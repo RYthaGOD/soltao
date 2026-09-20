@@ -62,6 +62,72 @@
     }
   ],
 
+  "yield": {
+    "note": "TVL is fetched live from the DefiLlama public API and cached 10 minutes. Everything else here is curated prose.",
+    "contrast": [
+      { "label": "Bittensor base chain", "llama": { "chain": "Bittensor" } },
+      { "label": "Bittensor EVM, all DeFi", "llama": { "chain": "Bittensor EVM" } }
+    ],
+    "routes": [
+      {
+        "label": "Native staking (dTAO)",
+        "where": "Bittensor · SS58 wallet",
+        "llama": { "protocol": "bittensor-dtao" },
+        "status": "live",
+        "note": "Subnet alpha pools on the base chain, reached with btcli or a Bittensor wallet. Essentially all of the money is here, and getting to it means leaving Solana completely.",
+        "url": "https://docs.learnbittensor.org/"
+      },
+      {
+        "label": "Bittensor EVM staking",
+        "where": "Bittensor EVM · any EVM wallet",
+        "llama": { "chain": "Bittensor EVM" },
+        "status": "live",
+        "note": "addStake(hotkey, amount, netuid) straight from an EVM transaction, reachable from Solana over LayerZero or Hyperlane. The figure is every DeFi dollar on that chain, not staked TAO — it is the room, and the room is empty.",
+        "url": "https://github.com/opentensor/evm-bittensor/blob/main/solidity/stakeV2.sol"
+      },
+      {
+        "label": "Tensorplex",
+        "where": "Bittensor",
+        "llama": { "protocol": "tensorplex" },
+        "status": "live",
+        "note": "The ecosystem's only liquid staking token.",
+        "url": "https://stake.tensorplex.ai/"
+      },
+      {
+        "label": "TaoFi",
+        "where": "Bittensor EVM",
+        "llama": { "protocol": "taofi" },
+        "status": "live",
+        "note": "The only DEX on Bittensor EVM, already routing Solana value in through Hyperlane. The pattern works. The users are not there.",
+        "url": "https://www.taofi.com/swap"
+      },
+      {
+        "label": "wTAO bridge",
+        "where": "Bittensor ↔ Ethereum",
+        "llama": { "protocol": "wtao" },
+        "status": "caution",
+        "note": "The Ethereum door, and the single-operator chokepoint described above. Real money, real structure.",
+        "url": null
+      },
+      {
+        "label": "TAOlie",
+        "where": "Solana",
+        "llama": { "protocol": "taolie" },
+        "status": "dead",
+        "note": "Pitched one-click Bittensor mining on Solana back in 2024. Still listed, still zero. The precedent worth knowing about.",
+        "url": null
+      },
+      {
+        "label": "Holding this wrapper",
+        "where": "Solana",
+        "llama": null,
+        "status": "none",
+        "note": "No emissions, no dividends, no yield of any kind. It trades. That is the entire offer, and it is a perfectly good one — just not this one.",
+        "url": null
+      }
+    ]
+  },
+
   "rewardModel": {
     "summary": "StonkFun reward coins pay holders pro-rata in whatever token the coin is paired against. Paired against TAO, the dividend arrives as TAO.",
     "v3": "v3 launches: a transfer tax on every transfer, 1% or 3%, fixed permanently at launch.",

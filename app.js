@@ -15,6 +15,13 @@ const DEAD_LIQ = 1_000;            // a book under $1k is not a book
 const SIZES = [1_000, 5_000, 25_000];
 const SOL_MINT = 'So11111111111111111111111111111111111111112';
 
+// DefiLlama sizes the staking options. Separate cache: TVL moves in hours, not
+// seconds, and /tvl/{slug} returns a bare number so each call is ~60 bytes.
+const LLAMA_TVL = 'https://api.llama.fi/tvl/';
+const LLAMA_CHAINS = 'https://api.llama.fi/v2/chains';
+const YIELD_CACHE_KEY = 'soltao:v1:yield';
+const YIELD_TTL = 600_000;   // 10 min
+
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -421,6 +428,110 @@ function renderPairs() {
     '. "Unverified" means the TAO-quoted pool is real but the reward mechanic has not been confirmed at the source — check before you size in.';
 }
 
+/* ── render: the yield menu ────────────────────────────────────────────────
+   Sizes every real route to TAO yield. Degrades to prose-only if DefiLlama is
+   unreachable — the guidance matters more than the numbers.
+   -------------------------------------------------------------------------- */
+
+function readYieldCache() {
+  try {
+    const c = JSON.parse(localStorage.getItem(YIELD_CACHE_KEY) || 'null');
+    if (!c || !c.t || !c.tvl) return null;
+    return { ...c, fresh: Date.now() - c.t < YIELD_TTL };
+  } catch { return null; }
+}
+
+async function loadYield() {
+  const y = state.registry.yield;
+  if (!y) return;
+
+  const cached = readYieldCache();
+  if (cached && cached.fresh) { renderYield(cached.tvl, cached.t, false); return; }
+
+  const refs = [...y.contrast, ...y.routes].map((r) => r.llama).filter(Boolean);
+  const slugs = [...new Set(refs.filter((r) => r.protocol).map((r) => r.protocol))];
+  const needChains = refs.some((r) => r.chain);
+
+  const jobs = slugs.map((s) =>
+    fetch(LLAMA_TVL + s).then((r) => (r.ok ? r.text() : Promise.reject(new Error(String(r.status)))))
+      .then((t) => ['p:' + s, parseFloat(t)]));
+  if (needChains) {
+    jobs.push(fetch(LLAMA_CHAINS).then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((rows) => ['chains', rows]));
+  }
+
+  const tvl = {};
+  let failed = 0;
+  for (const res of await Promise.allSettled(jobs)) {
+    if (res.status !== 'fulfilled') { failed++; continue; }
+    const [k, v] = res.value;
+    if (k === 'chains') {
+      for (const row of v) tvl['c:' + row.name] = num(row.tvl);
+    } else {
+      tvl[k] = num(v);
+    }
+  }
+
+  if (!Object.keys(tvl).length) {
+    if (cached) { renderYield(cached.tvl, cached.t, true); return; }
+    renderYield(null, null, true);
+    return;
+  }
+  try { localStorage.setItem(YIELD_CACHE_KEY, JSON.stringify({ t: Date.now(), tvl })); } catch { /* private mode */ }
+  renderYield(tvl, Date.now(), failed > 0);
+}
+
+const tvlOf = (tvl, ref) => {
+  if (!tvl || !ref) return null;
+  const v = ref.protocol ? tvl['p:' + ref.protocol] : tvl['c:' + ref.chain];
+  return isNum(v) ? v : null;
+};
+
+function renderYield(tvl, ts, degraded) {
+  const y = state.registry.yield;
+  if (!y) return;
+
+  // headline contrast
+  const cwrap = $('contrast');
+  cwrap.replaceChildren(...y.contrast.map((c) => {
+    const box = el('div', 'contrast-cell');
+    box.append(el('span', 'contrast-k', c.label));
+    box.append(el('span', 'contrast-v num', fmtUsd(tvlOf(tvl, c.llama))));
+    return box;
+  }));
+
+  const body = $('yield-body');
+  const rows = y.routes.map((r) => {
+    const v = tvlOf(tvl, r.llama);
+    const tr = el('tr', r.status === 'dead' ? 'row-dead' : null);
+
+    const first = el('td');
+    const box = el('div', 'coin');
+    const name = el('span', 'coin-sym', r.label);
+    box.append(r.url ? Object.assign(link(r.label, r.url), { className: 'coin-sym coin-link' }) : name);
+    if (r.status !== 'live') {
+      const b = el('span', 'rw', { caution: 'chokepoint', dead: 'dead', none: 'no yield' }[r.status] || r.status);
+      b.dataset.r = r.status;
+      box.append(b);
+    }
+    first.append(box);
+    tr.append(first);
+
+    tr.append(el('td', 'c-opt yield-where', r.where));
+    tr.append(el('td', 'r num' + (r.status === 'dead' || r.status === 'none' ? ' down' : ''),
+      r.llama ? fmtUsd(v) : 'n/a'));
+    tr.append(el('td', 'yield-note', r.note));
+    return tr;
+  });
+  body.replaceChildren(...rows);
+
+  $('yield-foot').textContent = tvl
+    ? 'TVL from the DefiLlama public API' + (ts ? ', ' + stamp(ts) : '') +
+      (degraded ? ' (partial — some figures may be stale).' : ', refreshed every 10 minutes.') +
+      ' Sizes are whole protocols or whole chains, not TAO staked. ' + y.note
+    : 'DefiLlama is not answering, so the sizes are missing. The routes and the guidance above do not depend on it.';
+}
+
 function link(text, href) {
   const a = el('a', null, text);
   a.href = href;
@@ -557,7 +668,9 @@ async function boot() {
     return;
   }
   await loadMarket();
+  loadYield().catch((e) => { console.warn('[soltao] yield sizing failed:', e); renderYield(null, null, true); });
   setInterval(() => { if (document.visibilityState === 'visible') loadMarket(); }, REFRESH_MS);
+  setInterval(() => { if (document.visibilityState === 'visible') loadYield().catch(() => {}); }, YIELD_TTL);
 }
 
 boot();

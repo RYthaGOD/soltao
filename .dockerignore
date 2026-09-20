@@ -1,0 +1,10 @@
+.git
+.github
+research
+node_modules
+*.log
+_headers
+README.md
+LICENSE
+.gitignore
+.gitattributes
