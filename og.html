@@ -1,0 +1,72 @@
+<!doctype html>
+<!-- Source for og.png. Render at exactly 1200x630 and screenshot. See README. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>soltao og card</title>
+<style>
+  @page { size: 1200px 630px; margin: 0; }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1200px; height: 630px; }
+  body {
+    background: #0a0a0b;
+    color: #e9e9ec;
+    font: 400 20px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    overflow: hidden;
+  }
+  .stripe { width: 14px; background: #f2a33c; flex: none; }
+  .pad {
+    flex: 1;
+    padding: 62px 68px 54px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background: linear-gradient(100deg, rgba(242,163,60,.10), transparent 58%);
+  }
+  .top { display: flex; align-items: baseline; gap: 14px; }
+  .mark { color: #f2a33c; font-size: 26px; }
+  .name { font: 600 26px/1 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace; letter-spacing: -.02em; }
+  .sub  { font: 400 18px/1 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace; color: #6a6b75; }
+  h1 {
+    font-size: 78px; line-height: 1.02; letter-spacing: -.035em; font-weight: 560;
+    max-width: 17ch; margin-top: 34px;
+  }
+  h1 em { font-style: normal; color: #f2a33c; }
+  .ca {
+    margin-top: 30px;
+    border: 1px solid #33333d; border-left: 4px solid #56d19a;
+    background: #08080a; padding: 20px 24px;
+    font: 600 29px/1 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+    letter-spacing: -.03em; color: #e9e9ec;
+  }
+  .ca small { display: block; font: 500 14px/1 ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase; color: #56d19a; margin-bottom: 11px; }
+  .foot { display: flex; gap: 34px; margin-top: 30px; font: 400 19px/1 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace; color: #9b9ca6; }
+  .foot b { color: #f2a33c; font-weight: 500; }
+</style>
+</head>
+<body>
+  <div class="stripe"></div>
+  <div class="pad">
+    <div>
+      <div class="top">
+        <span class="mark">◱</span>
+        <span class="name">soltao</span>
+        <span class="sub">unofficial · community reference</span>
+      </div>
+      <h1>Which TAO on Solana is <em>the real one</em>?</h1>
+    </div>
+    <div>
+      <div class="ca">
+        <small>canonical mint · wormhole ntt via sunrise</small>
+        taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY
+      </div>
+      <div class="foot">
+        <span><b>·</b> live depth &amp; slippage</span>
+        <span><b>·</b> look-alike checker</span>
+        <span><b>·</b> TAO-quoted reward coins</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

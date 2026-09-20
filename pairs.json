@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 1,
+  "curatedAt": "2026-09-20",
+  "curatedNote": "Everything in this file is hand-verified. Live price/volume/liquidity is fetched at runtime from Dexscreener and is never stored here.",
+
+  "canonical": {
+    "symbol": "TAO",
+    "name": "Bittensor",
+    "mint": "taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY",
+    "decimals": 9,
+    "bridge": "Wormhole Native Token Transfers (NTT), issued through Sunrise",
+    "bridgeUrl": "https://wormhole.com/products/ntt",
+    "launched": "2026-05-05",
+    "thinBookUsd": 300000,
+    "verifyUrls": {
+      "solscan": "https://solscan.io/token/taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY",
+      "dexscreener": "https://dexscreener.com/solana/taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY",
+      "jupiter": "https://jup.ag/swap/So11111111111111111111111111111111111111112-taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY"
+    }
+  },
+
+  "notThis": [
+    {
+      "mint": "9wAKgC8zXwSGaNgtkoNeFFkAfuBkW4BfUUuPkrx6nrQQ",
+      "symbol": "wTAO",
+      "name": "VoidAI Bridged wTAO",
+      "verdict": "legacy",
+      "claim": "A real third-party wrapper, not a scam — VoidAI's own Bittensor→Solana bridge, minted 1:1 against TAO locked on their bridge.",
+      "why": "It is not the canonical mint and the book is effectively dead. You can get in and not get out."
+    },
+    {
+      "mint": "FxzobTcV8rTV94G323fYWx1SKhotZq6781fAN3Twstzt",
+      "symbol": "TAO",
+      "name": "listed as “Bittensor (TAO)” on some explorers",
+      "verdict": "mislabeled",
+      "claim": "Explorer metadata says Bittensor, on-chain data disagrees.",
+      "why": "6 decimals and a 191,930,177 supply. Bittensor's max supply is 21,000,000 and the canonical Solana mint uses 9 decimals. No DEX liquidity."
+    },
+    {
+      "mint": "9cYXqd1ggyMTjwZFWnbDuf5EfLEcLuumMG67jRkJpump",
+      "symbol": "TAO",
+      "name": "The Anthropic Order",
+      "verdict": "ticker-squat",
+      "claim": "A pump.fun memecoin that took the TAO ticker.",
+      "why": "Unrelated to Bittensor. Shows up in wallet and aggregator search because the ticker matches."
+    },
+    {
+      "mint": "4Exvh43FSduKB7W4Vfa1D4vocwtpHbnErGcWuG4zp8HE",
+      "symbol": "BITTENSOR",
+      "name": "Bittensor (pump.fun)",
+      "verdict": "ticker-squat",
+      "claim": "A pump.fun launch using the Bittensor name.",
+      "why": "Unrelated to Bittensor. Launched 2026-09-19 with no liquidity."
+    },
+    {
+      "mint": "2Vg7CJskDNiQpdddfDruiLeQnP5f2tpMB4xro4nVpump",
+      "symbol": "WinTAO",
+      "name": "Win TAO",
+      "verdict": "ticker-squat",
+      "claim": "A pump.fun memecoin trading on the TAO name.",
+      "why": "Unrelated to Bittensor and to the canonical mint."
+    }
+  ],
+
+  "rewardModel": {
+    "summary": "StonkFun reward coins pay holders pro-rata in whatever token the coin is paired against. Paired against TAO, the dividend arrives as TAO.",
+    "v3": "v3 launches: a transfer tax on every transfer, 1% or 3%, fixed permanently at launch.",
+    "legacy": "Earlier launches: roughly 85% of the 4% pool trading fee.",
+    "payout": "Fees accumulate until the pot is worth distributing, then split across holders. There is no fixed schedule.",
+    "sourceUrl": "https://www.stonkfun.xyz/rewards"
+  },
+
+  "pairs": [
+    {
+      "symbol": "BUTT",
+      "name": "Buttensor",
+      "mint": "2pouN3by7twkiZGy5aEKYUpf78ALDpKRTNu2WsQkpkqt",
+      "pairAddress": "Cu7Rg8zeoNL7twiEYMsHWQCdXRtqLcWiVW8Ns1XvsBKW",
+      "dex": "raydium",
+      "launched": "2026-09-06",
+      "rewards": "confirmed",
+      "mechanic": "StonkFun reward coin. Holders accrue TAO dividends from trading fees.",
+      "site": "https://buttensor.fun/"
+    },
+    {
+      "symbol": "TCAT",
+      "name": "Artificial Cat",
+      "mint": "BifUDWQFpbTrSxYXBnqCpAVYgcyQGzHzJk2MDmeM2Gyv",
+      "pairAddress": "BtKFCWBQ3T16saR8pN4hkEuhLV2s7Vo65oBqvF7eEZSz",
+      "dex": "raydium",
+      "launched": "2026-09-10",
+      "rewards": "unverified",
+      "mechanic": "TAO-quoted launch. Reward mechanics not independently confirmed.",
+      "site": null
+    },
+    {
+      "symbol": "CONST",
+      "name": "TaoCats",
+      "mint": "oWeyEsRQa7SWRbEiW1QNxZJhwmjnefD6HGtXqKqfv3r",
+      "pairAddress": "DsCm8QQ3L8nyoD7edEceB8cwTSwA7FXJrEeQx4KwRe2x",
+      "dex": "raydium",
+      "launched": "2026-09-06",
+      "rewards": "unverified",
+      "mechanic": "TAO-quoted launch. Reward mechanics not independently confirmed.",
+      "site": null
+    },
+    {
+      "symbol": "NUTZ",
+      "name": "SUBNUTZ",
+      "mint": "F7mxDioYiZx5bJ752PU6mmCGD8vbrx7Nx8KBN4cfitpc",
+      "pairAddress": "8vX1WdtJJmQhCHhcjMaDGmoXtDhvYVghKSpiWBBMWRfj",
+      "dex": "raydium",
+      "launched": "2026-09-06",
+      "rewards": "unverified",
+      "mechanic": "TAO-quoted launch. Reward mechanics not independently confirmed.",
+      "site": null
+    },
+    {
+      "symbol": "SCAT",
+      "name": "Shiz Cat TAO",
+      "mint": "Fsey6rXphKexfVfcLWKkNZte9pKfehcG6oajGVS89nkW",
+      "pairAddress": null,
+      "dex": "raydium",
+      "launched": "2026-09-11",
+      "rewards": "unverified",
+      "mechanic": "TAO-quoted launch. Reward mechanics not independently confirmed.",
+      "site": null
+    },
+    {
+      "symbol": "JING",
+      "name": "Jingtao",
+      "mint": "AN82CufiuZt19HoQZzbCoVfR5DSftf46EkWeYg5TRS4r",
+      "pairAddress": null,
+      "dex": "raydium",
+      "launched": "2026-09-06",
+      "rewards": "unverified",
+      "mechanic": "TAO-quoted launch. Reward mechanics not independently confirmed.",
+      "site": null
+    },
+    {
+      "symbol": "KIZUNA",
+      "name": "Kizuna",
+      "mint": "4JMHyezQvPPETWv82XrwiHzqJ2eUVZTWaWPMUtgVtamy",
+      "pairAddress": null,
+      "dex": "raydium",
+      "launched": "2026-09-06",
+      "rewards": "unverified",
+      "mechanic": "TAO-quoted launch. Reward mechanics not independently confirmed.",
+      "site": null
+    }
+  ]
+}
