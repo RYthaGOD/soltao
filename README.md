@@ -52,8 +52,9 @@ Currently live on two hosts, serving byte-identical content:
 
 | | URL |
 |---|---|
-| GitHub Pages | <https://rythagod.github.io/soltao/> — canonical |
-| Railway | <https://soltao-production.up.railway.app/> — mirror |
+| Railway (custom domain) | <https://soltao.xyz/> — canonical |
+| Railway (generated) | <https://soltao-production.up.railway.app/> — mirror |
+| GitHub Pages | <https://rythagod.github.io/soltao/> — mirror |
 
 | Host | Setup |
 |---|---|
@@ -84,14 +85,14 @@ at server level and per-file caching uses `expires`, which is a different direct
 trigger that reset. If you add a header inside a location later, you must re-declare all of them
 there too.
 
-**Both hosts serve `rel="canonical"` and the OG tags pointing at GitHub Pages**, so the mirror
-does not compete with the primary in search or on social. If Railway becomes the real home —
-a custom domain, say — change the four absolute URLs in `index.html`, plus `robots.txt` and
-`sitemap.xml`.
+**Every host serves `rel="canonical"` and the OG tags pointing at `soltao.xyz`**, so the
+mirrors do not compete with the primary in search or on social. That is six absolute URLs in
+total — `link rel="canonical"`, `og:url`, `og:image` and `twitter:image` in `index.html`, the
+`Sitemap:` line in `robots.txt`, and `<loc>` in `sitemap.xml`. If the home domain ever moves,
+change all six together or the mirrors start competing with each other.
 
-After deploying, update the four absolute URLs in `index.html` — `link rel="canonical"`,
-`og:url`, `og:image` and `twitter:image` — to the real domain. Relative URLs do not work for
-social cards; X and Telegram need the absolute path or the card renders blank.
+Relative URLs do not work for social cards; X and Telegram need the absolute path or the card
+renders blank. That is why `og:image` is spelled out in full rather than left as `/og.png`.
 
 ### Regenerating the social card
 
