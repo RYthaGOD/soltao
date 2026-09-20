@@ -124,9 +124,13 @@ code { font-family: var(--mono); font-size: 0.92em; }
   text-transform: uppercase;
   color: var(--ink-3);
   white-space: nowrap;
+  /* nowrap with no clip pushed the whole document ~93px wide between 620 and
+     1080px. This is decorative status text — clip it rather than let it set
+     the page width. */
+  overflow: hidden;
 }
 .tick-sep { width: 1px; height: 10px; background: var(--line-2); flex: none; }
-.tick-end { margin-left: auto; }
+.tick-end { margin-left: auto; flex: none; }
 
 .topbar-in {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -709,6 +713,8 @@ code { font-family: var(--mono); font-size: 0.92em; }
   :root { --head-h: 120px; }
   .wrap { padding-inline: 28px; }
   .ticker { display: flex; }
+  /* Only room for the trailing claim once the poll labels have their space. */
+  .tick-end { display: none; }
   .hero { padding-block: 44px 36px; }
   .hero-in { padding: 26px 28px 26px 32px; }
   .panel { padding: 22px; }
@@ -740,4 +746,8 @@ code { font-family: var(--mono); font-size: 0.92em; }
     animation-duration: 0.01ms !important; animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+@media (min-width: 1080px) {
+  .tick-end { display: inline; }
 }
