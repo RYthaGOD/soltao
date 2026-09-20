@@ -56,6 +56,10 @@
           <span id="feed-label">connecting</span>
         </span>
         <button type="button" class="btn btn-ghost" id="refresh" aria-label="Refresh market data now">refresh</button>
+        <span class="social">
+          <a class="social-link" href="https://x.com/SOLTENSOR" rel="noopener" target="_blank" title="soltao on X"><span class="sr">soltao on X</span><svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18.9 2.3h3.4l-7.4 8.5 8.7 11.5h-6.8l-5.3-7-6.1 7H1.9l7.9-9.1L1.5 2.3h7l4.8 6.4 5.6-6.4Zm-1.2 17.9h1.9L7.4 4.2H5.4l12.3 16Z"/></svg></a>
+          <a class="social-link" href="https://t.me/+oFgZVIsOEwxhZTU8" rel="noopener" target="_blank" title="soltao on Telegram"><span class="sr">soltao on Telegram</span><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false"><path fill="currentColor" d="M21.9 4.3 18.9 19c-.2 1-.8 1.3-1.7.8l-4.6-3.4-2.2 2.1c-.2.2-.5.5-1 .5l.3-4.7 8.5-7.7c.4-.3-.1-.5-.6-.2L7.1 12l-4.5-1.4c-1-.3-1-1 .2-1.4l17.6-6.8c.8-.3 1.5.2 1.5 1.3Z"/></svg></a>
+        </span>
         <a class="btn btn-primary btn-sm" href="https://jup.ag/swap/So11111111111111111111111111111111111111112-taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY" rel="noopener" target="_blank">Swap on Jupiter</a>
       </div>
     </div>
@@ -104,7 +108,7 @@
             <span class="hero-card-v">wrapper</span>
           </div>
           <dl>
-            <div><dt>Bridge</dt><dd>Wormhole NTT · Sunrise</dd></div>
+            <div><dt>Bridge</dt><dd>LayerZero OFT · Sunrise</dd></div>
             <div><dt>Live since</dt><dd>5 May 2026</dd></div>
             <div><dt>Subnet emissions</dt><dd class="hero-card-no">none</dd></div>
           </dl>
@@ -120,7 +124,7 @@
   <div class="panel panel-mint">
     <div class="panel-head">
       <h2 id="mint-h">Canonical mint</h2>
-      <span class="tag tag-ok">Wormhole NTT · via Sunrise</span>
+      <span class="tag tag-ok">LayerZero OFT · via Sunrise</span>
     </div>
 
     <div class="ca-row">
@@ -211,18 +215,66 @@
       <h3>TAO — Bittensor</h3>
       <code class="ca ca-sm">taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY</code>
       <dl class="facts">
-        <div><dt>Bridge</dt><dd>Wormhole Native Token Transfers, issued through Sunrise</dd></div>
+        <div><dt>Bridge</dt><dd>LayerZero V2 OFT, listed by Sunrise — the mint authority is the OFT store</dd></div>
         <div><dt>Decimals</dt><dd class="num">9 — the same as native TAO</dd></div>
         <div><dt>Mint supply</dt><dd class="num" id="v-supply">—</dd></div>
-        <div><dt>Backing</dt><dd>TAO locked or burned on Bittensor, minted here. Canonical status is Wormhole's designation, not a Bittensor Foundation one.</dd></div>
+        <div><dt>Backing</dt><dd>TAO held on Bittensor EVM, its origin chain; minted and burned here. Canonical status is Sunrise's designation, not a Bittensor Foundation one.</dd></div>
       </dl>
       <p class="mint-foot"><span id="chain-src">Reading the mint account…</span></p>
     </article>
 
     <article class="panel panel-no">
       <p class="verdict verdict-no">Not this<span class="verdict-note">look-alikes &amp; squatters</span></p>
-      <ul class="nolist" id="nolist"></ul>
-      <p class="nolist-foot">No copy buttons on this side, on purpose. To compare one, use the checker above.</p>
+      <ul class="nolist" id="nolist">
+        <!-- fallback:notThis -->
+        <li>
+          <div class="no-head">
+            <span class="no-sym">wTAO</span>
+            <span class="no-name">VoidAI Bridged wTAO</span>
+            <span class="no-flag" data-f="legacy">legacy wrapper</span>
+          </div>
+          <code class="no-ca" aria-label="Not the canonical mint: 9wAKgC8zXwSGaNgtkoNeFFkAfuBkW4BfUUuPkrx6nrQQ">9wAKgC8zXwSGaNgtkoNeFFkAfuBkW4BfUUuPkrx6nrQQ</code>
+          <p class="no-why"><span>A real third-party wrapper, not a scam — VoidAI's own Bittensor→Solana bridge, minted 1:1 against TAO locked on their bridge.</span> It is not the canonical mint and the book is effectively dead. You can get in and not get out.</p>
+        </li>
+        <li>
+          <div class="no-head">
+            <span class="no-sym">TAO</span>
+            <span class="no-name">listed as “Bittensor (TAO)” on some explorers</span>
+            <span class="no-flag" data-f="mislabeled">mislabeled</span>
+          </div>
+          <code class="no-ca" aria-label="Not the canonical mint: FxzobTcV8rTV94G323fYWx1SKhotZq6781fAN3Twstzt">FxzobTcV8rTV94G323fYWx1SKhotZq6781fAN3Twstzt</code>
+          <p class="no-why"><span>Explorer metadata says Bittensor, on-chain data disagrees.</span> 6 decimals and a 191,930,177 supply. Bittensor's max supply is 21,000,000 and the canonical Solana mint uses 9 decimals. No DEX liquidity.</p>
+        </li>
+        <li>
+          <div class="no-head">
+            <span class="no-sym">TAO</span>
+            <span class="no-name">The Anthropic Order</span>
+            <span class="no-flag" data-f="ticker-squat">ticker squat</span>
+          </div>
+          <code class="no-ca" aria-label="Not the canonical mint: 9cYXqd1ggyMTjwZFWnbDuf5EfLEcLuumMG67jRkJpump">9cYXqd1ggyMTjwZFWnbDuf5EfLEcLuumMG67jRkJpump</code>
+          <p class="no-why"><span>A pump.fun memecoin that took the TAO ticker.</span> Unrelated to Bittensor. Shows up in wallet and aggregator search because the ticker matches.</p>
+        </li>
+        <li>
+          <div class="no-head">
+            <span class="no-sym">BITTENSOR</span>
+            <span class="no-name">Bittensor (Token-2022)</span>
+            <span class="no-flag" data-f="ticker-squat">ticker squat</span>
+          </div>
+          <code class="no-ca" aria-label="Not the canonical mint: 4Exvh43FSduKB7W4Vfa1D4vocwtpHbnErGcWuG4zp8HE">4Exvh43FSduKB7W4Vfa1D4vocwtpHbnErGcWuG4zp8HE</code>
+          <p class="no-why"><span>A Token-2022 mint that took the Bittensor name outright: 1,000,000,000 supply, metadata served from a third-party host.</span> Unrelated to Bittensor. No DEX pool at all, so there is nothing to sell it back into.</p>
+        </li>
+        <li>
+          <div class="no-head">
+            <span class="no-sym">WinTAO</span>
+            <span class="no-name">Win TAO</span>
+            <span class="no-flag" data-f="ticker-squat">ticker squat</span>
+          </div>
+          <code class="no-ca" aria-label="Not the canonical mint: 2Vg7CJskDNiQpdddfDruiLeQnP5f2tpMB4xro4nVpump">2Vg7CJskDNiQpdddfDruiLeQnP5f2tpMB4xro4nVpump</code>
+          <p class="no-why"><span>A pump.fun memecoin trading on the TAO name.</span> Unrelated to Bittensor. It trades against the canonical mint rather than being it — a TAO-quoted memecoin, not TAO.</p>
+        </li>
+        <!-- /fallback:notThis -->
+      </ul>
+      <p class="nolist-foot" id="nolist-foot">No copy buttons on this side, on purpose. To compare one, use the checker above.</p>
     </article>
   </div>
 </section>
@@ -286,69 +338,96 @@
     <span class="lbl lbl-amber">[ Structural risk ]</span>
     <h2 id="exit-h">Getting out</h2>
     <p>
-      Everybody checks the depth on the way in. The way back to native TAO is the leg nobody
-      prices, and it is not symmetrical with the way in.
+      Everybody checks the depth on the way in. The way back to native, stakeable TAO is the leg
+      nobody prices, and it is not symmetrical with the way in.
     </p>
   </div>
 
   <ol class="hops" aria-label="Route from Solana TAO back to native Bittensor TAO">
-    <li><b>Solana</b><span>canonical TAO</span></li>
-    <li><b>Wormhole NTT</b><span>automated</span></li>
-    <li><b>Ethereum</b><span>wTAO, ERC-20</span></li>
-    <li class="hop-break"><b>Manual sign-off</b><span>one operator, by hand</span></li>
-    <li><b>Bittensor</b><span>native TAO</span></li>
+    <li><b>Solana</b><span>canonical TAO, SPL</span></li>
+    <li><b>Sunrise withdraw</b><span>LayerZero OFT · burn</span></li>
+    <li><b>Bittensor EVM</b><span>TAO at an H160 address</span></li>
+    <li class="hop-break"><b>EVM → SS58</b><span>btcli, not a wallet click</span></li>
+    <li><b>Bittensor</b><span>native TAO · stakeable</span></li>
   </ol>
 
   <div class="exit-grid">
     <article class="panel panel-no">
-      <p class="verdict verdict-no">The chokepoint<span class="verdict-note">manual custody</span></p>
-      <h3>One person stands in the door</h3>
+      <p class="verdict verdict-no">The friction<span class="verdict-note">one chain short</span></p>
+      <h3>The door home does not open where you need it</h3>
       <p class="exit-p">
-        Bittensor's base chain runs no smart contracts of its own, so the route between Bittensor
-        and Ethereum is the <code>wTAO</code> bridge — a closed-source contract operated by a
-        single pseudonymous developer, holding <strong>about $28M of TAO</strong>.
-        Redemption is not permissionless: withdrawals are verified by hand, at a cadence the
-        operator described as <em>"at least once a day morning/night."</em>
+        Withdrawing on Sunrise burns the SPL token and delivers TAO on <strong>Bittensor EVM</strong>,
+        which is where this wrapper was issued from — at an <code>H160</code> address, not at the
+        SS58 coldkey that subnet staking runs on. The EVM side cannot send to an SS58 address
+        directly. The last hop is <code>btcli evm send-to-ss58</code> through the balance-transfer
+        precompile, or a deposit to your coldkey's EVM mirror that you then claim. It is a terminal,
+        not a wallet click, and nothing on the Solana side tells you it is coming.
       </p>
       <p class="exit-p">
-        That is not an accusation — the bridge works and it holds real money. It is a
-        <em>structure</em>, and you should know it sits between you and your TAO before you assume
-        you can leave on demand.
+        Two structural details before you size a position. The token is a <strong>LayerZero
+        OFT</strong> carrying 6 shared decimals against the mint's 9, so every cross-chain amount is
+        rounded down to 0.000001 TAO and the remainder does not travel. And the OFT store names a
+        single <strong>admin key</strong>, with a fee parameter and a pause flag in the same account
+        — read on 20 Sep 2026, the fee is 0 and transfers are not paused. That is not an accusation.
+        It is a structure, and it sits between you and your TAO.
       </p>
       <p class="exit-src">
-        The closed-source contract, the one-person team and the withdrawal quote were reported by
-        <a href="https://www.dlnews.com/articles/defi/wrapped-tao-on-ethereum-soars-to-82m-but-its-all-controlled-by-one-person/" rel="noopener" target="_blank">DL News in February 2024</a>,
-        quoting the operator directly; the bridge held $82M then. The $28M figure is DefiLlama's on
-        20 Sep 2026 and is not refreshed here. Wormhole itself does not reach Bittensor at all — the chain is not
-        in its registry, on any network.
+        Route and origin chain from <a href="https://docs.sunrise.xyz/resources/listed-assets" rel="noopener" target="_blank">Sunrise's listed assets</a>
+        — TAO, Bittensor EVM, LayerZero, listed 5 May 2026 — and withdrawal timing, rate limits and
+        queuing from its <a href="https://docs.sunrise.xyz/guides/withdraw-from-solana" rel="noopener" target="_blank">withdraw guide</a>.
+        The OFT store <code>8vJKzz…jZdDg</code>, its LayerZero V2 endpoint <code>76y77p…gjEn6</code>,
+        the 6 shared decimals and the unpaused zero-fee state were read from the mint account on
+        20 Sep 2026. The last hop is Bittensor's own
+        <a href="https://github.com/RaoFoundation/subtensor/blob/main/docs/guides/evm/index.mdx" rel="noopener" target="_blank">EVM money-flow guide</a>.
       </p>
     </article>
 
     <article class="panel panel-yes">
-      <p class="verdict verdict-yes">The path that isn't this<span class="verdict-note">EVM direct</span></p>
-      <h3>Staking doesn't need the wrapper at all</h3>
+      <p class="verdict verdict-yes">The path that isn't this<span class="verdict-note">no wrapper</span></p>
+      <h3>You can skip the wrapper entirely</h3>
       <p class="exit-p">
-        Bittensor's EVM layer exposes a staking precompile. The V2 interface takes a
-        <code>netuid</code>, so you can stake into a specific subnet from an ordinary EVM
-        transaction — and <code>addStakeLimit</code> carries a limit price and a partial-fill flag,
-        so you are not staking blind into a moving alpha pool.
+        <a href="https://all-ways.io/" rel="noopener" target="_blank">Allways</a> — Bittensor subnet 7,
+        settled on Solana — swaps native assets with no wrapped token anywhere in the path: miners
+        post collateral, validators verify both legs on-chain, the contract slashes on failure. Its
+        repository lists <strong>SOL and TAO as hubs</strong> with <code>SOL ↔ TAO</code> among the
+        live pairs, which is the thing the wrapper cannot do: SOL in your wallet becomes native TAO
+        in your Bittensor wallet. It is beta software and says so plainly.
+      </p>
+      <p class="exit-p">
+        If you land on Bittensor EVM anyway, you can stake from there without going further. The V2
+        staking precompile takes a <code>netuid</code>, and <code>addStakeLimit</code> carries a
+        limit price and a partial-fill flag, so you are not staking blind into a moving alpha pool.
       </p>
       <pre class="exit-code"><code><b>addStake</b>(bytes32 hotkey, uint256 amount, <i>uint256 netuid</i>)
 <b>addStakeLimit</b>(bytes32 hotkey, uint256 amount,
   uint256 limit_price, bool allow_partial, <i>uint256 netuid</i>)</code></pre>
-      <p class="exit-p">
-        LayerZero and Hyperlane both list Solana and Bittensor's EVM. So if the plan is to stake,
-        the move is to route <em>value</em> across and stake there — not to buy a wrapper and try
-        to walk it home.
-      </p>
       <p class="exit-src">
-        Signatures copied from Opentensor's
+        Pairs and trust model from the <a href="https://github.com/entrius/allways" rel="noopener" target="_blank">Allways repository</a>,
+        read 20 Sep 2026 — "use at your own risk. No warranty." Signatures copied from Opentensor's
         <a href="https://github.com/opentensor/evm-bittensor/blob/main/solidity/stakeV2.sol" rel="noopener" target="_blank">evm-bittensor</a>
-        interface, precompile <code>0x…0805</code>. Confirm it is live on mainnet before you rely
-        on it — and know that Bittensor EVM is close to empty: about <strong>$27K</strong> of
-        DeFi across one DEX against <strong>$495M</strong> on the base chain (DefiLlama, 20 Sep 2026).
+        interface, precompile <code>0x…0805</code>; confirm both are live before you rely on them.
+        And know that Bittensor EVM is close to empty: about <strong>$27K</strong> of DeFi across
+        one DEX against <strong>$495M</strong> on the base chain (DefiLlama, 20 Sep 2026).
       </p>
     </article>
+  </div>
+
+  <div class="callout callout-plain">
+    <div>
+      <h3>Doors that are not yours</h3>
+      <p>
+        Ethereum's <code>wTAO</code> is a different bridge, and it is not on the ladder above:
+        closed-source, one pseudonymous operator, withdrawals verified by hand at a cadence the
+        operator described as <em>"at least once a day morning/night"</em>, holding about $28M of
+        TAO. Real money, real structure — but routing a Solana position home through it would add a
+        manual custodian you do not otherwise touch. Tensorplex is closing: Tensorplex Stake and the
+        tTAO bridge are deprecated, with manual withdrawals only during the wind-down.
+        <span class="exit-src exit-src-inline">Operator and quote:
+        <a href="https://www.dlnews.com/articles/defi/wrapped-tao-on-ethereum-soars-to-82m-but-its-all-controlled-by-one-person/" rel="noopener" target="_blank">DL News, February 2024</a>,
+        when the bridge held $82M; the $28M is DefiLlama's on 20 Sep 2026 and is not refreshed here.
+        Deprecation notice read at <a href="https://stake.tensorplex.ai/" rel="noopener" target="_blank">stake.tensorplex.ai</a>, 20 Sep 2026.</span>
+      </p>
+    </div>
   </div>
 </section>
 
@@ -416,7 +495,27 @@
         </tr>
       </thead>
       <tbody id="pairs-body">
-        <tr class="row-msg"><td colspan="8">loading the book…</td></tr>
+        <!-- fallback:pairs -->
+        <tr>
+          <td>
+            <div class="coin">
+              <span class="coin-sym">$BUTT</span>
+              <span class="coin-name">Buttensor</span>
+              <code class="coin-ca">2pouN3by7twkiZGy5aEKYUpf78ALDpKRTNu2WsQkpkqt</code>
+            </div>
+          </td>
+          <td class="r num">—</td>
+          <td class="r num">—</td>
+          <td class="r num c-opt">—</td>
+          <td class="r num c-opt">—</td>
+          <td class="r num">—</td>
+          <td><span class="rw" data-r="confirmed" title="StonkFun reward coin. Holders accrue TAO dividends from trading fees.">TAO dividends</span></td>
+          <td class="r"><div class="tlinks"><a href="https://dexscreener.com/solana/2pouN3by7twkiZGy5aEKYUpf78ALDpKRTNu2WsQkpkqt" rel="noopener" target="_blank">DEX</a><a href="https://jup.ag/swap/taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY-2pouN3by7twkiZGy5aEKYUpf78ALDpKRTNu2WsQkpkqt" rel="noopener" target="_blank">JUP</a><a href="https://buttensor.fun/" rel="noopener" target="_blank">WWW</a></div></td>
+        </tr>
+        <tr class="row-msg">
+          <td colspan="8">Prices, liquidity and the other 6 TAO-quoted coins in the registry need JavaScript. The mint above does not.</td>
+        </tr>
+        <!-- /fallback:pairs -->
       </tbody>
     </table>
   </div>
@@ -435,8 +534,19 @@
     All of it cached in your browser. Registry hand-curated
     <time datetime="2026-09-20">20 Sep 2026</time><span id="foot-counts"></span>
   </p>
+  <p class="foot-soc">
+    <a href="https://x.com/SOLTENSOR" rel="noopener" target="_blank">X · @SOLTENSOR</a>
+    <span aria-hidden="true">·</span>
+    <a href="https://t.me/+oFgZVIsOEwxhZTU8" rel="noopener" target="_blank">Telegram</a>
+  </p>
   <p class="foot-dis">
-    Not affiliated with Bittensor, the Opentensor Foundation, Wormhole, Jupiter or StonkFun.
+    <strong>Disclosure:</strong> the person who runs this page also launched the SOLTAO coin on
+    StonkFun — <code>8P1XmDhzU8qR3oiXHd2YfmBpB92Rn4hwunMsMGdghvCn</code>, a Token-2022 mint with a
+    1% transfer tax, a fixed 1,000,000,000 supply and no mint or freeze authority. It is not one of
+    the coins listed above, and nothing on this page is a recommendation to buy it.
+  </p>
+  <p class="foot-dis">
+    Not affiliated with Bittensor, the Opentensor Foundation, Sunrise, LayerZero, Jupiter or StonkFun.
     No wallet connection, no tracking, no backend. Verify every address yourself before you sign
     anything. None of this is financial advice.
   </p>
@@ -444,9 +554,13 @@
 
 <noscript>
   <div class="wrap noscript">
-    JavaScript is off, so the live numbers and the checker are dead — but the canonical mint
-    above is hardcoded in this page and is still correct:
+    JavaScript is off, so the live numbers and the checker are dead. Everything that matters is
+    still on this page: the canonical mint, the look-alike list and the deepest TAO-quoted coin are
+    written into the HTML, not fetched. Prices, liquidity and the rest of the book are not.
     <code>taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY</code>
+    <span class="noscript-sub">Canonical TAO — LayerZero OFT, listed by Sunrise, live since 5 May 2026.
+    Verify it on <a href="https://solscan.io/token/taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY" rel="noopener" target="_blank">Solscan</a>
+    before you sign anything.</span>
   </div>
 </noscript>
 

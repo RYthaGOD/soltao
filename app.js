@@ -215,7 +215,7 @@ async function loadMarket(force = false) {
   if (!pairs.length) {
     if (cached) { ingest(cached.data, cached.t, true); return; }
     setFeed('error', 'feed down');
-    $('pairs-body').replaceChildren(rowMsg('Dexscreener is not answering. The mint address above is hardcoded and still correct.'));
+    $('pairs-foot').textContent = 'Dexscreener is not answering, so there are no live prices — the rows above are whatever the page could render without it. The mint address above is hardcoded and still correct.';
     return;
   }
 
@@ -517,7 +517,7 @@ function renderYield(tvl, ts, degraded) {
     const name = el('span', 'coin-sym', r.label);
     box.append(r.url ? Object.assign(link(r.label, r.url), { className: 'coin-sym coin-link' }) : name);
     if (r.status !== 'live') {
-      const b = el('span', 'rw', { caution: 'chokepoint', dead: 'dead', none: 'no yield' }[r.status] || r.status);
+      const b = el('span', 'rw', { caution: 'chokepoint', closing: 'winding down', dead: 'dead', none: 'no yield' }[r.status] || r.status);
       b.dataset.r = r.status;
       box.append(b);
     }
@@ -655,7 +655,7 @@ function extractMint(raw) {
 function verdictFor(addr) {
   const reg = state.registry;
   if (addr === reg.canonical.mint) {
-    return { v: 'yes', head: 'Canonical', body: 'This is the Wormhole NTT mint issued through Sunrise — the one Jupiter, Orca, Raydium and Meteora route. Safe to trade, still a wrapper.' };
+    return { v: 'yes', head: 'Canonical', body: 'This is the LayerZero OFT mint listed by Sunrise — the one Jupiter, Orca, Raydium and Meteora route. Safe to trade, still a wrapper.' };
   }
   const bad = reg.notThis.find((t) => t.mint === addr);
   if (bad) {
@@ -718,8 +718,9 @@ async function boot() {
   } catch (err) {
     console.error('[soltao] registry failed:', err);
     setFeed('error', 'registry error');
-    $('pairs-body').replaceChildren(rowMsg('pairs.json could not be loaded. If you opened this file directly, serve the folder over HTTP instead — see the README.'));
-    $('nolist').replaceChildren(el('li', null, 'Registry unavailable. The canonical mint above is hardcoded in the page and is still correct.'));
+    /* Leave the hardcoded rows in index.html standing — they are the fallback. */
+    $('pairs-foot').textContent = 'pairs.json could not be loaded, so the rows above are the hardcoded fallback written into the page: no live prices, no full registry. If you opened this file directly, serve the folder over HTTP instead — see the README.';
+    $('nolist-foot').textContent = 'Registry unavailable, so this list is the hardcoded fallback written into the page. The canonical mint above is hardcoded too, and is still correct.';
     return;
   }
   await loadMarket();

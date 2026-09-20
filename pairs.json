@@ -8,8 +8,11 @@
     "name": "Bittensor",
     "mint": "taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY",
     "decimals": 9,
-    "bridge": "Wormhole Native Token Transfers (NTT), issued through Sunrise",
-    "bridgeUrl": "https://wormhole.com/products/ntt",
+    "bridge": "LayerZero V2 OFT (mint-and-burn), listed by Sunrise",
+    "bridgeUrl": "https://docs.sunrise.xyz/resources/listed-assets",
+    "originChain": "Bittensor EVM",
+    "oftStore": "8vJKzzabD9t15SwVa8aQUEJH37Xk5nS9eaQ4WgojZdDg",
+    "sharedDecimals": 6,
     "launched": "2026-05-05",
     "thinBookUsd": 300000,
     "verifyUrls": {
@@ -75,7 +78,7 @@
         "llama": { "protocol": "bittensor-dtao" },
         "status": "live",
         "note": "Subnet alpha pools on the base chain, reached with btcli or a Bittensor wallet. Essentially all of the money is here, and getting to it means leaving Solana completely.",
-        "url": "https://docs.learnbittensor.org/"
+        "url": "https://bittensor.com/docs"
       },
       {
         "label": "Bittensor EVM staking",
@@ -89,8 +92,8 @@
         "label": "Tensorplex",
         "where": "Bittensor",
         "llama": { "protocol": "tensorplex" },
-        "status": "live",
-        "note": "The only liquid staking protocol DefiLlama tracks on Bittensor.",
+        "status": "closing",
+        "note": "Was the only liquid staking protocol DefiLlama tracks on Bittensor. Tensorplex Stake and the tTAO bridge are deprecated — the site tells holders to finish withdrawing, and manual withdrawals are processed once a month during the wind-down. Read 20 Sep 2026.",
         "url": "https://stake.tensorplex.ai/"
       },
       {
@@ -106,7 +109,7 @@
         "where": "Bittensor ↔ Ethereum",
         "llama": { "protocol": "wtao" },
         "status": "caution",
-        "note": "The Ethereum door, and the single-operator chokepoint described above. Real money, real structure.",
+        "note": "The Ethereum door: closed-source, one pseudonymous operator, withdrawals verified by hand. Real money, real structure — and not on the route home from Solana, which exits through Sunrise to Bittensor EVM instead.",
         "url": null
       },
       {
