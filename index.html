@@ -176,10 +176,13 @@
     <summary>What a market buy actually costs <span class="slip-sum" id="slip-sum"></span></summary>
     <div class="tablewrap tablewrap-bare">
       <table class="slip-table">
-        <caption>Worst-case price impact — constant-product maths against the single deepest pool
-          only. Jupiter splits across every pool and concentrated liquidity does better than this.
-          A ceiling, not a quote.</caption>
-        <thead><tr><th scope="col">Market buy</th><th scope="col" class="r">Est. impact</th><th scope="col" class="r">Effective price</th></tr></thead>
+        <caption>A thin-book alarm, not a quote. Size ÷ the deepest pool's quote-side reserve,
+          ignoring every other pool. Jupiter splits across all of them and concentrated liquidity
+          does better, so a real fill is typically several times cheaper than this: spot-checked
+          against a live Jupiter quote on 20 Sep 2026, the $25k row overstated the actual impact by
+          more than tenfold. Read it as an upper bound on how thin the book is, then read Jupiter's
+          own impact line before you sign.</caption>
+        <thead><tr><th scope="col">Market buy</th><th scope="col" class="r">Upper bound</th><th scope="col" class="r">At that bound</th></tr></thead>
         <tbody id="slip-rows"></tbody>
       </table>
     </div>
@@ -303,7 +306,7 @@
       <p class="exit-p">
         Bittensor's base chain runs no smart contracts of its own, so the route between Bittensor
         and Ethereum is the <code>wTAO</code> bridge — a closed-source contract operated by a
-        single pseudonymous developer, holding <strong>about $29M of TAO</strong> today.
+        single pseudonymous developer, holding <strong>about $28M of TAO</strong>.
         Redemption is not permissionless: withdrawals are verified by hand, at a cadence the
         operator described as <em>"at least once a day morning/night."</em>
       </p>
@@ -315,9 +318,9 @@
       <p class="exit-src">
         The closed-source contract, the one-person team and the withdrawal quote were reported by
         <a href="https://www.dlnews.com/articles/defi/wrapped-tao-on-ethereum-soars-to-82m-but-its-all-controlled-by-one-person/" rel="noopener" target="_blank">DL News in February 2024</a>,
-        quoting the operator directly; the bridge held $82M then. The $29M figure is today's,
-        from DefiLlama. Wormhole itself does not reach Bittensor — it is not among the ~73 chains
-        in Wormhole's registry.
+        quoting the operator directly; the bridge held $82M then. The $28M figure is DefiLlama's on
+        20 Sep 2026 and is not refreshed here. Wormhole itself does not reach Bittensor at all — the chain is not
+        in its registry, on any network.
       </p>
     </article>
 
@@ -342,8 +345,8 @@
         Signatures copied from Opentensor's
         <a href="https://github.com/opentensor/evm-bittensor/blob/main/solidity/stakeV2.sol" rel="noopener" target="_blank">evm-bittensor</a>
         interface, precompile <code>0x…0805</code>. Confirm it is live on mainnet before you rely
-        on it — and know that Bittensor EVM is close to empty, with about <strong>$28K</strong> of
-        DeFi across one DEX against <strong>$522M</strong> on the base chain.
+        on it — and know that Bittensor EVM is close to empty: about <strong>$27K</strong> of
+        DeFi across one DEX against <strong>$495M</strong> on the base chain (DefiLlama, 20 Sep 2026).
       </p>
     </article>
   </div>

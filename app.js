@@ -8,7 +8,7 @@ const CACHE_KEY = 'soltao:v1:tokens';
 const CACHE_TTL = 30_000;          // 30s, per Dexscreener rate-limit etiquette
 const REFRESH_MS = 30_000;
 // /latest/dex/tokens/ silently caps the response at 30 pairs no matter how many
-// mints you ask for. TAO alone is 26 pools, so batching everything into one call
+// mints you ask for. TAO alone returned 24 pairs on 20 Sep 2026, so batching into one call
 // drops the small coins. Keep TAO on its own and chunk the rest.
 const CHUNK = 6;
 const DEAD_LIQ = 1_000;            // a book under $1k is not a book
@@ -295,7 +295,8 @@ function renderTao() {
   return { price, liq, deepest };
 }
 
-/** Constant-product upper bound: effective price premium = size / quote-side reserve. */
+/** Upper bound, not constant-product: size / quote-side reserve of the deepest pool alone.
+    Measured 20 Sep 2026 against a live Jupiter quote, it overstates a $25k fill by >10x. */
 function renderSlippage(pool, price) {
   const body = $('slip-rows');
   const baseUsd = (pool.liquidity && num(pool.liquidity.base)) * price;

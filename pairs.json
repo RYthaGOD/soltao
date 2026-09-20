@@ -47,10 +47,10 @@
     {
       "mint": "4Exvh43FSduKB7W4Vfa1D4vocwtpHbnErGcWuG4zp8HE",
       "symbol": "BITTENSOR",
-      "name": "Bittensor (pump.fun)",
+      "name": "Bittensor (Token-2022)",
       "verdict": "ticker-squat",
-      "claim": "A pump.fun launch using the Bittensor name.",
-      "why": "Unrelated to Bittensor. Launched 2026-09-19."
+      "claim": "A Token-2022 mint that took the Bittensor name outright: 1,000,000,000 supply, metadata served from a third-party host.",
+      "why": "Unrelated to Bittensor. No DEX pool at all, so there is nothing to sell it back into."
     },
     {
       "mint": "2Vg7CJskDNiQpdddfDruiLeQnP5f2tpMB4xro4nVpump",
@@ -58,7 +58,7 @@
       "name": "Win TAO",
       "verdict": "ticker-squat",
       "claim": "A pump.fun memecoin trading on the TAO name.",
-      "why": "Unrelated to Bittensor and to the canonical mint."
+      "why": "Unrelated to Bittensor. It trades against the canonical mint rather than being it — a TAO-quoted memecoin, not TAO."
     }
   ],
 

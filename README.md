@@ -48,7 +48,7 @@ Then open `http://localhost:3000`.
 
 Any static host. There is no build step — point it at the repo root and publish.
 
-Currently live on two hosts, serving byte-identical content:
+Currently live on three hosts, serving byte-identical content:
 
 | | URL |
 |---|---|
@@ -131,7 +131,7 @@ Look-alikes, one object each:
 
 Live liquidity for each is fetched and appended in brackets, so a dead wrapper visibly reads
 as dead. Keep the wording factual: `wTAO` is a real VoidAI bridge token, not a scam — it is
-simply not canonical and has roughly $200 of liquidity, which is the thing that will hurt you.
+simply not canonical and had about $170 of liquidity on 20 Sep 2026, which is the thing that will hurt you.
 
 ### `pairs`
 
@@ -150,7 +150,7 @@ pool wins automatically.
 ### The API's 30-pair cap
 
 `/latest/dex/tokens/{mints}` silently returns **at most 30 pairs**, however many mints you
-ask for. TAO alone has 26 pools, so one combined request quietly drops the small coins.
+ask for. TAO alone returned 24 pairs on 20 Sep 2026, so one combined request quietly drops the small coins.
 
 `app.js` therefore fetches TAO on its own and chunks everything else six mints at a time
 (`CHUNK`). If you add a lot of tokens to `pairs.json`, the chunking scales automatically —
@@ -167,24 +167,45 @@ routing; Jupiter handles the swap and the link is prefilled.
 
 ## Accuracy notes
 
-- **The slippage table is an upper bound.** Constant-product maths (`impact = size ÷
-  quote-side reserve`) against the single deepest pool. Jupiter splits across every pool and
-  concentrated liquidity does better, so the real fill is usually cheaper. It is sized to
-  make thin books visible, not to quote you.
+- **The slippage table is an upper bound, and a loose one.** `impact = size ÷ quote-side
+  reserve` of the single deepest pool. That is a linear approximation, not constant-product
+  maths, and it ignores every other pool. Jupiter splits across all of them and concentrated
+  liquidity does better: spot-checked against a live Jupiter quote on 20 Sep 2026, the $25k
+  row overstated the real impact by more than tenfold. It is sized to make thin books
+  visible, not to quote you, and the caption now says so. If you want it to be a quote,
+  fetch one from Jupiter — that needs `connect-src` updated in both header files.
 - **"Canonical" is Wormhole's designation**, not a Bittensor Foundation endorsement.
 - **The exit route claims are researched, not live-fetched.** Wormhole does not list Bittensor as
   a supported chain, so the only Bittensor↔Ethereum door is the `wTAO` bridge — closed source,
-  single pseudonymous operator, manual withdrawal verification, ~$29M locked (DefiLlama, Sep 2026;
+  single pseudonymous operator, manual withdrawal verification, ~$28M locked (DefiLlama, 20 Sep 2026;
   governance reported by [DL News](https://www.dlnews.com/articles/defi/wrapped-tao-on-ethereum-soars-to-82m-but-its-all-controlled-by-one-person/)).
   The Bittensor EVM staking precompile interface is read from Opentensor's own
   [evm-bittensor](https://github.com/opentensor/evm-bittensor/blob/main/solidity/stakeV2.sol)
   examples; whether that V2 address is live on mainnet is **not verified** and the page says so.
   Re-check these before the next curation pass — they are the only numbers on the site that do
   not refresh themselves.
-- **Bridged supply** is derived from Dexscreener's FDV ÷ price rather than an RPC call, to
-  keep the page dependency-free. It is approximate.
+- **Bridged supply, decimals and the owning token program are read from the mint account**
+  over `solana-rpc.publicnode.com`, not derived from Dexscreener. An earlier version used
+  `fdv ÷ price` and was roughly 4x under the true supply. Never reintroduce that: a price
+  feed is not an on-chain fact. The call fails closed to an em dash rather than to a guess.
 - The 24h change and the quoted spot price come from the deepest pool; volume and liquidity
   are summed across every pool where TAO is the base token.
+
+## Verification log
+
+- **20 Sep 2026** — full pass. Verified on chain: decimals `9`, SPL Token program, live supply,
+  and token-account rent at `1,488,440` lamports for 165 bytes. Verified against source: the
+  DL News article (published 2024-02-11, $82M, the closed-source/one-operator/"at least once a
+  day morning/night" claims), the `0x…0805` precompile and both `addStake` signatures in
+  `stakeV2.sol`, and every StonkFun reward mechanic on stonkfun.xyz/rewards. Confirmed Bittensor
+  is absent from the Wormhole SDK chain registry, and that the oldest TAO pool was created
+  2026-05-05, corroborating "live since 5 May 2026". All seven TAO-quoted coins still have live
+  TAO-quoted pools.
+- Corrected in the same pass: the wTAO figure ($29M → $28M), the Bittensor base-chain figure
+  ($522M → $495M), Bittensor EVM DeFi ($28K → $27K), an unsourced "~73 chains in Wormhole's
+  registry", a `pump.fun` attribution on the BITTENSOR squat that the chain contradicts, a
+  launch date on it that nothing supports, and a WinTAO entry that called it unrelated to the
+  canonical mint when its pool is quoted in it.
 
 ## Licence
 
