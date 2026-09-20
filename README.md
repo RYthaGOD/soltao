@@ -137,6 +137,15 @@ routing; Jupiter handles the swap and the link is prefilled.
   concentrated liquidity does better, so the real fill is usually cheaper. It is sized to
   make thin books visible, not to quote you.
 - **"Canonical" is Wormhole's designation**, not a Bittensor Foundation endorsement.
+- **The exit route claims are researched, not live-fetched.** Wormhole does not list Bittensor as
+  a supported chain, so the only Bittensor↔Ethereum door is the `wTAO` bridge — closed source,
+  single pseudonymous operator, manual withdrawal verification, ~$29M locked (DefiLlama, Sep 2026;
+  governance reported by [DL News](https://www.dlnews.com/articles/defi/wrapped-tao-on-ethereum-soars-to-82m-but-its-all-controlled-by-one-person/)).
+  The Bittensor EVM staking precompile interface is read from Opentensor's own
+  [evm-bittensor](https://github.com/opentensor/evm-bittensor/blob/main/solidity/stakeV2.sol)
+  examples; whether that V2 address is live on mainnet is **not verified** and the page says so.
+  Re-check these before the next curation pass — they are the only numbers on the site that do
+  not refresh themselves.
 - **Bridged supply** is derived from Dexscreener's FDV ÷ price rather than an RPC call, to
   keep the page dependency-free. It is approximate.
 - The 24h change and the quoted spot price come from the deepest pool; volume and liquidity

@@ -205,13 +205,79 @@
   <div class="callout">
     <h3>If you actually want subnet yield</h3>
     <p>
-      You have to leave Solana. Bridge back to native TAO through the
-      <a href="https://portalbridge.com/" rel="noopener" target="_blank">Wormhole portal</a>,
-      hold it in a Bittensor SS58 wallet, and stake or delegate from there —
-      <a href="https://docs.learnbittensor.org/" rel="noopener" target="_blank">Bittensor's docs</a>
-      cover the wallet and <code>btcli</code> side. Budget for two bridge legs plus the spread on
-      both. Nothing on this page, and nothing in Phantom, does that step for you.
+      Then this is probably the wrong thing to buy. The road from a Solana wrapper to a staked
+      position runs through a chokepoint most people never price —
+      <a href="#exit">the exit route is below</a>.
     </p>
+  </div>
+</section>
+
+<!-- ─────────────────────────── GETTING OUT ────────────────────────────────── -->
+<section class="wrap sec" id="exit" aria-labelledby="exit-h">
+  <div class="sec-head">
+    <h2 id="exit-h">Getting out</h2>
+    <p>
+      Everybody checks the depth on the way in. The way back to native TAO is the leg nobody
+      prices, and it is not symmetrical with the way in.
+    </p>
+  </div>
+
+  <ol class="hops" aria-label="Route from Solana TAO back to native Bittensor TAO">
+    <li><b>Solana</b><span>canonical TAO</span></li>
+    <li><b>Wormhole NTT</b><span>automated</span></li>
+    <li><b>Ethereum</b><span>wTAO, ERC-20</span></li>
+    <li class="hop-break"><b>Manual sign-off</b><span>one operator, by hand</span></li>
+    <li><b>Bittensor</b><span>native TAO</span></li>
+  </ol>
+
+  <div class="mintgrid">
+    <article class="panel panel-no">
+      <p class="verdict verdict-no">The chokepoint</p>
+      <h3>One person stands in the door</h3>
+      <p class="exit-p">
+        Bittensor's base chain cannot run smart contracts, so the only route between Bittensor and
+        Ethereum is the <code>wTAO</code> bridge — roughly <strong>$29M of TAO locked</strong>
+        behind a closed-source contract operated by a single pseudonymous developer. Redemption is
+        not permissionless. Withdrawals are verified by hand, at a cadence the operator has
+        described as <em>"at least once a day morning/night."</em> No multisig, no public audit.
+      </p>
+      <p class="exit-p">
+        That is not an accusation — the bridge works and it holds real money. It is a
+        <em>structure</em>, and you should know it sits between you and your TAO before you assume
+        you can leave on demand.
+      </p>
+      <p class="exit-src">
+        Reported by <a href="https://www.dlnews.com/articles/defi/wrapped-tao-on-ethereum-soars-to-82m-but-its-all-controlled-by-one-person/" rel="noopener" target="_blank">DL News</a>,
+        including the operator's own statements. Wormhole itself does not reach Bittensor —
+        Bittensor is not on its supported-chain list.
+      </p>
+    </article>
+
+    <article class="panel panel-yes">
+      <p class="verdict verdict-yes">The path that isn't this</p>
+      <h3>Staking doesn't need the wrapper at all</h3>
+      <p class="exit-p">
+        Bittensor's EVM layer exposes a staking precompile. The V2 interface takes a
+        <code>netuid</code>, so you can stake into a specific subnet from an ordinary EVM
+        transaction — and <code>addStakeLimit</code> carries a limit price and a partial-fill flag,
+        so you are not staking blind into a moving alpha pool.
+      </p>
+      <pre class="exit-code"><code>addStake(bytes32 hotkey, uint256 amount, uint256 netuid)
+addStakeLimit(hotkey, amount, limit_price,
+              allow_partial, netuid)</code></pre>
+      <p class="exit-p">
+        LayerZero and Hyperlane both reach Bittensor EVM from Solana. So if the plan is to stake,
+        the move is to route <em>value</em> across and stake there — not to buy a wrapper and try
+        to walk it home.
+      </p>
+      <p class="exit-src">
+        Interface from Opentensor's own
+        <a href="https://github.com/opentensor/evm-bittensor/blob/main/solidity/stakeV2.sol" rel="noopener" target="_blank">evm-bittensor</a>
+        examples. Confirm the precompile is live on mainnet before you rely on it — and know that
+        Bittensor EVM is close to empty, with about <strong>$28K</strong> of DeFi across one DEX,
+        against <strong>$520M</strong> on the base chain.
+      </p>
+    </article>
   </div>
 </section>
 
