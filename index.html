@@ -25,6 +25,7 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="styles.css">
 <link rel="preconnect" href="https://api.dexscreener.com" crossorigin>
+<link rel="preconnect" href="https://solana-rpc.publicnode.com" crossorigin>
 </head>
 <body>
 <a class="skip" href="#mint">Skip to the mint address</a>
@@ -33,11 +34,11 @@
   <div class="wrap">
 
     <div class="ticker">
-      <span>Dexscreener · 30s poll</span>
+      <span class="tick"><i class="tick-dot tick-dot-green" aria-hidden="true"></i>Dexscreener · 30s poll</span>
       <span class="tick-sep" aria-hidden="true"></span>
-      <span>DefiLlama · 10min poll</span>
+      <span class="tick"><i class="tick-dot tick-dot-green" aria-hidden="true"></i>DefiLlama · 10min poll</span>
       <span class="tick-sep" aria-hidden="true"></span>
-      <span>Registry · hand-curated</span>
+      <span class="tick"><i class="tick-dot tick-dot-amber" aria-hidden="true"></i>Mint account · read on-chain</span>
       <span class="tick tick-end">No wallet connect · no backend · no tracking</span>
     </div>
 
@@ -59,14 +60,16 @@
       </div>
     </div>
 
-    <nav class="subnav" aria-label="Sections">
-      <a href="#mint">Canonical mint</a>
-      <a href="#which">Which mint?</a>
-      <a href="#buy">Buying it</a>
-      <a href="#exit">Getting out</a>
-      <a href="#yield">Where the yield is</a>
-      <a href="#pairs">Coins quoted in TAO</a>
-    </nav>
+    <div class="navrow">
+      <nav class="subnav" aria-label="Sections">
+        <a href="#mint">Canonical mint &amp; checker</a>
+        <a href="#buy">Buying it</a>
+        <a href="#exit">Getting out</a>
+        <a href="#yield">Yield vs staking</a>
+        <a href="#pairs">Coins quoted in TAO</a>
+      </nav>
+      <span class="navrow-note"><i class="tick-dot tick-dot-green" aria-hidden="true"></i>Solana mainnet · live in your browser</span>
+    </div>
 
   </div>
 </header>
@@ -84,7 +87,7 @@
             <span class="lbl">Canonical primitive</span>
           </div>
           <h1>
-            Solana TAO is a <em>bridged wrapper</em>.<br>
+            Solana TAO is a <em>bridged wrapper</em>.
             You cannot stake it on a Bittensor subnet from Phantom.
           </h1>
           <p class="hero-body">
@@ -96,21 +99,16 @@
         </div>
 
         <div class="hero-card">
+          <div class="hero-card-top">
+            <span>What this token is</span>
+            <span class="hero-card-v">wrapper</span>
+          </div>
           <dl>
-            <div>
-              <dt>Bridge</dt>
-              <dd>Wormhole NTT · via Sunrise</dd>
-            </div>
-            <div>
-              <dt>Decimals</dt>
-              <dd>9 — same as native TAO</dd>
-            </div>
-            <div>
-              <dt>Subnet emissions here</dt>
-              <dd>none</dd>
-            </div>
+            <div><dt>Bridge</dt><dd>Wormhole NTT · Sunrise</dd></div>
+            <div><dt>Live since</dt><dd>5 May 2026</dd></div>
+            <div><dt>Subnet emissions</dt><dd class="hero-card-no">none</dd></div>
           </dl>
-          <p class="hero-card-foot">Every number on this page is fetched live in your browser</p>
+          <p class="hero-card-foot">Every figure on this page is fetched live in your browser</p>
         </div>
       </div>
     </div>
@@ -131,9 +129,9 @@
     </div>
 
     <p class="ca-hint">
-      <span>Starts <code>taoC</code>, ends <code>BRrBY</code>, 9 decimals. That prefix is a vanity
-      address — check <strong>both ends</strong>, not just the first four characters.</span>
-      <span>SPL · 9 decimals</span>
+      <span>Starts <code>taoC</code>, ends <code>BRrBY</code>. That prefix is a vanity address —
+      check <strong>both ends</strong>, not just the first four characters.</span>
+      <span class="ca-hint-r"><span id="v-program">—</span> · <span id="v-decimals">—</span> decimals</span>
     </p>
 
     <nav class="linkrow" aria-label="Open the canonical mint elsewhere">
@@ -211,11 +209,11 @@
       <code class="ca ca-sm">taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY</code>
       <dl class="facts">
         <div><dt>Bridge</dt><dd>Wormhole Native Token Transfers, issued through Sunrise</dd></div>
-        <div><dt>Decimals</dt><dd class="num">9</dd></div>
-        <div><dt>Bridged supply</dt><dd class="num" id="v-supply">—</dd></div>
+        <div><dt>Decimals</dt><dd class="num">9 — the same as native TAO</dd></div>
+        <div><dt>Mint supply</dt><dd class="num" id="v-supply">—</dd></div>
         <div><dt>Backing</dt><dd>TAO locked or burned on Bittensor, minted here. Canonical status is Wormhole's designation, not a Bittensor Foundation one.</dd></div>
       </dl>
-      <p class="mint-foot">Routed by Jupiter · live on Orca, Raydium, Meteora</p>
+      <p class="mint-foot"><span id="chain-src">Reading the mint account…</span></p>
     </article>
 
     <article class="panel panel-no">
@@ -239,10 +237,10 @@
       <h3>Fund SOL</h3>
       <p>
         You need SOL in a Solana wallet — Phantom, Solflare, Backpack. SOL is the gas and the
-        deepest route in. Keep ~0.02 SOL spare: a first-time TAO buy opens a token account and
-        that costs rent.
+        deepest route in. Keep a little spare: a first-time TAO buy opens a token account, and
+        that account has to be funded to stay rent-exempt.
       </p>
-      <p class="step-foot">Token-account rent: <b>~0.00204 SOL</b>, refundable on close</p>
+      <p class="step-foot">Token-account rent: <b>~0.0015 SOL</b>, returned if you close it</p>
     </li>
     <li>
       <div class="step-n"><span class="lbl">Jupiter</span></div>
@@ -303,11 +301,11 @@
       <p class="verdict verdict-no">The chokepoint<span class="verdict-note">manual custody</span></p>
       <h3>One person stands in the door</h3>
       <p class="exit-p">
-        Bittensor's base chain cannot run smart contracts, so the only route between Bittensor and
-        Ethereum is the <code>wTAO</code> bridge — roughly <strong>$29M of TAO locked</strong>
-        behind a closed-source contract operated by a single pseudonymous developer. Redemption is
-        not permissionless. Withdrawals are verified by hand, at a cadence the operator has
-        described as <em>"at least once a day morning/night."</em> No multisig, no public audit.
+        Bittensor's base chain runs no smart contracts of its own, so the route between Bittensor
+        and Ethereum is the <code>wTAO</code> bridge — a closed-source contract operated by a
+        single pseudonymous developer, holding <strong>about $29M of TAO</strong> today.
+        Redemption is not permissionless: withdrawals are verified by hand, at a cadence the
+        operator described as <em>"at least once a day morning/night."</em>
       </p>
       <p class="exit-p">
         That is not an accusation — the bridge works and it holds real money. It is a
@@ -315,9 +313,11 @@
         you can leave on demand.
       </p>
       <p class="exit-src">
-        Reported by <a href="https://www.dlnews.com/articles/defi/wrapped-tao-on-ethereum-soars-to-82m-but-its-all-controlled-by-one-person/" rel="noopener" target="_blank">DL News</a>,
-        including the operator's own statements. Wormhole itself does not reach Bittensor —
-        Bittensor is not on its supported-chain list.
+        The closed-source contract, the one-person team and the withdrawal quote were reported by
+        <a href="https://www.dlnews.com/articles/defi/wrapped-tao-on-ethereum-soars-to-82m-but-its-all-controlled-by-one-person/" rel="noopener" target="_blank">DL News in February 2024</a>,
+        quoting the operator directly; the bridge held $82M then. The $29M figure is today's,
+        from DefiLlama. Wormhole itself does not reach Bittensor — it is not among the ~73 chains
+        in Wormhole's registry.
       </p>
     </article>
 
@@ -331,19 +331,19 @@
         so you are not staking blind into a moving alpha pool.
       </p>
       <pre class="exit-code"><code><b>addStake</b>(bytes32 hotkey, uint256 amount, <i>uint256 netuid</i>)
-<b>addStakeLimit</b>(hotkey, amount, limit_price,
-              allow_partial, <i>netuid</i>)</code></pre>
+<b>addStakeLimit</b>(bytes32 hotkey, uint256 amount,
+  uint256 limit_price, bool allow_partial, <i>uint256 netuid</i>)</code></pre>
       <p class="exit-p">
-        LayerZero and Hyperlane both reach Bittensor EVM from Solana. So if the plan is to stake,
+        LayerZero and Hyperlane both list Solana and Bittensor's EVM. So if the plan is to stake,
         the move is to route <em>value</em> across and stake there — not to buy a wrapper and try
         to walk it home.
       </p>
       <p class="exit-src">
-        Interface from Opentensor's own
+        Signatures copied from Opentensor's
         <a href="https://github.com/opentensor/evm-bittensor/blob/main/solidity/stakeV2.sol" rel="noopener" target="_blank">evm-bittensor</a>
-        examples. Confirm the precompile is live on mainnet before you rely on it — and know that
-        Bittensor EVM is close to empty, with about <strong>$28K</strong> of DeFi across one DEX,
-        against <strong>$520M</strong> on the base chain.
+        interface, precompile <code>0x…0805</code>. Confirm it is live on mainnet before you rely
+        on it — and know that Bittensor EVM is close to empty, with about <strong>$28K</strong> of
+        DeFi across one DEX against <strong>$522M</strong> on the base chain.
       </p>
     </article>
   </div>
@@ -387,9 +387,9 @@
       <span class="lbl lbl-amber">[ TAO-quoted book ]</span>
       <h2 id="pairs-h">Coins quoted in TAO</h2>
       <p>
-        StonkFun reward coins pay holders pro-rata in whatever they are paired against. Paired
-        against TAO, the dividend lands as TAO — which is the whole reason this meta exists.
-        <a href="https://www.stonkfun.xyz/rewards" rel="noopener" target="_blank">Mechanics ↗</a>
+        StonkFun reward coins pay holders pro-rata in the quote token their launch is paired
+        against. Paired against TAO, the dividend lands as TAO — which is the whole reason this
+        meta exists. <a href="https://www.stonkfun.xyz/rewards" rel="noopener" target="_blank">Mechanics ↗</a>
       </p>
     </div>
     <label class="toggle">
@@ -424,11 +424,13 @@
 
 <footer class="wrap foot">
   <p>
-    Market data from the public
+    Price, volume and liquidity from the public
     <a href="https://docs.dexscreener.com/api/reference" rel="noopener" target="_blank">Dexscreener API</a>,
-    refreshed every 30s and cached in your browser. TVL from the public
+    refreshed every 30s. TVL from the public
     <a href="https://defillama.com/docs/api" rel="noopener" target="_blank">DefiLlama API</a>.
-    Registry hand-curated <time datetime="2026-09-20">20 Sep 2026</time><span id="foot-counts"></span>
+    Mint supply, decimals and token program read straight from the mint account on Solana mainnet.
+    All of it cached in your browser. Registry hand-curated
+    <time datetime="2026-09-20">20 Sep 2026</time><span id="foot-counts"></span>
   </p>
   <p class="foot-dis">
     Not affiliated with Bittensor, the Opentensor Foundation, Wormhole, Jupiter or StonkFun.

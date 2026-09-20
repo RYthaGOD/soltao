@@ -50,7 +50,7 @@
       "name": "Bittensor (pump.fun)",
       "verdict": "ticker-squat",
       "claim": "A pump.fun launch using the Bittensor name.",
-      "why": "Unrelated to Bittensor. Launched 2026-09-19 with no liquidity."
+      "why": "Unrelated to Bittensor. Launched 2026-09-19."
     },
     {
       "mint": "2Vg7CJskDNiQpdddfDruiLeQnP5f2tpMB4xro4nVpump",
@@ -90,7 +90,7 @@
         "where": "Bittensor",
         "llama": { "protocol": "tensorplex" },
         "status": "live",
-        "note": "The ecosystem's only liquid staking token.",
+        "note": "The only liquid staking protocol DefiLlama tracks on Bittensor.",
         "url": "https://stake.tensorplex.ai/"
       },
       {
@@ -98,7 +98,7 @@
         "where": "Bittensor EVM",
         "llama": { "protocol": "taofi" },
         "status": "live",
-        "note": "The only DEX on Bittensor EVM, already routing Solana value in through Hyperlane. The pattern works. The users are not there.",
+        "note": "The only DEX DefiLlama tracks on Bittensor EVM — its TVL is the whole chain's DeFi. Hyperlane lists both Solana and Subtensor, so the route in exists. The pattern works. The users are not there.",
         "url": "https://www.taofi.com/swap"
       },
       {

@@ -5,7 +5,7 @@
   X-Frame-Options: DENY
   Referrer-Policy: no-referrer
   Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), usb=()
-  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.dexscreener.com https://api.llama.fi; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.dexscreener.com https://api.llama.fi https://solana-rpc.publicnode.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
 
 # The registry is the one file that must not go stale behind a CDN edge.
 /pairs.json

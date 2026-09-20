@@ -22,6 +22,15 @@ const LLAMA_CHAINS = 'https://api.llama.fi/v2/chains';
 const YIELD_CACHE_KEY = 'soltao:v1:yield';
 const YIELD_TTL = 600_000;   // 10 min
 
+// The mint account itself, read straight from a Solana RPC. Dexscreener's fdv
+// is not the bridged supply — dividing it by price gives roughly a quarter of
+// what the mint actually holds — so the one number that claims to be on-chain
+// truth is fetched from the chain.
+const RPC = 'https://solana-rpc.publicnode.com';
+const CHAIN_CACHE_KEY = 'soltao:v1:chain';
+const CHAIN_TTL = 600_000;   // 10 min; bridged supply moves slowly
+const SPL_TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
+
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -253,7 +262,6 @@ function renderTao() {
   const vol = books.reduce((s, p) => s + volOf(p), 0);
   const change = num(deepest.priceChange && deepest.priceChange.h24);
   const txns = deepest.txns && deepest.txns.h24;
-  const supply = isNum(price) && price > 0 ? num(deepest.fdv) / price : null;
 
   setPrice($('v-price'), price);
   setText($('v-price-sol'), deepest.priceNative ? deepest.priceNative + ' ' + deepest.quoteToken.symbol + ' · ' + deepest.dexId : DASH);
@@ -271,8 +279,6 @@ function renderTao() {
   setText(lq, fmtUsd(liq));
   lq.className = 'cell-v num' + (thin ? ' warn' : '');
   setText($('v-liq-note'), 'deepest ' + fmtUsd(liqOf(deepest)) + ' · ' + deepest.dexId);
-
-  setText($('v-supply'), supply ? fmtQty(supply, 0) + ' TAO bridged' : DASH);
 
   // thin-book alert
   const alert = $('thin-alert');
@@ -587,6 +593,54 @@ document.addEventListener('click', async (e) => {
   setTimeout(() => { btn.textContent = 'copy'; delete btn.dataset.done; }, 1800);
 });
 
+
+/* ── on-chain facts ────────────────────────────────────────────────────────
+   Supply, decimals and the owning token program, read from the mint account.
+   Everything here is a claim the page makes about the chain, so it comes from
+   the chain rather than from a price feed. Fails closed: the fields stay at —.
+   -------------------------------------------------------------------------- */
+
+async function loadChain() {
+  const mint = state.registry.canonical.mint;
+
+  try {
+    const c = JSON.parse(localStorage.getItem(CHAIN_CACHE_KEY) || 'null');
+    if (c && c.t && c.mint === mint && Date.now() - c.t < CHAIN_TTL) { renderChain(c.info); return; }
+  } catch { /* private mode */ }
+
+  const res = await fetch(RPC, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0', id: 1, method: 'getAccountInfo',
+      params: [mint, { encoding: 'jsonParsed' }],
+    }),
+  });
+  if (!res.ok) throw new Error('rpc ' + res.status);
+
+  const j = await res.json();
+  const v = j && j.result && j.result.value;
+  const info = v && v.data && v.data.parsed && v.data.parsed.info;
+  if (!info || info.supply == null) throw new Error('rpc: no mint account');
+
+  const facts = {
+    supply: Number(info.supply) / 10 ** info.decimals,
+    decimals: info.decimals,
+    program: v.owner === SPL_TOKEN_PROGRAM ? 'SPL Token' : v.owner,
+  };
+  try { localStorage.setItem(CHAIN_CACHE_KEY, JSON.stringify({ t: Date.now(), mint, info: facts })); } catch { /* private mode */ }
+  renderChain(facts);
+}
+
+function renderChain(f) {
+  if (!f) return;
+  setText($('v-supply'), fmtQty(f.supply, 0) + ' TAO');
+  setText($('v-decimals'), String(f.decimals));
+  setText($('v-program'), f.program);
+  const stamp = $('chain-src');
+  if (stamp) stamp.textContent = 'Read from the mint account on Solana mainnet.';
+}
+
 /* ── the checker ───────────────────────────────────────────────────────────── */
 
 const B58 = /[1-9A-HJ-NP-Za-km-z]{32,44}/g;
@@ -668,9 +722,11 @@ async function boot() {
     return;
   }
   await loadMarket();
+  loadChain().catch((e) => console.warn('[soltao] on-chain read failed:', e));
   loadYield().catch((e) => { console.warn('[soltao] yield sizing failed:', e); renderYield(null, null, true); });
   setInterval(() => { if (document.visibilityState === 'visible') loadMarket(); }, REFRESH_MS);
   setInterval(() => { if (document.visibilityState === 'visible') loadYield().catch(() => {}); }, YIELD_TTL);
+  setInterval(() => { if (document.visibilityState === 'visible') loadChain().catch(() => {}); }, CHAIN_TTL);
 }
 
 boot();
