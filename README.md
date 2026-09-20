@@ -48,12 +48,46 @@ Then open `http://localhost:3000`.
 
 Any static host. There is no build step — point it at the repo root and publish.
 
+Currently live on two hosts, serving byte-identical content:
+
+| | URL |
+|---|---|
+| GitHub Pages | <https://rythagod.github.io/soltao/> — canonical |
+| Railway | <https://soltao-production.up.railway.app/> — mirror |
+
 | Host | Setup |
 |---|---|
-| Cloudflare Pages | Connect the repo. Build command: *(none)*. Output directory: `/` |
 | GitHub Pages | Settings → Pages → deploy from branch, root folder |
+| Railway | `railway up` — see below |
+| Cloudflare Pages | Connect the repo. Build command: *(none)*. Output directory: `/` |
 | Netlify | Drag the folder in, or connect the repo with no build command |
 | Vercel | Import the repo, framework preset "Other", no build command |
+
+### Railway
+
+`Dockerfile` + `deploy/nginx.conf.template`, built remotely — nothing to install locally.
+
+```bash
+railway init --name soltao      # once
+railway add --service soltao    # once
+railway up --ci                 # deploy
+railway domain                  # once, to get a public URL
+```
+
+Railway injects `PORT` at runtime. The official nginx image runs `envsubst` over
+`/etc/nginx/templates/*.template` on boot, so the port lands in the config with no custom
+entrypoint. `/healthz` backs the healthcheck in `railway.json`.
+
+**The nginx trap worth knowing:** an `add_header` inside a `location` block silently discards
+every `add_header` inherited from the `server` block. So the security headers are declared once
+at server level and per-file caching uses `expires`, which is a different directive and does not
+trigger that reset. If you add a header inside a location later, you must re-declare all of them
+there too.
+
+**Both hosts serve `rel="canonical"` and the OG tags pointing at GitHub Pages**, so the mirror
+does not compete with the primary in search or on social. If Railway becomes the real home —
+a custom domain, say — change the four absolute URLs in `index.html`, plus `robots.txt` and
+`sitemap.xml`.
 
 After deploying, update the four absolute URLs in `index.html` — `link rel="canonical"`,
 `og:url`, `og:image` and `twitter:image` — to the real domain. Relative URLs do not work for
