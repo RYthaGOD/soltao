@@ -6,7 +6,7 @@
 <title>Solana TAO Board — the canonical TAO mint, and the ones that aren't</title>
 <meta name="description" content="One page: the canonical Solana TAO mint address, live liquidity depth, the imposter contracts, and every TAO-quoted reward coin. Built for pasting into CT replies.">
 <link rel="canonical" href="https://rythagod.github.io/soltao/">
-<meta name="theme-color" content="#0a0b0a">
+<meta name="theme-color" content="#0a0c10">
 <meta name="color-scheme" content="dark">
 
 <meta property="og:type" content="website">
@@ -30,19 +30,44 @@
 <a class="skip" href="#mint">Skip to the mint address</a>
 
 <header class="topbar">
-  <div class="wrap topbar-in">
-    <div class="brand">
-      <span class="brand-mark" aria-hidden="true">◱</span>
-      <span class="brand-name">soltao</span>
-      <span class="brand-sub">unofficial · community reference</span>
+  <div class="wrap">
+
+    <div class="ticker">
+      <span>Dexscreener · 30s poll</span>
+      <span class="tick-sep" aria-hidden="true"></span>
+      <span>DefiLlama · 10min poll</span>
+      <span class="tick-sep" aria-hidden="true"></span>
+      <span>Registry · hand-curated</span>
+      <span class="tick tick-end">No wallet connect · no backend · no tracking</span>
     </div>
-    <div class="topbar-right">
-      <span class="feed" id="feed-state" data-state="init">
-        <span class="feed-dot" aria-hidden="true"></span>
-        <span id="feed-label">connecting</span>
-      </span>
-      <button type="button" class="btn btn-ghost" id="refresh" aria-label="Refresh market data now">refresh</button>
+
+    <div class="topbar-in">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">τ</span>
+        <span class="brand-text">
+          <span class="brand-name">Solana TAO Board</span>
+          <span class="brand-sub">unofficial · community reference</span>
+        </span>
+      </div>
+      <div class="topbar-right">
+        <span class="feed" id="feed-state" data-state="init">
+          <span class="feed-dot" aria-hidden="true"></span>
+          <span id="feed-label">connecting</span>
+        </span>
+        <button type="button" class="btn btn-ghost" id="refresh" aria-label="Refresh market data now">refresh</button>
+        <a class="btn btn-primary btn-sm" href="https://jup.ag/swap/So11111111111111111111111111111111111111112-taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY" rel="noopener" target="_blank">Swap on Jupiter</a>
+      </div>
     </div>
+
+    <nav class="subnav" aria-label="Sections">
+      <a href="#mint">Canonical mint</a>
+      <a href="#which">Which mint?</a>
+      <a href="#buy">Buying it</a>
+      <a href="#exit">Getting out</a>
+      <a href="#yield">Where the yield is</a>
+      <a href="#pairs">Coins quoted in TAO</a>
+    </nav>
+
   </div>
 </header>
 
@@ -51,17 +76,44 @@
 <!-- ─────────────────────────── HERO / THE ONE WARNING ─────────────────────── -->
 <section class="hero">
   <div class="wrap">
-    <p class="kicker">Read this first</p>
-    <h1>
-      Solana TAO is a <em>bridged wrapper</em>.<br>
-      You cannot stake it on a Bittensor subnet from Phantom.
-    </h1>
-    <p class="hero-body">
-      The token at the mint below is real, canonical, and tradeable on Solana. It is
-      <strong>not</strong> native TAO. Holding it earns no subnet emissions, no validator
-      yield, and no dTAO. To stake, you bridge back to Bittensor —
-      <a href="#buy">steps below</a>.
-    </p>
+    <div class="hero-in">
+      <div class="hero-grid">
+        <div>
+          <div class="hero-kick">
+            <span class="hero-chip">Read this first</span>
+            <span class="lbl">Canonical primitive</span>
+          </div>
+          <h1>
+            Solana TAO is a <em>bridged wrapper</em>.<br>
+            You cannot stake it on a Bittensor subnet from Phantom.
+          </h1>
+          <p class="hero-body">
+            The token at the mint below is real, canonical, and tradeable on Solana. It is
+            <strong>not</strong> native TAO. Holding it earns no subnet emissions, no validator
+            yield, and no dTAO. To stake, you bridge back to Bittensor —
+            <a href="#exit">the route out is below</a>.
+          </p>
+        </div>
+
+        <div class="hero-card">
+          <dl>
+            <div>
+              <dt>Bridge</dt>
+              <dd>Wormhole NTT · via Sunrise</dd>
+            </div>
+            <div>
+              <dt>Decimals</dt>
+              <dd>9 — same as native TAO</dd>
+            </div>
+            <div>
+              <dt>Subnet emissions here</dt>
+              <dd>none</dd>
+            </div>
+          </dl>
+          <p class="hero-card-foot">Every number on this page is fetched live in your browser</p>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -70,17 +122,18 @@
   <div class="panel panel-mint">
     <div class="panel-head">
       <h2 id="mint-h">Canonical mint</h2>
-      <span class="tag tag-ok">Wormhole NTT · via Sunrise · May 2026</span>
+      <span class="tag tag-ok">Wormhole NTT · via Sunrise</span>
     </div>
 
     <div class="ca-row">
-      <code class="ca" id="ca" tabindex="0">taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY</code>
+      <code class="ca" id="ca" tabindex="0"><b>taoC</b>6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kc<b>BRrBY</b></code>
       <button type="button" class="btn btn-copy" data-copy="taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY">copy</button>
     </div>
 
     <p class="ca-hint">
-      Starts <code>taoC</code>, ends <code>BrBY</code>, 9 decimals. That prefix is a vanity
-      address — check both ends, not just the first four characters.
+      <span>Starts <code>taoC</code>, ends <code>BRrBY</code>, 9 decimals. That prefix is a vanity
+      address — check <strong>both ends</strong>, not just the first four characters.</span>
+      <span>SPL · 9 decimals</span>
     </p>
 
     <nav class="linkrow" aria-label="Open the canonical mint elsewhere">
@@ -107,7 +160,10 @@
       <span class="cell-s" id="v-pools">—</span>
     </div>
     <div class="cell cell-liq">
-      <span class="cell-k">Liquidity <span class="cell-k-note">all TAO books</span></span>
+      <span class="cell-k">
+        <span>Liquidity <span class="cell-k-note">all TAO books</span></span>
+        <span class="cell-flag" aria-hidden="true">thin book</span>
+      </span>
       <span class="cell-v num" id="v-liq">—</span>
       <span class="cell-s" id="v-liq-note">—</span>
     </div>
@@ -120,7 +176,7 @@
 
   <details class="slip" id="slip-wrap">
     <summary>What a market buy actually costs <span class="slip-sum" id="slip-sum"></span></summary>
-    <div class="tablewrap">
+    <div class="tablewrap tablewrap-bare">
       <table class="slip-table">
         <caption>Worst-case price impact — constant-product maths against the single deepest pool
           only. Jupiter splits across every pool and concentrated liquidity does better than this.
@@ -135,21 +191,22 @@
 <!-- ─────────────────────────── WHICH MINT? ────────────────────────────────── -->
 <section class="wrap sec" id="which" aria-labelledby="which-h">
   <div class="sec-head">
+    <span class="lbl lbl-amber">[ Local registry check ]</span>
     <h2 id="which-h">Which mint?</h2>
-    <p>Paste any address someone drops in your replies. Checked against the registry locally —
-      nothing leaves your browser.</p>
+    <p>Paste any address or Dexscreener link someone drops in your replies. Checked against the
+      registry locally — nothing leaves your browser.</p>
   </div>
 
   <form class="checker" id="checker" autocomplete="off">
     <label class="sr" for="check-in">Contract address to verify</label>
     <input type="text" id="check-in" placeholder="paste a contract address, Solscan URL, or Dexscreener link" spellcheck="false">
-    <button type="submit" class="btn btn-primary">Check</button>
+    <button type="submit" class="btn btn-primary">Check address</button>
   </form>
   <div class="check-out" id="check-out" role="status" aria-live="polite" hidden></div>
 
   <div class="mintgrid">
     <article class="panel panel-yes">
-      <p class="verdict verdict-yes">This one</p>
+      <p class="verdict verdict-yes">This one<span class="verdict-note">confirmed</span></p>
       <h3>TAO — Bittensor</h3>
       <code class="ca ca-sm">taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY</code>
       <dl class="facts">
@@ -158,10 +215,11 @@
         <div><dt>Bridged supply</dt><dd class="num" id="v-supply">—</dd></div>
         <div><dt>Backing</dt><dd>TAO locked or burned on Bittensor, minted here. Canonical status is Wormhole's designation, not a Bittensor Foundation one.</dd></div>
       </dl>
+      <p class="mint-foot">Routed by Jupiter · live on Orca, Raydium, Meteora</p>
     </article>
 
     <article class="panel panel-no">
-      <p class="verdict verdict-no">Not this</p>
+      <p class="verdict verdict-no">Not this<span class="verdict-note">look-alikes &amp; squatters</span></p>
       <ul class="nolist" id="nolist"></ul>
       <p class="nolist-foot">No copy buttons on this side, on purpose. To compare one, use the checker above.</p>
     </article>
@@ -171,20 +229,24 @@
 <!-- ─────────────────────────── HOW TO BUY ─────────────────────────────────── -->
 <section class="wrap sec" id="buy" aria-labelledby="buy-h">
   <div class="sec-head">
+    <span class="lbl lbl-amber">[ Operational protocol ]</span>
     <h2 id="buy-h">Buying it, and the thing people get wrong afterwards</h2>
   </div>
 
   <ol class="steps">
     <li>
+      <div class="step-n"><span class="lbl">Solana wallet</span></div>
       <h3>Fund SOL</h3>
       <p>
         You need SOL in a Solana wallet — Phantom, Solflare, Backpack. SOL is the gas and the
         deepest route in. Keep ~0.02 SOL spare: a first-time TAO buy opens a token account and
         that costs rent.
       </p>
+      <p class="step-foot">Token-account rent: <b>~0.00204 SOL</b>, refundable on close</p>
     </li>
     <li>
-      <h3>Swap on Jupiter, with slippage set by hand</h3>
+      <div class="step-n"><span class="lbl">Jupiter</span></div>
+      <h3>Swap, with slippage set by hand</h3>
       <p>
         <a href="https://jup.ag/swap/So11111111111111111111111111111111111111112-taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY" rel="noopener" target="_blank">Open the prefilled route</a>,
         then confirm the output mint matches the address above character for character —
@@ -192,29 +254,35 @@
         line before signing: <span id="step-depth">the book is thin</span>, so a size that is
         nothing in SOL is a real haircut here.
       </p>
+      <p class="step-foot">Depth check: <span class="warn">read the impact line, not the spot price</span></p>
     </li>
     <li>
+      <div class="step-n"><span class="lbl">What you hold</span></div>
       <h3>Know what you are holding</h3>
       <p>
         A wrapped claim on TAO, tradeable on Solana, kept near the native price by arbitrage.
         It does not stake, it does not earn emissions, and it will not show up on Taostats.
       </p>
+      <p class="step-foot">Subnet emissions on this token: <span class="down">none</span></p>
     </li>
   </ol>
 
   <div class="callout">
-    <h3>If you actually want subnet yield</h3>
-    <p>
-      Then this is probably the wrong thing to buy. The road from a Solana wrapper to a staked
-      position runs through a chokepoint most people never price —
-      <a href="#exit">the exit route is below</a>.
-    </p>
+    <div>
+      <h3>If you actually want subnet yield</h3>
+      <p>
+        Then this is probably the wrong thing to buy. The road from a Solana wrapper to a staked
+        position runs through a chokepoint most people never price.
+      </p>
+    </div>
+    <a class="btn" href="#exit">View chokepoints ↓</a>
   </div>
 </section>
 
 <!-- ─────────────────────────── GETTING OUT ────────────────────────────────── -->
 <section class="wrap sec" id="exit" aria-labelledby="exit-h">
   <div class="sec-head">
+    <span class="lbl lbl-amber">[ Structural risk ]</span>
     <h2 id="exit-h">Getting out</h2>
     <p>
       Everybody checks the depth on the way in. The way back to native TAO is the leg nobody
@@ -230,9 +298,9 @@
     <li><b>Bittensor</b><span>native TAO</span></li>
   </ol>
 
-  <div class="mintgrid">
+  <div class="exit-grid">
     <article class="panel panel-no">
-      <p class="verdict verdict-no">The chokepoint</p>
+      <p class="verdict verdict-no">The chokepoint<span class="verdict-note">manual custody</span></p>
       <h3>One person stands in the door</h3>
       <p class="exit-p">
         Bittensor's base chain cannot run smart contracts, so the only route between Bittensor and
@@ -254,7 +322,7 @@
     </article>
 
     <article class="panel panel-yes">
-      <p class="verdict verdict-yes">The path that isn't this</p>
+      <p class="verdict verdict-yes">The path that isn't this<span class="verdict-note">EVM direct</span></p>
       <h3>Staking doesn't need the wrapper at all</h3>
       <p class="exit-p">
         Bittensor's EVM layer exposes a staking precompile. The V2 interface takes a
@@ -262,9 +330,9 @@
         transaction — and <code>addStakeLimit</code> carries a limit price and a partial-fill flag,
         so you are not staking blind into a moving alpha pool.
       </p>
-      <pre class="exit-code"><code>addStake(bytes32 hotkey, uint256 amount, uint256 netuid)
-addStakeLimit(hotkey, amount, limit_price,
-              allow_partial, netuid)</code></pre>
+      <pre class="exit-code"><code><b>addStake</b>(bytes32 hotkey, uint256 amount, <i>uint256 netuid</i>)
+<b>addStakeLimit</b>(hotkey, amount, limit_price,
+              allow_partial, <i>netuid</i>)</code></pre>
       <p class="exit-p">
         LayerZero and Hyperlane both reach Bittensor EVM from Solana. So if the plan is to stake,
         the move is to route <em>value</em> across and stake there — not to buy a wrapper and try
@@ -284,6 +352,7 @@ addStakeLimit(hotkey, amount, limit_price,
 <!-- ─────────────────────────── THE YIELD MENU ─────────────────────────────── -->
 <section class="wrap sec" id="yield" aria-labelledby="yield-h">
   <div class="sec-head">
+    <span class="lbl lbl-amber">[ Capital distribution ]</span>
     <h2 id="yield-h">So where is the yield, actually?</h2>
     <p>
       Every real option for earning on TAO, with live size attached. The gap between the first
@@ -315,6 +384,7 @@ addStakeLimit(hotkey, amount, limit_price,
 <section class="wrap sec" id="pairs" aria-labelledby="pairs-h">
   <div class="sec-head sec-head-row">
     <div>
+      <span class="lbl lbl-amber">[ TAO-quoted book ]</span>
       <h2 id="pairs-h">Coins quoted in TAO</h2>
       <p>
         StonkFun reward coins pay holders pro-rata in whatever they are paired against. Paired
@@ -356,8 +426,9 @@ addStakeLimit(hotkey, amount, limit_price,
   <p>
     Market data from the public
     <a href="https://docs.dexscreener.com/api/reference" rel="noopener" target="_blank">Dexscreener API</a>,
-    refreshed every 30s and cached in your browser. Registry hand-curated
-    <time datetime="2026-09-20">20 Sep 2026</time><span id="foot-counts"></span>
+    refreshed every 30s and cached in your browser. TVL from the public
+    <a href="https://defillama.com/docs/api" rel="noopener" target="_blank">DefiLlama API</a>.
+    Registry hand-curated <time datetime="2026-09-20">20 Sep 2026</time><span id="foot-counts"></span>
   </p>
   <p class="foot-dis">
     Not affiliated with Bittensor, the Opentensor Foundation, Wormhole, Jupiter or StonkFun.
