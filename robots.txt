@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://soltao.pages.dev/sitemap.xml
+Sitemap: https://rythagod.github.io/soltao/sitemap.xml
