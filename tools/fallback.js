@@ -48,19 +48,22 @@ function notThisBlock(reg) {
 
 function pairsBlock(reg) {
   const tao = reg.canonical.mint;
-  const shown = reg.pairs.filter((t) => t.rewards === 'confirmed');
+  const shown = reg.pairs.filter((t) => t.rewards === 'confirmed' || t.self);
   const rows = (shown.length ? shown : reg.pairs.slice(0, 1)).map((t) => {
     const links = [
       `<a href="https://dexscreener.com/solana/${esc(t.mint)}" rel="noopener" target="_blank">DEX</a>`,
-      `<a href="https://jup.ag/swap/${esc(tao)}-${esc(t.mint)}" rel="noopener" target="_blank">JUP</a>`,
+      t.self && !t.pairAddress
+        ? `<a href="https://solscan.io/token/${esc(t.mint)}" rel="noopener" target="_blank">SCAN</a>`
+        : `<a href="https://jup.ag/swap/${esc(tao)}-${esc(t.mint)}" rel="noopener" target="_blank">JUP</a>`,
     ];
     if (t.site) links.push(`<a href="${esc(t.site)}" rel="noopener" target="_blank">WWW</a>`);
     return [
-      '        <tr>',
+      `        <tr${t.self ? ' class="row-self"' : ''}>`,
       '          <td>',
       '            <div class="coin">',
       `              <span class="coin-sym">$${esc(t.symbol)}</span>`,
       `              <span class="coin-name">${esc(t.name)}</span>`,
+      t.self && t.disclosure ? `              <span class="coin-self">${esc(t.disclosure)}</span>` : null,
       `              <code class="coin-ca">${esc(t.mint)}</code>`,
       '            </div>',
       '          </td>',
@@ -69,16 +72,17 @@ function pairsBlock(reg) {
       `          <td class="r num c-opt">${DASH}</td>`,
       `          <td class="r num c-opt">${DASH}</td>`,
       `          <td class="r num">${DASH}</td>`,
-      `          <td><span class="rw" data-r="${esc(t.rewards)}" title="${esc(t.mechanic)}">TAO dividends</span></td>`,
+      `          <td><span class="rw" data-r="${esc(t.rewards)}" title="${esc([t.mechanic, t.verified, t.onchain, t.pool].filter(Boolean).join(' '))}">${t.self ? 'ours &middot; ' + (t.badge || 'unverified') : 'TAO dividends'}</span></td>`,
       `          <td class="r"><div class="tlinks">${links.join('')}</div></td>`,
       '        </tr>',
-    ].join('\n');
+    ].filter((l) => l !== null).join('\n');
   });
 
-  const rest = reg.pairs.length - (shown.length || 1);
+  const nShown = shown.length || 1;
+  const rest = reg.pairs.length - nShown;
   rows.push([
     '        <tr class="row-msg">',
-    `          <td colspan="8">Prices, liquidity and the other ${rest} TAO-quoted ${rest === 1 ? 'coin' : 'coins'} in the registry need JavaScript. The mint above does not.</td>`,
+    `          <td colspan="8">Prices, liquidity and the other ${rest} TAO-quoted ${rest === 1 ? 'coin' : 'coins'} in the registry need JavaScript. The ${nShown === 1 ? 'mint above does' : 'mints above do'} not.</td>`,
     '        </tr>',
   ].join('\n'));
 

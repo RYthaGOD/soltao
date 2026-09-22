@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Stake Solana TAO — soltao</title>
+<meta name="description" content="Send canonical Solana TAO home to Bittensor and stake it, in a Bittensor wallet you hold. One Solana transaction. No receipt token, no soltao contract, no custody.">
+<link rel="canonical" href="https://soltao.xyz/stake/">
+<meta name="theme-color" content="#0a0c10">
+<meta name="color-scheme" content="dark">
+<meta name="robots" content="index,follow">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="stake.css">
+<script src="stake.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#steps">Skip to the steps</a>
+
+<header class="topbar">
+  <div class="wrap">
+    <div class="topbar-in">
+      <a class="brand brand-link" href="../">
+        <span class="brand-mark" aria-hidden="true">τ</span>
+        <span class="brand-text">
+          <span class="brand-name">Solana TAO Board</span>
+          <span class="brand-sub">unofficial · community reference</span>
+        </span>
+      </a>
+      <div class="topbar-right">
+        <a class="btn btn-ghost" href="../">← back to the board</a>
+        <span class="wallet-pill" id="wallet-pill" hidden></span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+<section class="wrap stake-hero" aria-labelledby="stake-h">
+  <span class="lbl lbl-amber">[ Stake route ]</span>
+  <h1 id="stake-h">Stake your Solana TAO, <em>in a wallet you own</em></h1>
+  <p class="stake-lede">
+    One Solana transaction. Your TAO goes home over the LayerZero bridge it came in on, and this page
+    stakes it to the validator you choose, owned by your own Bittensor wallet. There is no receipt
+    token and no soltao contract: every key along the way comes from your signature, and nobody else
+    holds one.
+  </p>
+  <ol class="hops stake-hops" aria-label="The route">
+    <li><b>Solana</b><span>canonical TAO · you sign once</span></li>
+    <li><b>LayerZero</b><span>the OFT bridge TAO arrived on</span></li>
+    <li><b>Bittensor EVM</b><span>your transit account unwraps it</span></li>
+    <li><b>Your coldkey</b><span>staked on root · yours</span></li>
+  </ol>
+</section>
+
+<div class="wrap">
+  <div class="callout callout-plain notlive" id="not-live" hidden>
+    <div>
+      <h3>Not live yet</h3>
+      <p id="not-live-why">Sending is switched off until the route's settings are final, so nothing on this
+      page can send. You can still create your Bittensor wallet and see a live fee quote.</p>
+    </div>
+  </div>
+</div>
+
+<ol class="wrap route-steps" id="steps">
+
+  <!-- 1 ───────────────────────────────────────────────────────── -->
+  <li class="panel step" id="step-connect" data-state="active">
+    <div class="step-head">
+      <span class="rs-n">01</span>
+      <h2>Connect your Solana wallet</h2>
+    </div>
+    <p class="step-p">Read-only until you sign in step 4. The page never sees your Solana key.</p>
+    <div class="step-row">
+      <button type="button" class="btn btn-primary" id="connect">Connect wallet</button>
+      <span class="step-note" id="connect-note" role="status"></span>
+    </div>
+    <dl class="kv" id="balances" hidden>
+      <div><dt>Wallet</dt><dd class="num" id="sol-address"></dd></div>
+      <div><dt>TAO</dt><dd class="num" id="tao-balance"><span class="skel"></span></dd></div>
+      <div><dt>SOL</dt><dd class="num" id="sol-balance"><span class="skel"></span></dd></div>
+    </dl>
+  </li>
+
+  <!-- 2 ───────────────────────────────────────────────────────── -->
+  <li class="panel step" id="step-coldkey" data-state="locked">
+    <div class="step-head">
+      <span class="rs-n">02</span>
+      <h2>Your Bittensor wallet</h2>
+    </div>
+
+    <p class="step-p">You sign one message. It creates two keys that only you hold: a Bittensor wallet, and a
+      transit account on Bittensor EVM, where the bridge delivers and where this page stakes your TAO and
+      hands it to your wallet. Signing moves no funds.</p>
+
+    <fieldset class="choice">
+      <legend class="sr">Where the TAO should land</legend>
+      <label class="choice-opt">
+        <input type="radio" name="ck-mode" value="derive" checked>
+        <span><b>Land in the wallet my signature creates</b>
+        <i>The same Solana wallet recreates the same Bittensor wallet every time. You also get its 12-word phrase to import into btcli or any Bittensor wallet.</i></span>
+      </label>
+      <label class="choice-opt">
+        <input type="radio" name="ck-mode" value="paste">
+        <span><b>Land in a Bittensor address I already have</b>
+        <i>Paste the coldkey address (starts with 5). Best if you already keep TAO in btcli, Talisman or another Bittensor wallet. You still sign once, for the transit account.</i></span>
+      </label>
+    </fieldset>
+
+    <div class="ck-paste" id="ck-paste" hidden>
+      <label class="field">
+        <span>Bittensor coldkey address</span>
+        <input type="text" id="coldkey-in" inputmode="text" autocomplete="off" spellcheck="false" placeholder="5…">
+      </label>
+      <span class="step-note" id="coldkey-note" role="status"></span>
+    </div>
+
+    <div class="step-row">
+      <button type="button" class="btn" id="derive">Sign with my Solana wallet</button>
+      <span class="step-note" id="derive-note" role="status"></span>
+    </div>
+    <p class="sign-warn">
+      That signature <strong>is</strong> the key to both. Only sign it on soltao.xyz. A hardware wallet, or
+      another wallet app holding the same key, can sign it differently and make different keys, so save the
+      phrase anyway.
+    </p>
+
+    <div class="callout callout-plain resume" id="resume" hidden>
+      <div>
+        <h3>Unfinished route</h3>
+        <p id="resume-text"></p>
+        <div class="step-row">
+          <button type="button" class="btn btn-primary" id="resume-go">Finish it</button>
+          <button type="button" class="btn btn-ghost" id="resume-forget" hidden>Forget it</button>
+          <span class="step-note" id="resume-links"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="ck-result" id="ck-result" hidden>
+      <div class="addr-row">
+        <span class="lbl">Lands in</span>
+        <code class="num" id="coldkey-out"></code>
+        <button type="button" class="btn btn-ghost" id="coldkey-copy">copy</button>
+        <a class="btn btn-ghost" id="coldkey-explorer" rel="noopener" target="_blank">taostats ↗</a>
+      </div>
+      <div class="addr-row via">
+        <span class="lbl">Via</span>
+        <code class="num" id="transit-out"></code>
+        <span class="step-note">your transit account · empty between routes</span>
+      </div>
+      <div class="phrase" id="phrase-box" hidden>
+        <button type="button" class="btn btn-ghost" id="phrase-toggle" aria-expanded="false" aria-controls="phrase">show recovery phrase</button>
+        <ol class="phrase-words" id="phrase" hidden></ol>
+        <label class="ack">
+          <input type="checkbox" id="phrase-ack">
+          <span>I saved the phrase somewhere safe, or I accept that only this Solana wallet, signing the same way, can recreate this Bittensor wallet.</span>
+        </label>
+      </div>
+    </div>
+  </li>
+
+  <!-- 3 ───────────────────────────────────────────────────────── -->
+  <li class="panel step" id="step-plan" data-state="locked">
+    <div class="step-head">
+      <span class="rs-n">03</span>
+      <h2>Amount and what happens on arrival</h2>
+    </div>
+
+    <label class="field">
+      <span>TAO to send</span>
+      <span class="field-row">
+        <input type="text" id="amount" inputmode="decimal" autocomplete="off" placeholder="0.00">
+        <button type="button" class="btn btn-ghost" id="amount-max">max</button>
+      </span>
+    </label>
+    <span class="step-note" id="amount-note" role="status"></span>
+
+    <fieldset class="choice">
+      <legend class="sr">On arrival</legend>
+      <label class="choice-opt">
+        <input type="radio" name="plan" value="stake" checked>
+        <span><b>Stake it for me</b>
+        <i>Staked on root to the validator below, owned by your coldkey. Four Bittensor transactions (unwrap, stake, hand over, sweep), paid in TAO.</i></span>
+      </label>
+      <label class="choice-opt">
+        <input type="radio" name="plan" value="deliver">
+        <span><b>Just deliver it</b>
+        <i>Lands as free TAO in your Bittensor wallet. Two Bittensor transactions; stake it yourself afterwards.</i></span>
+      </label>
+    </fieldset>
+
+    <div id="stake-opts">
+      <label class="field">
+        <span>Validator hotkey</span>
+        <input type="text" id="hotkey-in" autocomplete="off" spellcheck="false" placeholder="5… (the validator's hotkey address)">
+      </label>
+      <span class="step-note" id="hotkey-note" role="status">Pick one yourself; this page does not choose for you. Validators and their take are listed on <a href="https://taostats.io/validators" rel="noopener" target="_blank">taostats ↗</a>.</span>
+      <label class="field field-sm">
+        <span>Keep unstaked for future fees (TAO)</span>
+        <input type="text" id="reserve" inputmode="decimal" autocomplete="off" value="0.01">
+      </label>
+    </div>
+  </li>
+
+  <!-- 4 ───────────────────────────────────────────────────────── -->
+  <li class="panel step" id="step-review" data-state="locked">
+    <div class="step-head">
+      <span class="rs-n">04</span>
+      <h2>Review and sign</h2>
+    </div>
+    <dl class="kv kv-review" id="review">
+      <div><dt>You send</dt><dd class="num" id="r-send">—</dd></div>
+      <div><dt>Lands in</dt><dd class="num" id="r-dest">—</dd></div>
+      <div><dt>Via</dt><dd class="num" id="r-via">—</dd></div>
+      <div><dt>On arrival</dt><dd id="r-plan">—</dd></div>
+      <div><dt>Bittensor gas, in TAO</dt><dd class="num" id="r-gas">—</dd></div>
+      <div><dt>LayerZero network fee</dt><dd class="num" id="r-lzfee">—</dd></div>
+      <div><dt>soltao fee</dt><dd class="num" id="r-fee">—</dd></div>
+      <div class="kv-total"><dt>Total SOL</dt><dd class="num" id="r-total">—</dd></div>
+    </dl>
+    <p class="step-p small">The LayerZero fee includes 0.001 TAO dropped on your transit account to pay for its first
+      Bittensor transaction; what it does not use comes back to you. The Solana transaction fee is added by
+      your wallet. The transaction is simulated against mainnet before your wallet asks you to sign.</p>
+    <p class="sign-warn">Keep this page open until step 5 finishes. Once the bridge delivers, usually within
+      minutes, the page signs the Bittensor steps with your transit key; your wallet will not ask again. If
+      the page closes, come back, sign the same message in step 2, and it finishes.</p>
+    <div class="step-row">
+      <button type="button" class="btn btn-primary" id="sign" disabled>Sign and send</button>
+      <span class="step-note" id="sign-note" role="status"></span>
+    </div>
+  </li>
+
+  <!-- 5 ───────────────────────────────────────────────────────── -->
+  <li class="panel step" id="step-status" data-state="locked">
+    <div class="step-head">
+      <span class="rs-n">05</span>
+      <h2>Where it is</h2>
+    </div>
+    <ol class="track" id="track" aria-live="polite">
+      <li data-k="solana"><b>Solana</b><span>—</span></li>
+      <li data-k="bridge"><b>LayerZero</b><span>—</span></li>
+      <li data-k="unwrap"><b>Unwrap wTAO</b><span>—</span></li>
+      <li data-k="stake"><b>Stake and hand over</b><span>—</span></li>
+      <li data-k="sweep"><b>Your Bittensor wallet</b><span>—</span></li>
+    </ol>
+    <p class="step-note" id="track-note" role="status"></p>
+    <p class="step-p small" id="track-links"></p>
+  </li>
+</ol>
+
+<section class="wrap sec" aria-labelledby="trust-h">
+  <div class="sec-head">
+    <span class="lbl">[ What you are trusting ]</span>
+    <h2 id="trust-h">Every hop, and who holds a key over it</h2>
+  </div>
+  <div class="trust-grid">
+    <article class="panel">
+      <h3>Canonical Solana TAO</h3>
+      <p class="exit-p">A LayerZero OFT listed by Sunrise. Its Solana program is upgradeable, and the upgrade key
+        and the OFT admin key are the same single key (read on chain, 21 Sep 2026).</p>
+    </article>
+    <article class="panel">
+      <h3>wTAO on Bittensor EVM</h3>
+      <p class="exit-p">The OFT's other end, holding the TAO that backs Solana's supply. Not upgradeable; its
+        bridge settings are held by a 3-of-4 Safe.</p>
+    </article>
+    <article class="panel">
+      <h3>Your transit account</h3>
+      <p class="exit-p">Not a contract: a Bittensor EVM account whose key comes from your signature, like your
+        wallet does. It only talks to wTAO and Bittensor's own staking and transfer precompiles, and it only
+        ever sends to your coldkey. If a step fails, your TAO waits there until you sign again.
+        <a href="https://github.com/RYthaGOD/soltao/blob/main/tools/stake/src/route.js" rel="noopener" target="_blank">Source ↗</a></p>
+    </article>
+    <article class="panel">
+      <h3>This page</h3>
+      <p class="exit-p">It builds the transaction, derives your keys and runs the Bittensor steps in your
+        browser. One self-hosted script, no third-party code loaded at runtime. It stores no keys; an
+        unfinished route's settings stay in this browser until it finishes.</p>
+    </article>
+  </div>
+</section>
+</main>
+
+<footer class="wrap foot">
+  <p class="foot-dis">
+    <strong>Fees:</strong> soltao charges a flat SOL fee on every route, shown in step 4 before you sign and
+    paid in the same transaction. LayerZero's network fee is quoted live from the TAO program itself.
+    Bittensor gas is paid in TAO, out of what arrives. There is no soltao contract to charge anything else.
+  </p>
+  <p class="foot-dis">
+    <strong>Disclosure:</strong> the person who runs this page also launched the SOLTAO coin on StonkFun. You
+    do not need it to use this route, and nothing here is a recommendation to buy it.
+  </p>
+  <p class="foot-dis">
+    Not affiliated with Bittensor, the Opentensor Foundation, Sunrise, LayerZero or any validator. Crossing a
+    bridge carries risk. Check every address before you sign. None of this is financial advice.
+  </p>
+</footer>
+
+<noscript>
+  <div class="wrap noscript">This page builds a transaction in your browser, so it needs JavaScript. Nothing
+  is sent anywhere without your signature.</div>
+</noscript>
+</body>
+</html>

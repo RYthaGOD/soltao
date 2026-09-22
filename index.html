@@ -71,6 +71,7 @@
         <a href="#exit">Getting out</a>
         <a href="#yield">Yield vs staking</a>
         <a href="#pairs">Coins quoted in TAO</a>
+        <a href="stake/">Stake route</a>
       </nav>
       <span class="navrow-note"><i class="tick-dot tick-dot-green" aria-hidden="true"></i>Solana mainnet · live in your browser</span>
     </div>
@@ -356,10 +357,10 @@
       <p class="verdict verdict-no">The friction<span class="verdict-note">one chain short</span></p>
       <h3>The door home does not open where you need it</h3>
       <p class="exit-p">
-        Withdrawing on Sunrise burns the SPL token and delivers TAO on <strong>Bittensor EVM</strong>,
-        which is where this wrapper was issued from — at an <code>H160</code> address, not at the
-        SS58 coldkey that subnet staking runs on. The EVM side cannot send to an SS58 address
-        directly. The last hop is <code>btcli evm send-to-ss58</code> through the balance-transfer
+        Withdrawing on Sunrise burns the SPL token and delivers <strong>wTAO</strong> on
+        <strong>Bittensor EVM</strong>, where this wrapper was issued from: a wrapped ERC-20 you still
+        have to unwrap, at an <code>H160</code> address rather than the SS58 coldkey that subnet
+        staking runs on. A plain wallet transfer cannot reach an SS58 address. The last hop is <code>btcli evm send-to-ss58</code> through the balance-transfer
         precompile, or a deposit to your coldkey's EVM mirror that you then claim. It is a terminal,
         not a wallet click, and nothing on the Solana side tells you it is coming.
       </p>
@@ -405,11 +406,24 @@
         Pairs and trust model from the <a href="https://github.com/entrius/allways" rel="noopener" target="_blank">Allways repository</a>,
         read 20 Sep 2026 — "use at your own risk. No warranty." Signatures copied from Opentensor's
         <a href="https://github.com/opentensor/evm-bittensor/blob/main/solidity/stakeV2.sol" rel="noopener" target="_blank">evm-bittensor</a>
-        interface, precompile <code>0x…0805</code>; confirm both are live before you rely on them.
+        interface; the <code>0x…0805</code> precompile answers on mainnet (read 21 Sep 2026). Confirm
+        Allways is live before you rely on it.
         And know that Bittensor EVM is close to empty: about <strong>$27K</strong> of DeFi across
         one DEX against <strong>$495M</strong> on the base chain (DefiLlama, 20 Sep 2026).
       </p>
     </article>
+  </div>
+
+  <div class="callout callout-plain">
+    <div>
+      <h3>The route this site runs</h3>
+      <p>
+        <a href="stake/">soltao's stake route</a> makes that trip in one Solana transaction: your TAO
+        goes home over the same LayerZero bridge and is staked to the validator you pick, owned by a
+        Bittensor wallet you hold. No receipt token and no soltao contract: every key along the way
+        comes from your own signature. soltao charges a flat SOL fee on it, shown before you sign.
+      </p>
+    </div>
   </div>
 
   <div class="callout callout-plain">
@@ -512,8 +526,25 @@
           <td><span class="rw" data-r="confirmed" title="StonkFun reward coin. Holders accrue TAO dividends from trading fees.">TAO dividends</span></td>
           <td class="r"><div class="tlinks"><a href="https://dexscreener.com/solana/2pouN3by7twkiZGy5aEKYUpf78ALDpKRTNu2WsQkpkqt" rel="noopener" target="_blank">DEX</a><a href="https://jup.ag/swap/taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY-2pouN3by7twkiZGy5aEKYUpf78ALDpKRTNu2WsQkpkqt" rel="noopener" target="_blank">JUP</a><a href="https://buttensor.fun/" rel="noopener" target="_blank">WWW</a></div></td>
         </tr>
+        <tr class="row-self">
+          <td>
+            <div class="coin">
+              <span class="coin-sym">$SOLTAO</span>
+              <span class="coin-name">SOLTAO</span>
+              <span class="coin-self">This page's own coin. Listed so it is graded in public next to the others, not quietly left out.</span>
+              <code class="coin-ca">8P1XmDhzU8qR3oiXHd2YfmBpB92Rn4hwunMsMGdghvCn</code>
+            </div>
+          </td>
+          <td class="r num">—</td>
+          <td class="r num">—</td>
+          <td class="r num c-opt">—</td>
+          <td class="r num c-opt">—</td>
+          <td class="r num">—</td>
+          <td><span class="rw" data-r="self" title="StonkFun reward coin quoted against canonical TAO. The 1% Token-2022 transfer fee is the reward mechanic: fees accrue in TAO and are paid to holders pro-rata under StonkFun's published model. Read from mainnet on 20 Sep 2026: canonical TAO and this mint appear together in 5 of 6 sampled transactions, and the mint's update authority WLHv2UAZ…pJVVh gained canonical TAO in each of them. The 1% fee is transferFeeBasisPoints 100 on the mint itself. The pro-rata payout to holders was not observed directly and is taken from StonkFun's published model, same as every other row here. Token-2022, 6 decimals, 1,000,000,000 fixed supply, 1% transfer fee, no mint or freeze authority - read from the mint account on 20 Sep 2026. Still on the StonkFun curve - program LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj - which Dexscreener did not index on 20 Sep 2026, so every live figure in this row reads as no data.">ours &middot; TAO dividends</span></td>
+          <td class="r"><div class="tlinks"><a href="https://dexscreener.com/solana/8P1XmDhzU8qR3oiXHd2YfmBpB92Rn4hwunMsMGdghvCn" rel="noopener" target="_blank">DEX</a><a href="https://solscan.io/token/8P1XmDhzU8qR3oiXHd2YfmBpB92Rn4hwunMsMGdghvCn" rel="noopener" target="_blank">SCAN</a></div></td>
+        </tr>
         <tr class="row-msg">
-          <td colspan="8">Prices, liquidity and the other 6 TAO-quoted coins in the registry need JavaScript. The mint above does not.</td>
+          <td colspan="8">Prices, liquidity and the other 6 TAO-quoted coins in the registry need JavaScript. The mints above do not.</td>
         </tr>
         <!-- /fallback:pairs -->
       </tbody>
@@ -542,12 +573,17 @@
   <p class="foot-dis">
     <strong>Disclosure:</strong> the person who runs this page also launched the SOLTAO coin on
     StonkFun — <code>8P1XmDhzU8qR3oiXHd2YfmBpB92Rn4hwunMsMGdghvCn</code>, a Token-2022 mint with a
-    1% transfer tax, a fixed 1,000,000,000 supply and no mint or freeze authority. It is not one of
-    the coins listed above, and nothing on this page is a recommendation to buy it.
+    1% transfer tax, a fixed 1,000,000,000 supply and no mint or freeze authority, all read from the
+    mint account on <time datetime="2026-09-20">20 Sep 2026</time>. It is listed in the TAO-quoted
+    table above, marked <em>ours</em>, never hidden by the liquidity filter, and never rendered in
+    the verified green however well it checks out. Its book is quoted against canonical TAO but is
+    not indexed by Dexscreener, so every live figure in its row reads as no data. Nothing on this
+    page is a recommendation to buy it.
   </p>
   <p class="foot-dis">
     Not affiliated with Bittensor, the Opentensor Foundation, Sunrise, LayerZero, Jupiter or StonkFun.
-    No wallet connection, no tracking, no backend. Verify every address yourself before you sign
+    This page has no wallet connection, no tracking and no backend; the stake route connects a
+    wallet on its own page, <a href="stake/">/stake/</a>. Verify every address yourself before you sign
     anything. None of this is financial advice.
   </p>
 </footer>

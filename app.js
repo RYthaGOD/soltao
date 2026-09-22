@@ -388,14 +388,17 @@ function renderPairs() {
   for (const { t, p } of ranked) {
     const liq = p ? liqOf(p) : 0;
     const dead = liq < DEAD_LIQ;
-    if (dead && !state.showDead) { hidden++; continue; }
+    // A self-listed row never hides. A disclosure that disappears behind a
+    // liquidity filter is not a disclosure.
+    if (dead && !state.showDead && !t.self) { hidden++; continue; }
 
-    const tr = el('tr', dead ? 'row-dead' : null);
+    const tr = el('tr', t.self ? 'row-self' : dead ? 'row-dead' : null);
 
     const c = el('td');
     const box = el('div', 'coin');
     box.append(el('span', 'coin-sym', '$' + t.symbol));
     box.append(el('span', 'coin-name', t.name));
+    if (t.self && t.disclosure) box.append(el('span', 'coin-self', t.disclosure));
     c.append(box);
     tr.append(c);
 
@@ -411,16 +414,20 @@ function renderPairs() {
     tr.append(el('td', 'r num' + (dead ? ' down' : ''), p ? fmtUsd(liq) : DASH));
 
     const rw = el('td');
-    const badge = el('span', 'rw', t.rewards === 'confirmed' ? 'TAO dividends' : 'unverified');
+    const badge = el('span', 'rw',
+      t.self ? 'ours · ' + (t.badge || 'unverified') : t.rewards === 'confirmed' ? 'TAO dividends' : 'unverified');
     badge.dataset.r = t.rewards;
-    badge.title = t.mechanic;
+    badge.title = [t.mechanic, t.verified, t.onchain, t.pool].filter(Boolean).join(' ');
     rw.append(badge);
     tr.append(rw);
 
     const links = el('td', 'r');
     const wrapL = el('div', 'tlinks');
     wrapL.append(link('DEX', p ? p.url : 'https://dexscreener.com/solana/' + t.mint));
-    wrapL.append(link('JUP', 'https://jup.ag/swap/' + taoMint + '-' + t.mint));
+    // Own coin with no indexed book: send people to verify the mint, not to a
+    // swap route that does not exist.
+    if (t.self && !p) wrapL.append(link('SCAN', 'https://solscan.io/token/' + t.mint));
+    else wrapL.append(link('JUP', 'https://jup.ag/swap/' + taoMint + '-' + t.mint));
     if (t.site) wrapL.append(link('WWW', t.site));
     links.append(wrapL);
     tr.append(links);
@@ -432,7 +439,10 @@ function renderPairs() {
   $('pairs-foot').textContent =
     state.registry.pairs.length + ' coins tracked' +
     (hidden ? ', ' + hidden + ' hidden with under ' + fmtUsd(DEAD_LIQ) + ' liquidity' : '') +
-    '. "Unverified" means the TAO-quoted pool is real but the reward mechanic has not been confirmed at the source — check before you size in.';
+    '. "Unverified" means the TAO-quoted pool is real but the reward mechanic has not been confirmed at the source — check before you size in.' +
+    (state.registry.pairs.some((t) => t.self)
+      ? ' "Ours" marks the coin launched by whoever runs this page. It never takes the verified green however well it checks out, and it is never hidden by the liquidity filter — hover it for what was actually read on-chain.'
+      : '');
 }
 
 /* ── render: the yield menu ────────────────────────────────────────────────

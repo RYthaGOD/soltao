@@ -216,6 +216,23 @@
       "rewards": "unverified",
       "mechanic": "TAO-quoted launch. Reward mechanics not independently confirmed.",
       "site": null
+    },
+    {
+      "symbol": "SOLTAO",
+      "name": "SOLTAO",
+      "mint": "8P1XmDhzU8qR3oiXHd2YfmBpB92Rn4hwunMsMGdghvCn",
+      "pairAddress": null,
+      "dex": null,
+      "launched": "2026-09-20",
+      "rewards": "self",
+      "self": true,
+      "badge": "TAO dividends",
+      "mechanic": "StonkFun reward coin quoted against canonical TAO. The 1% Token-2022 transfer fee is the reward mechanic: fees accrue in TAO and are paid to holders pro-rata under StonkFun's published model.",
+      "verified": "Read from mainnet on 20 Sep 2026: canonical TAO and this mint appear together in 5 of 6 sampled transactions, and the mint's update authority WLHv2UAZ…pJVVh gained canonical TAO in each of them. The 1% fee is transferFeeBasisPoints 100 on the mint itself. The pro-rata payout to holders was not observed directly and is taken from StonkFun's published model, same as every other row here.",
+      "disclosure": "This page's own coin. Listed so it is graded in public next to the others, not quietly left out.",
+      "onchain": "Token-2022, 6 decimals, 1,000,000,000 fixed supply, 1% transfer fee, no mint or freeze authority - read from the mint account on 20 Sep 2026.",
+      "pool": "Still on the StonkFun curve - program LanMV9sAd7wArD4vJFi2qDdfnVhFxYSUg6eADduJ3uj - which Dexscreener did not index on 20 Sep 2026, so every live figure in this row reads as no data.",
+      "site": null
     }
   ]
 }

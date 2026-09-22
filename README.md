@@ -25,6 +25,8 @@ og.html        source for the social card
 og.png         1200×630 social card, rendered from og.html
 favicon.svg
 tools/         maintenance scripts — optional, never needed to serve the site
+stake/         the stake route page: its own HTML, CSS and one bundled script (built, committed)
+tools/stake/   source, build and tests for stake/stake.js
 ```
 
 ### Why the mint is hardcoded
@@ -150,14 +152,25 @@ simply not canonical and had about $170 of liquidity on 20 Sep 2026, which is th
 
 ### `pairs`
 
-TAO-quoted coins. `rewards` is `confirmed` or `unverified`:
+TAO-quoted coins. `rewards` is `confirmed`, `unverified` or `self`:
 
 - **`confirmed`** — the TAO dividend mechanic has been verified at the source. Only `$BUTT`
   qualifies today.
 - **`unverified`** — the TAO-quoted pool is real and live, but nobody has confirmed the
   reward mechanic. The table says so out loud.
 
-Do not promote a coin to `confirmed` on the strength of its own marketing.
+- **`self`** — this page's own coin, flagged with `"self": true`. It never renders in the
+  verified green, however well it checks out, and it carries extra fields the renderer shows:
+  `badge` (what the marker reads after "ours"), `disclosure` (printed under the name in the
+  row), `verified` (what was actually read on-chain — and what was not), `onchain` (the mint
+  account) and `pool` (why the live columns are empty, if they are).
+
+Do not promote a coin to `confirmed` on the strength of its own marketing. That rule binds
+hardest on the `self` row, which is why it cannot reach `confirmed` at all.
+
+A `self` row is also exempt from the dead-liquidity filter in `app.js`. A disclosure that
+vanishes behind a toggle is not a disclosure, so the row renders at zero liquidity, with every
+live cell reading as no data, and says why in the badge tooltip.
 
 `pairAddress` pins the row to one specific pool. Leave it `null` and the deepest TAO-quoted
 pool wins automatically.
@@ -174,9 +187,107 @@ the first thing to suspect.
 
 ---
 
+## /stake/ — the stake route
+
+The one page on the site that connects a wallet, kept on its own URL so the board stays read-only.
+It takes canonical Solana TAO home and stakes it, owned by a Bittensor wallet the user holds, in one
+Solana transaction. There is no soltao contract anywhere on the route and no server: the page does
+the Bittensor half itself, with a key derived from the user's own signature.
+
+```
+sign once ─► coldkey (sr25519, 12 words) + transit key (secp256k1, Bittensor EVM)
+Solana tx: OFT send to the transit account, with a 0.001 TAO gas drop  +  soltao's flat SOL fee
+Bittensor EVM, signed by the page with the transit key:
+  wTAO.withdraw → addStake (root, chosen validator) → transferStake to the coldkey → transferAll the rest
+```
+
+**The keys.** The user signs a fixed Sign-In-With-Solana message. HKDF over that ed25519 signature
+gives two independent keys: a 12-word phrase that is an ordinary sr25519 coldkey and imports into
+btcli (checked against Substrate's published vectors), and a secp256k1 key for the **transit
+account**, the Bittensor EVM address the bridge delivers to. The user can land the TAO in the
+derived coldkey or paste one they already have; either way the transit key comes from the same
+signature. If the wallet's signature does not verify as raw ed25519 (some hardware setups wrap the
+message), the page says only that exact setup can recreate the keys.
+
+**Why a transit account.** The OFT only delivers to an H160, and the staking precompile only acts
+for the caller. So the bridge delivers wTAO to the user's own transit account, and the page then
+sends up to four ordinary transactions from it: unwrap, stake as itself, hand the stake to the
+coldkey with `transferStake`, and sweep what is left (the reserve and unused gas money) to the
+coldkey as free TAO. They only call wTAO and the `0x…0805` staking and `0x…0800` transfer
+precompiles, and only ever pay out to the coldkey. The runner (`src/route.js`) works from chain
+state, so if the page closes midway the user signs the same message again and it picks up where it
+stopped. The page remembers the unfinished route's settings (plan, validator, destination, amount;
+never a key) in `localStorage` so it knows what to finish.
+
+**Gas.** The gas drop pays for the unwrap; everything after is paid from the arriving TAO.
+`transferStake` is only admitted with ~2.36M gas on hand, though it uses ~62k. A contract had to buy
+that whole limit through LayerZero's compose option (≈0.05 SOL a route); a plain account only has to
+*hold* limit × price and is charged for what it uses. The route costs about 0.0012 TAO of gas to
+stake and 0.0004 TAO to deliver, at 5 gwei (21 Sep 2026). The LayerZero fee for 0.1 TAO, drop
+included, was 0.0144 SOL the same day; the page quotes it live from the TAO program before signing.
+
+**soltao's fee** is 0.0075 SOL, a plain SOL transfer in the same transaction, shown in the review
+with its receiving address before the wallet opens. With no contract, anyone can bridge to their
+own address without the page and skip it; the fee pays for the page, not for access.
+
+**What it trusts:** the canonical TAO program (upgradeable; its upgrade key and OFT admin are one
+single key), wTAO on Bittensor EVM (immutable; bridge settings under a 3-of-4 Safe), LayerZero's DVNs
+and executor (for the gas drop), Bittensor's precompiles, the chosen validator, and this page's
+script. The footer of /stake/ says the same.
+
+### Files
+
+| Path | What |
+|---|---|
+| `tools/stake/src/derive.js` | The coldkey and transit key from one signature |
+| `tools/stake/src/solana.js` | The Solana transaction: OFT send with the gas drop, plus the fee |
+| `tools/stake/src/route.js` | The Bittensor half: unwrap, stake, hand over, sweep, resumable |
+| `tools/stake/src/evm.js`, `bittensor.js` | Legacy EIP-155 signing and the precompile reads it needs |
+| `tools/stake/src/config.js` | Every address, gas limit and the fee, with where each was measured |
+| `tools/stake/src/app.js` | The page controller |
+| `tools/stake/test/` | Derivation vectors, signing against ethers, the runner against a simulated chain, the Solana transaction simulated on mainnet, and a headless-browser run under the production CSP |
+| `stake/` | What is served: `index.html`, `stake.css`, `stake.js` (built) and its licence notices |
+
+The first design used an ownerless router contract on Bittensor EVM. It is retired, not deployed,
+and kept only in the private `research/archive/`.
+
+### Build and test
+
+```bash
+cd tools/stake && npm install
+npm test              # derivation, EVM signing, route runner, build shim, Solana mainnet simulation
+npm run test:mainnet  # the real route.js against live Bittensor mainnet state, in eth_call only
+npm run test:page     # builds stake/stake.js, then drives it in Chrome under the production CSP
+npm run serve         # the site on http://localhost:8788 with the production headers
+```
+
+None of it needs funds or sends anything. `test:mainnet` places `test/Replay.sol` at LayerZero's
+endpoint and at the transit address inside a single `eth_call`, delivers through the real wTAO OFT,
+and replays every transaction `route.js` signs, so each step runs on Bittensor's real runtime. What
+it cannot show is LayerZero's executor delivering; LayerZero Scan's history for this path covers
+that (78 of 78 Solana → Bittensor TAO messages delivered since 1 May 2026, median 81 s, and all three
+earlier native drops succeeded, each to a plain address like the transit account).
+
+The build fails if the bundle contains `eval` or `new Function`, so it can never need
+`'unsafe-eval'`. The only CSP change the page needed is `https://lite.chain.opentensor.ai` in
+`connect-src`, in both `_headers` and `deploy/nginx.conf.template`.
+
+### Going live, in order
+
+Nothing deploys: there is no contract and no lookup table of soltao's. Until `fee.wallet` is set
+in `tools/stake/src/config.js` the page shows "Not live yet" and cannot send, but still derives
+wallets and still quotes.
+
+1. Set `fee.wallet` in `config.js`, `npm run build`, `npm test`, `npm run test:page`. Done 21 Sep
+   2026: `BgGFMbwUtKLifQYZogbDorEXTXYp3UKVAZSH41xQ72Na`, checked on chain as an ordinary wallet, and
+   the Solana test decodes the fee instruction to confirm exactly 0.0075 SOL goes to it.
+2. Route a small amount yourself through both plans, closing the page once mid-route to prove the
+   resume, and watch it land on Taostats.
+3. Only then publish.
+
 ## Things this deliberately does not do
 
-No wallet connect. No backend or database. No charts. No subnet, validator or dTAO
+No wallet connect on the board; the stake route connects one on its own page. No backend or database. No charts. No subnet, validator or dTAO
 analytics — [Taostats](https://taostats.io/) already does that and does it properly. No swap
 routing; Jupiter handles the swap and the link is prefilled.
 
@@ -189,9 +300,20 @@ that coin's accounts.
 
 A reference page that grades other people's coins, run by someone who has a coin, only works if
 it says so where a reader will see it. So the footer carries the disclosure in plain language,
-and SOLTAO is **not** in `pairs.json`. If it is ever listed there, the footer line has to change
-and the row needs its own marker — "unverified" next to everyone else's coin and silence next to
-your own is exactly the thing that would discredit the rest of the page.
+and SOLTAO is **in** `pairs.json` rather than left out of it, flagged `"self": true` — a row
+people can see and judge, marked `ours`, exempt from the dead-liquidity filter so it cannot
+quietly disappear, and barred from ever reaching `confirmed`. "Unverified" next to everyone
+else's coin and silence next to your own is exactly the thing that would discredit the rest of
+the page.
+
+Three things have to stay true of that row. It never renders in the verified green, however well
+it checks out — the marker stays amber and leads with "ours", so a reader prices the conflict
+before the claim. It never gets ranked above the others by anything but real liquidity — it sorts
+on the same number as everyone else, which on 20 Sep 2026 put it last, because Dexscreener
+indexed no book for it at all. And every claim in its `mechanic` is backed by a `verified` field
+saying what was actually read on-chain and what was not; on 20 Sep 2026 that was TAO-quoting and
+fee accrual read from sampled mainnet transactions, but not the pro-rata payout itself, which is
+taken from StonkFun's published model exactly as it is for every other row.
 
 ## Accuracy notes
 
@@ -221,7 +343,10 @@ your own is exactly the thing that would discredit the rest of the page.
   and the page now says so instead of putting it on the ladder. The Bittensor EVM staking
   precompile interface is read from Opentensor's own
   [evm-bittensor](https://github.com/opentensor/evm-bittensor/blob/main/solidity/stakeV2.sol)
-  examples; whether that V2 address is live on mainnet is **not verified** and the page says so.
+  examples; that V2 address answers on mainnet (view calls at runtime spec 467, read 21 Sep 2026),
+  and the stake route depends on it. A Sunrise withdraw lands as **wTAO**, the OFT's ERC-20, not as
+  native TAO: a simulated delivery credits wTAO to every kind of recipient, and Sunrise's docs list
+  only MON, HYPE, AVAX and SUI as unwrapping on arrival.
   Allways (subnet 7, `SOL ↔ TAO` among its live pairs) is read from its
   [repository](https://github.com/entrius/allways) and is beta software by its own description.
   Re-check these before the next curation pass — they are the only numbers on the site that do
