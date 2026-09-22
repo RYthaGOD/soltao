@@ -4,9 +4,11 @@
 //   npm run build        then commit stake/stake.js and stake/stake.js.LEGAL.txt
 
 import { build } from "esbuild";
-import { readFileSync, statSync } from "node:fs";
+import { readFileSync, statSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 
 const out = "../../stake/stake.js";
+const html = "../../stake/index.html";
 const result = await build({
   entryPoints: ["src/app.js"],
   bundle: true,
@@ -42,3 +44,14 @@ if (evalish.length) { console.error("bundle uses eval-like constructs:", evalish
 const kb = (statSync(out).size / 1024).toFixed(0);
 const inputs = Object.keys(result.metafile.inputs).length;
 console.log(`stake/stake.js  ${kb} KB  (${inputs} modules, no eval)`);
+
+// A content hash on the script tag, so a new build is a new URL: neither the browser nor an
+// intermediate edge cache (each node caches independently, for up to the hour in _headers/nginx)
+// can serve a stale bundle just because its own TTL hasn't expired yet. index.html itself is
+// cached for only 5 minutes, so this reaches people far sooner than stake.js's own hour would.
+const hash = createHash("sha256").update(code).digest("hex").slice(0, 8);
+const page = readFileSync(html, "utf8");
+const busted = page.replace(/(<script src="stake\.js)(?:\?v=[0-9a-f]+)?(" defer><\/script>)/, `$1?v=${hash}$2`);
+if (busted === page && !page.includes(`stake.js?v=${hash}"`)) { console.error("could not find the stake.js script tag in index.html to version"); process.exit(1); }
+writeFileSync(html, busted);
+console.log(`stake/index.html  now points at stake.js?v=${hash}`);
