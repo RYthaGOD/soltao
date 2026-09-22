@@ -133,6 +133,7 @@ function wireDebug() {
       ["+ statement", { domain: location.host, address: state.user, statement: "test" }],
       ["+ uri", { domain: location.host, address: state.user, statement: "test", uri: location.href }],
       ["+ chainId mainnet", { domain: location.host, address: state.user, statement: "test", uri: location.href, chainId: "mainnet" }],
+      ["+ nonce", { domain: location.host, address: state.user, statement: "test", uri: location.href, chainId: "mainnet", nonce: "deterministic" }],
       ["full production fields", signInFields(state.user)],
     ];
     const results = [];
