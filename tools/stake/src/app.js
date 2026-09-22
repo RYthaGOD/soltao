@@ -143,7 +143,6 @@ function wireDebug() {
         results.push(`${label}: OK`);
       } catch (e) {
         results.push(`${label}: FAIL ${e?.message || e} (code ${e?.code})`);
-        if (!isRejection(e)) break; // stop at the first real failure; a user rejection just means "try the next one"
       }
     }
     note("debug-note", results.join("  |  "));
