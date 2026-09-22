@@ -130,13 +130,12 @@ function wireDebug() {
     note("debug-note", "check your wallet…");
     const iso = new Date().toISOString();
     const attempts = [
-      ["minimal (domain + address)", { domain: location.host, address: state.user }],
-      ["full SIWS (no chainId)", { domain: location.host, address: state.user, statement: "test", uri: location.href, version: "1", nonce: "1234567890", issuedAt: iso }],
-      ["full SIWS + chainId mainnet", { domain: location.host, address: state.user, statement: "test", uri: location.href, version: "1", chainId: "mainnet", nonce: "1234567890", issuedAt: iso }],
-      ["full SIWS + chainId solana:mainnet", { domain: location.host, address: state.user, statement: "test", uri: location.href, version: "1", chainId: "solana:mainnet", nonce: "1234567890", issuedAt: iso }],
-      ["full SIWS (no version)", { domain: location.host, address: state.user, statement: "test", uri: location.href, nonce: "1234567890" }],
-      ["full production + nonce", { ...signInFields(state.user), nonce: "1234567890" }],
-      ["full production fields", signInFields(state.user)],
+      ["empty object", {}],
+      ["only domain", { domain: location.host }],
+      ["phantom doc exact (no address/uri)", { domain: location.host, statement: "test", version: "1", nonce: "oBbLoEldZs", chainId: "mainnet", issuedAt: iso }],
+      ["phantom doc + origin uri", { domain: location.host, statement: "test", uri: location.origin, version: "1", nonce: "oBbLoEldZs", chainId: "mainnet", issuedAt: iso }],
+      ["phantom doc + address", { domain: location.host, address: state.user, statement: "test", version: "1", nonce: "oBbLoEldZs", chainId: "mainnet", issuedAt: iso }],
+      ["full production + nonce + origin", { ...signInFields(state.user), nonce: "1234567890", uri: location.origin }],
     ];
     const results = [];
     for (const [label, input] of attempts) {
