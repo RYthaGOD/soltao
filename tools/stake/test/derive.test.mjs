@@ -59,5 +59,14 @@ expect("a different Solana wallet → a different transit account", other.transi
 let threw = false; try { mnemonicFromSignature(new Uint8Array(10), solanaAddress); } catch { threw = true; }
 expect("rejects a signature that is not 64 bytes", threw);
 
+// A stray non-ASCII byte (an em dash, added 22 Sep 2026 to dodge an unrelated worry) made Phantom's
+// own signIn() and signMessage() both refuse this message with "invalid formatting" (code -32000),
+// live, twice. The reference SIWS parser didn't care; Phantom's real implementation did. Guard it.
+{
+  const msg = derivationMessage(solanaAddress);
+  const bad = [...msg].filter((c) => c.charCodeAt(0) > 126 || (c.charCodeAt(0) < 32 && c !== "\n"));
+  expect("the signed-in message is plain ASCII (no smart punctuation, no control characters)", bad.length === 0, JSON.stringify(bad));
+}
+
 console.log(failures ? `\n${failures} failed` : "\nall passed");
 process.exit(failures ? 1 : 0);

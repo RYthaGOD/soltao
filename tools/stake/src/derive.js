@@ -26,19 +26,20 @@ const utf8 = (s) => new TextEncoder().encode(s);
 /**
  * The Sign In With Solana fields the user signs. Changing any of them changes every derived wallet.
  *
- * Traced our exact text (colon and all) through the reference parser and reconstructor
- * (createSignInMessageText, @solana/wallet-standard-util) by hand on 22 Sep 2026: it round-trips
- * perfectly either way, so the text was never actually malformed by that spec's own rules. Phantom
- * still failed twice when reached through plain signMessage() (recognized as sign-in, "Unexpected
- * error"; then, after a cosmetic change, "invalid formatting") — both in whatever internal step
- * reprocesses a signMessage() call it decides looks like sign-in, not in this field data. app.js now
- * calls the wallet's actual signIn() when it has one, which is what this format exists for, and
- * falls back to signMessage() with derivationMessage() only for wallets without it.
+ * Keep this text plain ASCII. That was the actual cause of two live failures on 22 Sep 2026 ("The
+ * app's signature request cannot be shown due to invalid formatting.", code -32000, thrown inside
+ * Phantom's own solana.js from both signMessage() and its real signIn() — same internal validator
+ * either way, which is what pointed away from the message *shape* and toward its *bytes*): the
+ * statement's em dash (U+2014), added to dodge an unrelated colon-parsing worry that turned out not
+ * to be real (hand-traced our colon-containing text through the reference parser and reconstructor,
+ * createSignInMessageText in @solana/wallet-standard-util, and it round-trips perfectly — Phantom's
+ * own docs example doesn't avoid colons either). A period fixed it. Confirmed no non-ASCII or
+ * control characters remain in the full message (test/derive.test.mjs enforces this going forward).
  */
 export function signInFields(solanaAddress, { domain = "soltao.xyz", uri = "https://soltao.xyz/stake/" } = {}) {
   return {
     domain, address: solanaAddress, uri, version: "1", chainId: "mainnet",
-    statement: `Create my Bittensor wallet. Only sign this on ${domain} — this signature is the key to that wallet. It moves no funds.`,
+    statement: `Create my Bittensor wallet. Only sign this on ${domain}. This signature is the key to that wallet. It moves no funds.`,
   };
 }
 
