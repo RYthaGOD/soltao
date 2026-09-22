@@ -141,7 +141,10 @@ async function sign() {
     await checkTransit();
   } catch (e) {
     $("derive").disabled = false;
-    if (isRejection(e)) note("derive-note", ""); else note("derive-note", `Could not create them: ${e.message || e}`, "bad");
+    if (isRejection(e)) { note("derive-note", ""); return; }
+    console.error("sign-in failed", e, e && Object.fromEntries(Object.entries(e)));
+    const detail = [e?.name, e?.message || String(e), e?.code !== undefined && `code ${e.code}`, e?.data !== undefined && `data ${JSON.stringify(e.data)}`].filter(Boolean).join(" · ");
+    note("derive-note", `Could not create them: ${detail}. The browser console (F12) has the full error.`, "bad");
   }
 }
 
