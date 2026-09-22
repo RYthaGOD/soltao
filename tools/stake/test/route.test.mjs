@@ -67,8 +67,8 @@ function execute(tx) {
 
 globalThis.fetch = async (_url, { body }) => {
   const { method, params } = JSON.parse(body);
-  const reply = (result) => ({ json: async () => ({ jsonrpc: "2.0", id: 1, result }) });
-  const fail = (message) => ({ json: async () => ({ jsonrpc: "2.0", id: 1, error: { message } }) });
+  const reply = (result) => ({ ok: true, status: 200, json: async () => ({ jsonrpc: "2.0", id: 1, result }) });
+  const fail = (message) => ({ ok: true, status: 200, json: async () => ({ jsonrpc: "2.0", id: 1, error: { message } }) });
   const hex = (v) => "0x" + BigInt(v).toString(16);
   switch (method) {
     case "eth_gasPrice": return reply(hex(PRICE));

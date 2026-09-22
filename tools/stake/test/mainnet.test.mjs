@@ -61,8 +61,8 @@ async function replay(readTo = ethers.ZeroAddress, readData = "0x") {
 
 globalThis.fetch = async (_url, { body }) => {
   const { method, params } = JSON.parse(body);
-  const reply = (result) => ({ json: async () => ({ jsonrpc: "2.0", id: 1, result }) });
-  const fail = (message) => ({ json: async () => ({ jsonrpc: "2.0", id: 1, error: { message } }) });
+  const reply = (result) => ({ ok: true, status: 200, json: async () => ({ jsonrpc: "2.0", id: 1, result }) });
+  const fail = (message) => ({ ok: true, status: 200, json: async () => ({ jsonrpc: "2.0", id: 1, error: { message } }) });
   try {
     switch (method) {
       case "eth_gasPrice": return reply(await real(method, params));
@@ -71,7 +71,7 @@ globalThis.fetch = async (_url, { body }) => {
       case "eth_call": return reply((await replay(params[0].to, params[0].data)).read);
       case "eth_getTransactionReceipt": return reply(S.receipts.get(params[0]) ?? null);
       case "eth_sendRawTransaction": {
-        if (S.failSendAt !== null && S.sends++ === S.failSendAt) return fail("connection reset (simulated: the page closed)");
+        if (S.failSendAt !== null && S.sends++ >= S.failSendAt) return fail("connection reset (simulated: the page closed)");
         const tx = ethers.Transaction.from(params[0]);
         S.signers.push({ from: tx.from.toLowerCase(), chainId: tx.chainId, type: tx.type, nonce: tx.nonce, expectNonce: S.calls.length });
         S.calls.push({ to: tx.to, value: tx.value, data: tx.data, gasLimit: tx.gasLimit, label: tx.data.slice(0, 10) });

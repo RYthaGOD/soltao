@@ -39,10 +39,23 @@ export function signLegacyTx({ nonce, gasPrice, gasLimit, to, value = 0n, data =
 }
 
 export async function rpc(method, params = [], url = CONFIG.bittensorEvmRpc) {
-  const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
-  const body = await res.json();
-  if (body.error) throw new Error(body.error.message || `${method} failed`);
-  return body.result;
+  let lastErr;
+  const urls = Array.isArray(url) ? url : [url];
+  for (let attempt = 0; attempt < 3; attempt++) {
+    for (const u of urls) {
+      try {
+        const res = await fetch(u, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const body = await res.json();
+        if (body.error) throw new Error(body.error.message || `${method} failed`);
+        return body.result;
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    await new Promise((r) => setTimeout(r, 1000 * (attempt + 1))); // backoff
+  }
+  throw lastErr;
 }
 
 export const getBalance = async (address) => BigInt(await rpc("eth_getBalance", [address, "latest"]));
@@ -56,9 +69,18 @@ export async function sendTx(privateKey, { to, value = 0n, data = "0x", gasLimit
   const hash = await rpc("eth_sendRawTransaction", [signLegacyTx({ nonce, gasPrice: price, gasLimit: BigInt(gasLimit), to, value, data }, privateKey)]);
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    const receipt = await rpc("eth_getTransactionReceipt", [hash]);
+    let receipt;
+    try {
+      receipt = await rpc("eth_getTransactionReceipt", [hash]);
+    } catch (e) {
+      // rpc() already retries a few times on its own; this only catches it giving up entirely
+      // (the RPC is down). Keep polling rather than fail the whole route over one bad round.
+      await new Promise((r) => setTimeout(r, pollMs));
+      continue;
+    }
     if (receipt) {
-      // `reverted` tells a refusal by the chain apart from a network failure, which is worth retrying.
+      // `reverted` tells a refusal by the chain apart from a network failure, which is worth
+      // retrying. It must reach the caller, not be swallowed with a transport error above.
       if (receipt.status !== "0x1") throw Object.assign(new Error(`transaction ${hash} reverted`), { reverted: true, hash });
       return { hash, gasUsed: BigInt(receipt.gasUsed) };
     }
