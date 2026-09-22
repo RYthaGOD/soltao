@@ -120,6 +120,36 @@ async function refreshBalances() {
   gate();
 }
 
+// ── temporary debug aid: isolate which SIWS field trips Phantom's internal signIn() error ───
+// Remove once the -32603 "Unexpected error" investigation (see HANDOVER.md) is resolved.
+function wireDebug() {
+  if (!new URLSearchParams(location.search).has("debug")) return;
+  $("debug-row").hidden = false;
+  $("debug-signin").addEventListener("click", async () => {
+    if (!state.provider) { note("debug-note", "connect a wallet first", "bad"); return; }
+    note("debug-note", "check your wallet…");
+    const attempts = [
+      ["minimal (domain + address only)", { domain: location.host, address: state.user }],
+      ["+ statement", { domain: location.host, address: state.user, statement: "test" }],
+      ["+ uri", { domain: location.host, address: state.user, statement: "test", uri: location.href }],
+      ["+ chainId mainnet", { domain: location.host, address: state.user, statement: "test", uri: location.href, chainId: "mainnet" }],
+      ["full production fields", signInFields(state.user)],
+    ];
+    const results = [];
+    for (const [label, input] of attempts) {
+      try {
+        await state.provider.signIn(input);
+        results.push(`${label}: OK`);
+      } catch (e) {
+        results.push(`${label}: FAIL ${e?.message || e} (code ${e?.code})`);
+        if (!isRejection(e)) break; // stop at the first real failure; a user rejection just means "try the next one"
+      }
+    }
+    note("debug-note", results.join("  |  "));
+    console.log("debug sign-in sweep:\n" + results.join("\n"));
+  });
+}
+
 // ── step 2: the Bittensor wallet and the transit account ────────────────────
 async function sign() {
   if (state.signed) return checkTransit(); // already signed: this is the retry after a failed read
@@ -502,6 +532,7 @@ function init() {
   document.querySelectorAll('input[name="plan"]').forEach((r) => r.addEventListener("change", () => { state.plan = r.value; gate(); }));
   $("hotkey-in").addEventListener("input", onHotkey);
   $("sign").addEventListener("click", send);
+  wireDebug();
   getGasPrice().then((p) => { state.gasPrice = p; gate(); }).catch(() => {});
   addEventListener("beforeunload", (e) => { if (state.running) { e.preventDefault(); e.returnValue = ""; } });
   // Keys live only in memory; drop them when the page goes away.
