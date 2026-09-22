@@ -128,12 +128,14 @@ function wireDebug() {
   $("debug-signin").addEventListener("click", async () => {
     if (!state.provider) { note("debug-note", "connect a wallet first", "bad"); return; }
     note("debug-note", "check your wallet…");
+    const iso = new Date().toISOString();
     const attempts = [
-      ["minimal (domain + address only)", { domain: location.host, address: state.user }],
-      ["+ statement", { domain: location.host, address: state.user, statement: "test" }],
-      ["+ uri", { domain: location.host, address: state.user, statement: "test", uri: location.href }],
-      ["+ chainId mainnet", { domain: location.host, address: state.user, statement: "test", uri: location.href, chainId: "mainnet" }],
-      ["+ nonce", { domain: location.host, address: state.user, statement: "test", uri: location.href, chainId: "mainnet", nonce: "deterministic" }],
+      ["minimal (domain + address)", { domain: location.host, address: state.user }],
+      ["full SIWS (no chainId)", { domain: location.host, address: state.user, statement: "test", uri: location.href, version: "1", nonce: "1234567890", issuedAt: iso }],
+      ["full SIWS + chainId mainnet", { domain: location.host, address: state.user, statement: "test", uri: location.href, version: "1", chainId: "mainnet", nonce: "1234567890", issuedAt: iso }],
+      ["full SIWS + chainId solana:mainnet", { domain: location.host, address: state.user, statement: "test", uri: location.href, version: "1", chainId: "solana:mainnet", nonce: "1234567890", issuedAt: iso }],
+      ["full SIWS (no version)", { domain: location.host, address: state.user, statement: "test", uri: location.href, nonce: "1234567890" }],
+      ["full production + nonce", { ...signInFields(state.user), nonce: "1234567890" }],
       ["full production fields", signInFields(state.user)],
     ];
     const results = [];
