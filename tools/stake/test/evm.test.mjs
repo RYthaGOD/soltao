@@ -30,8 +30,11 @@ for (const [i, tx] of cases.entries()) {
   expect(`tx ${i + 1} recovers to the signer on chain 964`, parsed.from === key.address && parsed.chainId === 964n);
 }
 
-// The real RPC must parse it: a zero-balance sender is refused for funds, never for format.
-try { await rpc("eth_sendRawTransaction", [signLegacyTx(cases[2], bytes(ethers.Wallet.createRandom().privateKey))]); expect("RPC refuses an unfunded tx", false, "accepted?"); }
+// The real RPC must parse it: a zero-balance sender is refused for funds, never for format. A
+// random nonce keeps this from colliding with the same fixed shape on repeated runs, which the
+// node's mempool dedup reports as "already known" instead of the refusal being checked here.
+const unfunded = { ...cases[2], nonce: BigInt(Math.floor(Math.random() * 1_000_000)) };
+try { await rpc("eth_sendRawTransaction", [signLegacyTx(unfunded, bytes(ethers.Wallet.createRandom().privateKey))]); expect("RPC refuses an unfunded tx", false, "accepted?"); }
 catch (e) { expect("Bittensor RPC parses the transaction (refuses it only for funds)", /insufficient funds/i.test(e.message), e.message); }
 
 console.log(failures ? `\n${failures} failed` : "\nall passed");

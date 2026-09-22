@@ -23,13 +23,20 @@ export const SS58_PREFIX = 42;
 const HKDF_SALT = "soltao.xyz/bittensor-wallet/v1";
 const utf8 = (s) => new TextEncoder().encode(s);
 
-/** The exact text the user signs. Changing a single byte changes every derived wallet. */
+/**
+ * The exact text the user signs. Changing a single byte changes every derived wallet.
+ *
+ * The statement line must not contain a colon: Phantom's Sign In With Solana parser (22 Sep 2026)
+ * throws "Unexpected error" after the user confirms if the freeform statement has one, apparently
+ * mistaking it for another "Field: value" line. The template otherwise matches Phantom's published
+ * format (github.com/phantom/sign-in-with-solana) exactly; this was the one non-standard byte.
+ */
 export function derivationMessage(solanaAddress) {
   return [
     "soltao.xyz wants you to sign in with your Solana account:",
     solanaAddress,
     "",
-    "Create my Bittensor wallet. Only sign this on soltao.xyz: this signature is the key to that wallet. It moves no funds.",
+    "Create my Bittensor wallet. Only sign this on soltao.xyz — this signature is the key to that wallet. It moves no funds.",
     "",
     "URI: https://soltao.xyz/stake/",
     "Version: 1",
