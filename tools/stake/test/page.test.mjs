@@ -53,13 +53,34 @@ const expect = (name, ok, detail = "") => { console.log(`${ok ? "PASS" : "FAIL"}
 
 const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ["--no-sandbox"] });
 
-async function openWith({ pubkey, secret, base = plain.base, before }) {
+// createSignInMessageText, by hand from @solana/wallet-standard-util's own source (fetched 22 Sep
+// 2026): what any standards-following wallet's signIn() builds from structured fields. The stub
+// below uses this to reconstruct the message itself, the way a real wallet would — not just echo
+// back whatever derivationMessage() already produced — so the test actually proves the two paths
+// agree, rather than assuming it.
+function buildSiwsText(input) {
+  let message = `${input.domain} wants you to sign in with your Solana account:\n${input.address}`;
+  if (input.statement) message += `\n\n${input.statement}`;
+  const fields = [];
+  if (input.uri) fields.push(`URI: ${input.uri}`);
+  if (input.version) fields.push(`Version: ${input.version}`);
+  if (input.chainId) fields.push(`Chain ID: ${input.chainId}`);
+  if (fields.length) message += `\n\n${fields.join("\n")}`;
+  return message;
+}
+
+async function openWith({ pubkey, secret, base = plain.base, before, signIn = false }) {
   const page = await browser.newPage();
   const problems = [];
   page.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`));
   page.on("console", (m) => { if (m.type() === "error") problems.push(`console: ${m.text()}`); });
   await page.exposeFunction("__testSign", (bytes) => Array.from(ed25519.sign(Uint8Array.from(bytes), secret)));
-  await page.evaluateOnNewDocument((pk, planted) => {
+  await page.exposeFunction("__testSignIn", (fields) => {
+    const text = buildSiwsText(fields);
+    const bytes = new TextEncoder().encode(text);
+    return { signedMessage: Array.from(bytes), signature: Array.from(ed25519.sign(bytes, secret)) };
+  });
+  await page.evaluateOnNewDocument((pk, planted, withSignIn) => {
     window.__csp = [];
     document.addEventListener("securitypolicyviolation", (e) => window.__csp.push(`${e.violatedDirective} ${e.blockedURI}`));
     if (planted) localStorage.setItem(planted.key, planted.value);
@@ -75,8 +96,12 @@ async function openWith({ pubkey, secret, base = plain.base, before }) {
         throw Object.assign(new Error("User rejected the request."), { code: 4001 });
       },
       on() {},
+      ...(withSignIn ? { async signIn(input) {
+        const out = await window.__testSignIn(input);
+        return { account: { address: pk, publicKey: key }, signedMessage: Uint8Array.from(out.signedMessage), signature: Uint8Array.from(out.signature) };
+      } } : {}),
     } };
-  }, pubkey, before ?? null);
+  }, pubkey, before ?? null, signIn);
   await page.goto(base, { waitUntil: "networkidle0" });
   return { page, problems };
 }
@@ -149,6 +174,28 @@ const clean = async (page, problems, label) => {
   expect("a pasted address needs no phrase acknowledgement", (await attr(page, "#step-plan", "data-state")) === "active");
 
   await clean(page, problems, "run A");
+  await page.close();
+}
+
+// ── Run A2: a wallet with a native signIn(), the path added after Phantom failed twice going ──
+// through plain signMessage() on 22 Sep 2026. Proves it derives the identical wallet as run A's
+// signMessage() path for a fresh key, since the stub reconstructs the message itself from the
+// fields the page sends, the way a real wallet's signIn() does, rather than trusting our own text.
+{
+  const secret = ed25519.utils.randomPrivateKey();
+  const pubkey = base58.encode(ed25519.getPublicKey(secret));
+  const expected = walletFromSignature(ed25519.sign(new TextEncoder().encode(derivationMessage(pubkey)), secret), pubkey);
+  const { page, problems } = await openWith({ pubkey, secret, signIn: true });
+
+  await page.click("#connect");
+  await waitText(page, "#tao-balance", /TAO/);
+  await page.click("#derive");
+  await waitText(page, "#coldkey-out", /^5/);
+  expect("signIn() derives the identical wallet as signMessage() for the same key", (await text(page, "#coldkey-out")) === expected.address, await text(page, "#coldkey-out"));
+  expect("…and the identical transit account", (await text(page, "#transit-out")) === expected.transitAddress);
+  expect("recognised as portable, same as the signMessage() path", (await attr(page, "#derive-note", "data-tone")) === "ok", await text(page, "#derive-note"));
+
+  await clean(page, problems, "run A2");
   await page.close();
 }
 

@@ -6,7 +6,7 @@
 import { PublicKey } from "@solana/web3.js";
 import { ed25519 } from "@noble/curves/ed25519";
 import { CONFIG } from "./config.js";
-import { derivationMessage, walletFromSignature, ss58Decode, ss58Encode, toHex } from "./derive.js";
+import { derivationMessage, signInFields, walletFromSignature, ss58Decode, ss58Encode, toHex } from "./derive.js";
 import { createClients, getTaoBalance, quoteNativeFee, buildRouteTransaction, removeDust } from "./solana.js";
 import { getDelegate, getFreeBalance } from "./bittensor.js";
 import { getGasPrice } from "./evm.js";
@@ -123,16 +123,34 @@ async function refreshBalances() {
 // ── step 2: the Bittensor wallet and the transit account ────────────────────
 async function sign() {
   if (state.signed) return checkTransit(); // already signed: this is the retry after a failed read
-  if (!state.provider?.signMessage) { note("derive-note", "This wallet cannot sign messages, and the route needs one signature to create your keys.", "bad"); return; }
-  const message = new TextEncoder().encode(derivationMessage(state.user));
+  // Prefer the wallet's own Sign In With Solana call: it builds and signs the message itself, so
+  // there's no risk of a wallet's own heuristic reprocessing of a plain signMessage() call (Phantom
+  // failed twice going through that path on 22 Sep 2026, in whatever step does that reprocessing,
+  // not in the message itself: github.com/phantom/sign-in-with-solana's own reference parser round-
+  // trips our exact fields cleanly by hand-trace). Falls back to plain signMessage() otherwise.
+  const canSignIn = typeof state.provider?.signIn === "function";
+  if (!canSignIn && !state.provider?.signMessage) { note("derive-note", "This wallet cannot sign messages, and the route needs one signature to create your keys.", "bad"); return; }
+  const expected = new TextEncoder().encode(derivationMessage(state.user));
   $("derive").disabled = true; note("derive-note", "check your wallet…");
   try {
-    const res = await state.provider.signMessage(message, "utf8");
-    const signature = new Uint8Array(res?.signature ?? res);
+    let signature, signed;
+    if (canSignIn) {
+      const out = [].concat(await state.provider.signIn(signInFields(state.user)))[0];
+      if (!out?.signature || !out?.signedMessage) throw new Error("wallet returned an unexpected sign-in result");
+      const acct = out.account?.address || (out.account?.publicKey && new PublicKey(out.account.publicKey).toBase58());
+      if (acct && acct !== state.user) throw new Error("signed in as a different wallet than the one connected");
+      signature = new Uint8Array(out.signature);
+      signed = new Uint8Array(out.signedMessage);
+    } else {
+      const res = await state.provider.signMessage(expected, "utf8");
+      signature = new Uint8Array(res?.signature ?? res);
+      signed = expected;
+    }
     if (signature.length !== 64) throw new Error("wallet returned an unexpected signature");
-    // If the wallet signed the raw text, any wallet holding this key recreates the same keys. If it
-    // signed a wrapped format (some hardware setups do), only this setup will.
-    const raw = ed25519.verify(signature, message, new PublicKey(state.user).toBytes());
+    // Same bytes any standards-following wallet would sign for these fields: any wallet holding this
+    // key recreates the same keys. If it built something else, only this exact wallet setup can.
+    const matches = signed.length === expected.length && signed.every((b, i) => b === expected[i]);
+    const raw = matches && ed25519.verify(signature, signed, new PublicKey(state.user).toBytes());
     state.signed = { wallet: walletFromSignature(signature, state.user), raw };
     $("derive").textContent = "Signed";
     note("derive-note", raw ? "Done. Same wallet, same signature, same keys." : "Done, but your wallet signed in a non-standard format. Only this exact wallet setup can recreate these keys: save the phrase.", raw ? "ok" : "warn");

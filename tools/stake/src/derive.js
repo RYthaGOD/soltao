@@ -24,23 +24,36 @@ const HKDF_SALT = "soltao.xyz/bittensor-wallet/v1";
 const utf8 = (s) => new TextEncoder().encode(s);
 
 /**
- * The exact text the user signs. Changing a single byte changes every derived wallet.
+ * The Sign In With Solana fields the user signs. Changing any of them changes every derived wallet.
  *
- * The statement line must not contain a colon: Phantom's Sign In With Solana parser (22 Sep 2026)
- * throws "Unexpected error" after the user confirms if the freeform statement has one, apparently
- * mistaking it for another "Field: value" line. The template otherwise matches Phantom's published
- * format (github.com/phantom/sign-in-with-solana) exactly; this was the one non-standard byte.
+ * Traced our exact text (colon and all) through the reference parser and reconstructor
+ * (createSignInMessageText, @solana/wallet-standard-util) by hand on 22 Sep 2026: it round-trips
+ * perfectly either way, so the text was never actually malformed by that spec's own rules. Phantom
+ * still failed twice when reached through plain signMessage() (recognized as sign-in, "Unexpected
+ * error"; then, after a cosmetic change, "invalid formatting") — both in whatever internal step
+ * reprocesses a signMessage() call it decides looks like sign-in, not in this field data. app.js now
+ * calls the wallet's actual signIn() when it has one, which is what this format exists for, and
+ * falls back to signMessage() with derivationMessage() only for wallets without it.
  */
-export function derivationMessage(solanaAddress) {
+export function signInFields(solanaAddress, { domain = "soltao.xyz", uri = "https://soltao.xyz/stake/" } = {}) {
+  return {
+    domain, address: solanaAddress, uri, version: "1", chainId: "mainnet",
+    statement: `Create my Bittensor wallet. Only sign this on ${domain} — this signature is the key to that wallet. It moves no funds.`,
+  };
+}
+
+/** The exact text a fallback signMessage() call signs: signInFields(), laid out by hand. */
+export function derivationMessage(solanaAddress, opts) {
+  const f = signInFields(solanaAddress, opts);
   return [
-    "soltao.xyz wants you to sign in with your Solana account:",
-    solanaAddress,
+    `${f.domain} wants you to sign in with your Solana account:`,
+    f.address,
     "",
-    "Create my Bittensor wallet. Only sign this on soltao.xyz — this signature is the key to that wallet. It moves no funds.",
+    f.statement,
     "",
-    "URI: https://soltao.xyz/stake/",
-    "Version: 1",
-    "Chain ID: mainnet",
+    `URI: ${f.uri}`,
+    `Version: ${f.version}`,
+    `Chain ID: ${f.chainId}`,
   ].join("\n");
 }
 
