@@ -52,6 +52,7 @@
 @keyframes skel { to { background-position: -200% 0; } }
 
 .choice { border: 0; margin: 4px 0 14px; padding: 0; display: grid; gap: 8px; }
+.direction-toggle { margin-top: 2rem; margin-bottom: 0; }
 .choice-opt {
   display: flex; gap: 11px; align-items: flex-start; padding: 12px;
   border: 1px solid var(--line); border-radius: var(--r); background: var(--canvas); cursor: pointer;
