@@ -156,9 +156,12 @@ This is **not** git-push-triggered. Steps, in order, every time:
 7. **Configured Helius RPC blocked by production CSP.** `config.js` was switched from PublicNode to
    Helius, but `_headers` and `deploy/nginx.conf.template` still allowed only PublicNode. The static
    page loaded without errors; the violation appeared only after wallet connection tried to read a
-   Solana balance. Confirmed in the live response headers on 23 Sep 2026. Both CSP files now allow
-   only the exact configured Helius origin, and `test/page.test.mjs` completes the full wallet flow
-   with zero CSP violations. **Fixed locally, not deployed yet.**
+   Solana balance — exactly the kind of gap a page-load-only smoke check misses. Confirmed in the
+   live response headers on 23 Sep 2026. Both CSP files now allow the exact configured Helius
+   origin, and `test/page.test.mjs` completes the full wallet flow with zero CSP violations.
+   **Fixed and deployed** — confirmed live on `soltao.xyz` (both `/` and `/stake/`) by simulating the
+   actual `fetch()` the page's own wallet-connect code makes to the Helius endpoint from inside the
+   real page, not just checking that the page loads.
 
 8. **Review step active before a route was reviewable.** The gate made step 4 active on a fresh
    page and tied fee quoting to the destination acknowledgement. It now keeps steps 2-5 locked at
@@ -175,14 +178,27 @@ This is **not** git-push-triggered. Steps, in order, every time:
 
 ## Current state
 
-### Deployed 23 Sep 2026
-The redesign, netuid-aware `route.js`, the direction-toggle scaffold, and the Helius RPC switch
-were built, tested, committed, pushed, and deployed to `soltao.xyz` via `railway up --ci` this
-session, with Craig's explicit go-ahead. Post-deploy, `soltao.xyz/` and `soltao.xyz/stake/` were
-both checked headless against the real domain: HTTP 200, the served script hash matches the build
-(`stake.js?v=cc7fdecb` at deploy time — re-run the build to get the current one), zero console
-errors, zero CSP violations, zero failed asset requests. This is the live site right now, not a
+### Deployed 23 Sep 2026 (two rounds, same day)
+Round one: the redesign, netuid-aware `route.js`, the direction-toggle scaffold, and the Helius RPC
+switch were built, tested, committed, pushed, and deployed via `railway up --ci` with Craig's
+explicit go-ahead. That deploy shipped a real bug — `config.js` pointed at Helius but the CSP
+headers still only allowed PublicNode (bug history item 7) — caught by checking response headers
+directly rather than trusting a page-load-only smoke test.
+
+Round two happened separately and concurrently: another session/process (commit `a1de8dc`, "Build
+resumable free-TAO return foundation") fixed the CSP gap, refined the review-step gating (bug
+history item 8), and pushed further Milestone 3 work (`return_route.js`, resumable free-TAO
+return), then deployed it. By the time this was checked, `soltao.xyz` was already serving that
+build. **Current state:** local `main`, `origin/main`, and the live site are all in sync at commit
+`a1de8dc`, script hash `stake.js?v=b5d4275d` — confirmed by comparing the hash directly and by
+simulating the actual `fetch()` the page's wallet-connect code makes to the Helius endpoint from
+inside the real, live page (200 OK, zero CSP violations). This is the live site right now, not a
 staging preview.
+
+**Note for whoever picks this up next:** at least one other agent/process was actively committing
+and deploying to this same repo today, without coordinating through this session. Re-check
+`git log origin/main` and the live script hash before assuming this document is still ahead of
+reality — it may not be.
 
 ### What has real-funds proof
 - **Wallet connection, SIWS sign-in, wallet derivation, transit account/coldkey generation,
@@ -227,5 +243,10 @@ staging preview.
 
 **Bottom line:** live in production. Root staking has full real-funds proof. Subnet staking has
 real-chain-state proof plus Craig's informed acceptance of the remaining gap. The redesign has
-headless proof on the real domain. The standing deploy constraint above (explicit confirmation
-before every `railway up --ci`) was followed for this deploy and still applies to the next one.
+headless proof on the real domain. The bridge-back return engine's mocked recovery suite
+(`return_route.test.mjs`, 11 assertions) and its zero-cost mainnet replay (`return_mainnet.test.mjs`
+— live fee 0.002859118 TAO, wrap 59,827/75,000 gas, send 246,363/650,000 gas, 0 wTAO left) were both
+independently re-run and confirmed this session, not just taken on the other session's word. The
+standing deploy constraint above (explicit confirmation before every `railway up --ci`) was
+followed for the deploy this session made, and still applies to the next one — including whichever
+session makes it.
