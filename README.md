@@ -23,7 +23,9 @@ app.js         fetch, cache, number formatting, rendering, the address checker
 pairs.json     the curated registry — the only file you edit to keep the site current
 og.html        source for the social card
 og.png         1200×630 social card, rendered from og.html
-favicon.svg
+favicon.svg    the logo, embedded so the one favicon path works everywhere
+logo.webp      the logo master, as supplied
+logo.png       180px crop of it: header mark and apple-touch icon (logo-512.png renders og.png)
 tools/         maintenance scripts — optional, never needed to serve the site
 stake/         the stake route page: its own HTML, CSS and one bundled script (built, committed)
 tools/stake/   source, build and tests for stake/stake.js

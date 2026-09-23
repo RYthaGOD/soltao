@@ -9,40 +9,40 @@
   * { box-sizing: border-box; margin: 0; }
   html, body { width: 1200px; height: 630px; }
   body {
-    background: #0a0a0b;
-    color: #e9e9ec;
+    background: #0b0b0c;
+    color: #f1efec;
     font: 400 20px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     display: flex;
     overflow: hidden;
   }
-  .stripe { width: 14px; background: #f2a33c; flex: none; }
+  .stripe { width: 14px; background: linear-gradient(180deg, #2ccab5, #1a8f80); flex: none; }
   .pad {
     flex: 1;
     padding: 62px 68px 54px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    background: linear-gradient(100deg, rgba(242,163,60,.10), transparent 58%);
+    background: radial-gradient(700px 380px at 12% 8%, rgba(44,202,181,.13), transparent 70%), radial-gradient(600px 360px at 96% 100%, rgba(219,134,81,.12), transparent 70%);
   }
-  .top { display: flex; align-items: baseline; gap: 14px; }
-  .mark { color: #f2a33c; font-size: 26px; }
-  .name { font: 600 26px/1 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace; letter-spacing: -.02em; }
-  .sub  { font: 400 18px/1 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace; color: #6a6b75; }
+  .top { display: flex; align-items: center; gap: 16px; }
+  .mark { width: 56px; height: 56px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(44,202,181,.25), 0 8px 28px -8px rgba(44,202,181,.55); }
+  .name { font: 650 28px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; letter-spacing: -.02em; }
+  .sub  { font: 400 19px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #85827e; }
   h1 {
-    font-size: 78px; line-height: 1.02; letter-spacing: -.035em; font-weight: 560;
+    font-size: 78px; line-height: 1.02; letter-spacing: -.04em; font-weight: 700;
     max-width: 17ch; margin-top: 34px;
   }
-  h1 em { font-style: normal; color: #f2a33c; }
+  h1 em { font-style: normal; background: linear-gradient(100deg, #f0ae80, #db8651 45%, #c4683a); -webkit-background-clip: text; background-clip: text; color: transparent; padding-right: .06em; }
   .ca {
     margin-top: 30px;
-    border: 1px solid #33333d; border-left: 4px solid #56d19a;
-    background: #08080a; padding: 20px 24px;
+    border: 1px solid rgba(44,202,181,.35); border-radius: 14px;
+    background: #0e0e10; padding: 20px 24px;
     font: 600 29px/1 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
-    letter-spacing: -.03em; color: #e9e9ec;
+    letter-spacing: -.03em; color: #f1efec;
   }
-  .ca small { display: block; font: 500 14px/1 ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase; color: #56d19a; margin-bottom: 11px; }
-  .foot { display: flex; gap: 34px; margin-top: 30px; font: 400 19px/1 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace; color: #9b9ca6; }
-  .foot b { color: #f2a33c; font-weight: 500; }
+  .ca small { display: block; font: 500 14px/1 ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase; color: #2ccab5; margin-bottom: 11px; }
+  .foot { display: flex; gap: 34px; margin-top: 30px; font: 400 19px/1 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace; color: #a8a6a3; }
+  .foot b { color: #db8651; font-weight: 700; }
 </style>
 </head>
 <body>
@@ -50,7 +50,7 @@
   <div class="pad">
     <div>
       <div class="top">
-        <span class="mark">◱</span>
+        <img class="mark" src="logo-512.png" alt="">
         <span class="name">soltao</span>
         <span class="sub">unofficial · community reference</span>
       </div>
