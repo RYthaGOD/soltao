@@ -114,10 +114,15 @@ Acceptance:
 - Portfolio shows Solana TAO, Bittensor free TAO, root stake, subnet Alpha positions, and return actions.
 - No hidden recommendations. If soltao ranks or filters, it explains the exact rule.
 
-Known prerequisite, ahead of any picker: the live hotkey check is subnet-blind. `onHotkey()` uses
-`getDelegate(hotkey)`, which takes no netuid, so a hotkey that validates nowhere on the chosen
-subnet still passes as a "registered validator". Confirmed against mainnet on 24 Sep 2026; details
-and the zero-cost way to settle the remaining unknown are in the research note above.
+Prerequisite, done in code on 24 Sep 2026 but **not yet deployed**: the hotkey check was
+subnet-blind. `onHotkey()` used `getDelegate(hotkey)`, which takes no netuid, so a hotkey holding no
+slot on the chosen subnet still passed as a "registered validator". The zero-cost mainnet replay
+(`test/mainnet.test.mjs` scenario 5) then showed the chain **accepts** such a stake: 0.1 TAO became
+~11.2 Alpha under a hotkey with no uid on subnet 1, earning nothing, with no revert for the route's
+fallback to catch. The page now reads the chosen subnet's metagraph (precompile `0x802`, batched 50
+calls per request) and refuses a subnet that does not exist, a hotkey with no uid there, and a hotkey
+with a uid but no validator permit. Root staking keeps the original delegate check. The same scan is
+the data source for the keyless validator picker (option 2 in the research note).
 
 ## Deferred
 

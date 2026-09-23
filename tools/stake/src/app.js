@@ -8,7 +8,7 @@ import { ed25519 } from "@noble/curves/ed25519";
 import { CONFIG } from "./config.js";
 import { derivationMessage, signInFields, walletFromSignature, ss58Decode, ss58Encode, toHex } from "./derive.js";
 import { createClients, getTaoBalance, quoteNativeFee, buildRouteTransaction, removeDust } from "./solana.js";
-import { getDelegate, getFreeBalance } from "./bittensor.js";
+import { findOnSubnet, getDelegate, getFreeBalance, getUidCount } from "./bittensor.js";
 import { getGasPrice } from "./evm.js";
 import { finishRoute, transitState, minStakeAmount, stakeGasReserve, sweepFloor } from "./route.js";
 
@@ -21,7 +21,7 @@ const state = {
   provider: null, user: null, taoLd: 0n, lamports: 0n,
   signed: null, mode: "derive",
   coldkey: null, coldkeyAddress: null, mustAck: false,
-  plan: "stake", netuid: 0n, netuidValid: true, hotkey: null, amountLd: 0n, reserveRao: CONFIG.defaultReserveRao,
+  plan: "stake", netuid: 0n, netuidValid: true, netuidChecking: false, hotkey: null, amountLd: 0n, reserveRao: CONFIG.defaultReserveRao,
   gasPrice: null, nativeFee: null, quoteSeq: 0,
   running: false, unfinished: null, transitRead: false, direction: "forward",
 };
@@ -308,24 +308,50 @@ function forget() {
 }
 
 // ── step 3: amount and plan ─────────────────────────────────────────────────
-function onNetuid() {
-  const v = $("netuid-in").value.trim();
-  state.netuid = 0n; state.netuidValid = true;
+let netuidSeq = 0;
+async function onNetuid() {
+  const v = $("netuid-in").value.trim(); const seq = ++netuidSeq;
+  state.netuid = 0n; state.netuidValid = true; state.netuidChecking = false;
+  const recheckHotkey = () => { if ($("hotkey-in").value.trim()) onHotkey(); };
   if (!v) {
     $("netuid-in").removeAttribute("aria-invalid");
     note("netuid-note", "Default is 0 (Root network). Other subnets will mint Alpha tokens.");
+    recheckHotkey();
     return gate();
   }
-  if (!/^\d+$/.test(v)) {
+  if (!/^\d+$/.test(v) || BigInt(v) > 65535n) {
     state.netuidValid = false;
     $("netuid-in").setAttribute("aria-invalid", "true");
-    note("netuid-note", "Subnet ID must be a number.", "bad");
+    note("netuid-note", "Subnet ID must be a whole number.", "bad");
     return gate();
   }
   state.netuid = BigInt(v);
-  state.netuidValid = true;
-  $("netuid-in").setAttribute("aria-invalid", "false");
-  note("netuid-note", state.netuid === 0n ? "Root network." : `Subnet ${state.netuid}.`, "ok");
+  if (state.netuid === 0n) {
+    $("netuid-in").setAttribute("aria-invalid", "false");
+    note("netuid-note", "Root network.", "ok");
+    recheckHotkey();
+    return gate();
+  }
+  // A subnet that does not exist would only be refused at the stake step, after the bridge.
+  state.netuidValid = false; state.netuidChecking = true;
+  note("netuid-note", `checking subnet ${state.netuid} on Bittensor…`);
+  recheckHotkey();
+  gate();
+  try {
+    const uids = await getUidCount(state.netuid);
+    if (seq !== netuidSeq) return;
+    state.netuidChecking = false;
+    if (uids === 0) {
+      $("netuid-in").setAttribute("aria-invalid", "true");
+      note("netuid-note", `Subnet ${state.netuid} is not registered on Bittensor.`, "bad");
+    } else {
+      state.netuidValid = true;
+      $("netuid-in").setAttribute("aria-invalid", "false");
+      note("netuid-note", `Subnet ${state.netuid} · ${uids} registered hotkeys. Staking here mints its Alpha.`, "ok");
+    }
+  } catch (e) {
+    if (seq === netuidSeq) { state.netuidChecking = false; note("netuid-note", `Could not reach Bittensor to check it: ${e.message}`, "bad"); }
+  }
   gate();
 }
 
@@ -337,13 +363,35 @@ async function onHotkey() {
   let pk;
   try { pk = ss58Decode(v); } catch (e) { $("hotkey-in").setAttribute("aria-invalid", "true"); note("hotkey-note", e.message, "bad"); return gate(); }
   if (state.coldkey && toHex(pk) === toHex(state.coldkey)) { $("hotkey-in").setAttribute("aria-invalid", "true"); note("hotkey-note", "That is your coldkey. Paste the validator's hotkey.", "bad"); return gate(); }
-  note("hotkey-note", "checking on Bittensor…");
+  const netuid = state.netuid;
+  const bad = (msg) => { $("hotkey-in").setAttribute("aria-invalid", "true"); note("hotkey-note", msg, "bad"); };
+  note("hotkey-note", netuid === 0n ? "checking on Bittensor…" : `checking subnet ${netuid}'s validators on Bittensor…`);
+  gate();
   try {
-    const d = await getDelegate(pk);
+    if (netuid === 0n) {
+      const d = await getDelegate(pk);
+      if (seq !== hotkeySeq) return;
+      if (!d.exists) { bad("Not a registered validator (delegate) hotkey. Check it on taostats."); return gate(); }
+      state.hotkey = pk; $("hotkey-in").setAttribute("aria-invalid", "false");
+      note("hotkey-note", `Registered validator · take ${d.takePct.toFixed(2)}% of rewards`, "ok");
+      return gate();
+    }
+    // getDelegate() takes no netuid: a delegate on one subnet can hold no slot on this one, and a
+    // stake there earns nothing. So a subnet stake is checked against the subnet's own metagraph.
+    const [d, at] = await Promise.all([getDelegate(pk), findOnSubnet(pk, netuid)]);
     if (seq !== hotkeySeq) return;
-    if (!d.exists) { $("hotkey-in").setAttribute("aria-invalid", "true"); note("hotkey-note", "Not a registered validator (delegate) hotkey. Check it on taostats.", "bad"); return gate(); }
+    if (at.uidCount === 0) { bad(`Subnet ${netuid} is not registered on Bittensor.`); return gate(); }
+    if (at.uid === null) {
+      bad(`Not on subnet ${netuid}: this hotkey holds none of its ${at.uidCount} slots, so a stake there would earn nothing.${d.exists ? " It validates elsewhere; paste a hotkey that validates on this subnet." : ""}`);
+      return gate();
+    }
+    if (!at.validatorPermit) {
+      bad(`Holds uid ${at.uid} on subnet ${netuid} but no validator permit right now, so it earns no validator dividends there.`);
+      return gate();
+    }
     state.hotkey = pk; $("hotkey-in").setAttribute("aria-invalid", "false");
-    note("hotkey-note", `Registered validator · take ${d.takePct.toFixed(2)}% of rewards`, "ok");
+    const take = d.exists ? ` · take ${d.takePct.toFixed(2)}% of rewards` : "";
+    note("hotkey-note", `Validator on subnet ${netuid} · uid ${at.uid}${take} · ${(at.dividendShare * 100).toFixed(2)}% of the subnet's validator dividends last epoch`, "ok");
   } catch (e) {
     if (seq === hotkeySeq) note("hotkey-note", `Could not reach Bittensor to check it: ${e.message}`, "bad");
   }
@@ -361,6 +409,7 @@ function readAmounts() {
   if (state.direction !== "forward") return "Bridge back is being rebuilt with full unstake and return checks.";
   if (state.amountLd > state.taoLd) return `More than your ${tao(state.taoLd)}`;
   if (state.plan === "stake") {
+    if (state.netuidChecking) return "Checking the subnet on Bittensor…";
     if (!state.netuidValid) return "Enter a valid subnet ID.";
     if (state.reserveRao < 0n) return "Enter the reserve like 0.01";
     if (state.gasPrice === null) return "Reading Bittensor's gas price…";

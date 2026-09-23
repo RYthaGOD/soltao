@@ -28,6 +28,10 @@ const HOTKEY = "0x20b0f8ac1d5416d32f5a552f98b570f06e8392ccb803029e04f63fbe0553c9
 // a known-good non-root hotkey for the subnet-staking scenario below, not a recommendation.
 const SUBNET_HOTKEY = "0xe2ee75ea11e4c5b7f5dac2e735278cfa0b1590c9856690f66653bdd85b709104";
 const SUBNET_NETUID = 1n;
+// Opentensor Foundation's hotkey (5F4tQyWr...uyHbZAc3): a delegate at 18% take that held no uid on
+// netuid 1 on 24 Sep 2026 (full 256-uid metagraph scan). getDelegate() takes no netuid, so the page's
+// old hotkey check passed it for every subnet. Scenario 5 records what the chain then does.
+const OFF_SUBNET_HOTKEY = "0x84d83d08ca89f8e60424ffa286f165c16dd8752e4faa4d8977221e6720678d28";
 const RAO = 1_000_000_000n;
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -44,11 +48,24 @@ const codeOf = (n) => "0x" + art(n).evm.deployedBytecode.object;
 
 // ── the replaying JSON-RPC ──────────────────────────────────────────────────
 const realFetch = globalThis.fetch;
+// The public RPC rate-limits bursts. Transport errors and rate limits are retried here, so a busy RPC
+// shows up as a slower run, never as a fake revert. A real revert or refusal is thrown at once.
 async function real(method, params) {
-  const res = await realFetch(RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
-  const body = await res.json();
-  if (body.error) throw new Error(body.error.message);
-  return body.result;
+  let last;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      const res = await realFetch(RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = await res.json();
+      if (body.error) throw Object.assign(new Error(body.error.message), { final: !/rate|limit|too many|busy|timeout/i.test(body.error.message || "") });
+      return body.result;
+    } catch (e) {
+      last = e;
+      if (e.final) throw e;
+      await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+    }
+  }
+  throw last;
 }
 const hex = (v) => "0x" + BigInt(v).toString(16);
 
@@ -78,9 +95,14 @@ globalThis.fetch = async (_url, { body }) => {
       case "eth_sendRawTransaction": {
         if (S.failSendAt !== null && S.sends++ >= S.failSendAt) return fail("connection reset (simulated: the page closed)");
         const tx = ethers.Transaction.from(params[0]);
+        // A retried broadcast of the same signed transaction is one transaction, as on a real chain.
+        // Without this, an RPC hiccup during the replay below made the page's retry record the unwrap
+        // twice; the second copy found no wTAO and showed up as a fake revert.
+        if (S.receipts.has(tx.hash)) return reply(tx.hash);
         S.signers.push({ from: tx.from.toLowerCase(), chainId: tx.chainId, type: tx.type, nonce: tx.nonce, expectNonce: S.calls.length });
         S.calls.push({ to: tx.to, value: tx.value, data: tx.data, gasLimit: tx.gasLimit, label: tx.data.slice(0, 10) });
-        const r = await replay();
+        let r;
+        try { r = await replay(); } catch (e) { S.calls.pop(); S.signers.pop(); throw e; }
         const i = S.calls.length - 1;
         S.calls[i].ok = r.ok[i]; S.calls[i].gasUsed = r.gasUsed[i];
         S.receipts.set(tx.hash, { status: r.ok[i] ? "0x1" : "0x0", gasUsed: hex(r.gasUsed[i]) });
@@ -207,6 +229,18 @@ function checkSigning(label) {
   const free = await getFreeBalance(u.coldkey), leftNative = (await replay()).transitBalance;
   const inRao = amountSD * 1000n + CONFIG.gasDropWei / RAO;
   expect("…and the TAO is delivered unstaked to the coldkey, nothing left on the transit account", steps() === "unwrap,stake,sweep" && inRao - free <= 1n && leftNative <= sweepFloor(price), `${fmt(free)} TAO free of ${fmt(inRao)}`);
+}
+
+// ── 5. A delegate that holds no uid on the chosen subnet ──────────────────────
+{
+  const u = freshUser(), amountSD = 100_000n;
+  scenario({ transit: u.transit, amountSD, dropWei: CONFIG.gasDropWei });
+  const summary = await finishRoute({ transitKey: u.transitKey, coldkey: u.coldkey, hotkey: bytes(OFF_SUBNET_HOTKEY), netuid: SUBNET_NETUID, plan: "stake", reserveRao: CONFIG.defaultReserveRao, expectLd: amountSD * 1000n });
+  const stakeTx = S.calls.find((c) => NAMES[c.label] === "stake");
+  const stake = await getStake(bytes(OFF_SUBNET_HOTKEY), u.coldkey, SUBNET_NETUID);
+  const free = await getFreeBalance(u.coldkey);
+  console.log(`INFO  off-subnet delegate on netuid ${SUBNET_NETUID}: ${steps()}; addStake ${stakeTx?.ok ? "SUCCEEDED" : "REVERTED"}; ${fmt(stake)} Alpha owned; ${fmt(free)} TAO free`);
+  expect("a delegate with no uid on the subnet: the route still ends clean, staked or refused, never stuck", S.calls.every((c) => NAMES[c.label] === "stake" || c.ok) && (stake > 0n || summary.stakeRefused === true), steps());
 }
 
 console.log(failures ? `\n${failures} failed` : "\nall passed");

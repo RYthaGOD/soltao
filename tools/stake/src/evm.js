@@ -58,6 +58,42 @@ export async function rpc(method, params = [], url = CONFIG.bittensorEvmRpc) {
   throw lastErr;
 }
 
+// Bittensor's public RPC rejects a JSON-RPC batch of more than 50 calls (measured 24 Sep 2026).
+export const BATCH_LIMIT = 50;
+
+/** Many calls in as few requests as the RPC allows, answered in order. Throws if any call fails. */
+export async function rpcBatch(calls, url = CONFIG.bittensorEvmRpc) {
+  const urls = Array.isArray(url) ? url : [url];
+  const results = [];
+  for (let i = 0; i < calls.length; i += BATCH_LIMIT) {
+    const chunk = calls.slice(i, i + BATCH_LIMIT).map(({ method, params = [] }, j) => ({ jsonrpc: "2.0", id: j, method, params }));
+    let lastErr, got = null;
+    for (let attempt = 0; attempt < 3 && !got; attempt++) {
+      for (const u of urls) {
+        try {
+          const res = await fetch(u, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(chunk) });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const body = await res.json();
+          if (!Array.isArray(body)) throw new Error(body?.error?.message || "batch refused");
+          const byId = new Map(body.map((r) => [r.id, r]));
+          got = chunk.map(({ id, method }) => {
+            const r = byId.get(id);
+            if (!r || r.error) throw new Error(r?.error?.message || `${method} missing from batch reply`);
+            return r.result;
+          });
+          break;
+        } catch (e) {
+          lastErr = e;
+        }
+      }
+      if (!got) await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+    }
+    if (!got) throw lastErr;
+    results.push(...got);
+  }
+  return results;
+}
+
 export const getBalance = async (address) => BigInt(await rpc("eth_getBalance", [address, "latest"]));
 export const getGasPrice = async () => BigInt(await rpc("eth_gasPrice"));
 

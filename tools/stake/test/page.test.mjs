@@ -21,6 +21,10 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const CHROME = process.env.CHROME || "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const HOLDER = "E7wdV5qCYL1fZJf6YfvHEyheAeow67Mf7BTpByX89mNQ"; // real TAO + SOL holder, read-only use
 const VALIDATOR = "5CoZxgtfhcJKX2HmkwnsN18KbaT9aih9eF3b6qVPTgAUbifj"; // a registered delegate (test data, not a pick)
+// Test data, not picks. Opentensor Foundation's hotkey is a delegate that held no uid on subnet 1 on
+// 24 Sep 2026; subnet 1's owner hotkey held uid 248 there with a validator permit.
+const FOUNDATION_HOTKEY = "5F4tQyWrhfGVcNhoqeiNsR6KjD4wMZ2kfhLj4oHYuyHbZAc3";
+const SUBNET1_OWNER_HOTKEY = "5HCFWvRqzSHWRPecN7q8J6c7aKQnrCZTMHstPv39xL1wgDHh";
 // Run C checks the fee goes to the configured wallet, or to a stand-in if none is configured yet.
 const FEE_WALLET = CONFIG.fee.wallet ?? "11111111111111111111111111111112";
 
@@ -232,6 +236,28 @@ const clean = async (page, problems, label) => {
   expect("review shows the transit account", /^0x[0-9a-f]{40}$/.test(await text(page, "#r-via")));
   expect("review estimates Bittensor gas in TAO", /^about 0\.00\d+ TAO$/.test(await text(page, "#r-gas")), await text(page, "#r-gas"));
   expect("sign stays disabled while the route is not live", await page.$eval("#sign", (b) => b.disabled));
+
+  // Subnet staking: the hotkey must hold a validator slot on the chosen subnet, not merely be a
+  // delegate somewhere. Live mainnet reads, as the page makes them.
+  const setField = async (sel, value) => { await page.$eval(sel, (el) => { el.value = ""; el.dispatchEvent(new Event("input", { bubbles: true })); }); if (value) await page.type(sel, value); };
+  await setField("#netuid-in", "60000");
+  await waitText(page, "#netuid-note", /not registered/);
+  expect("a subnet that does not exist is refused before anything is sent", /Subnet 60000 is not registered/.test(await text(page, "#netuid-note")), await text(page, "#netuid-note"));
+  await setField("#netuid-in", "1");
+  await waitText(page, "#netuid-note", /registered hotkeys/);
+  await setField("#hotkey-in", FOUNDATION_HOTKEY);
+  await waitText(page, "#hotkey-note", /Not on subnet 1|Validator on subnet 1/);
+  expect("a delegate with no slot on the chosen subnet is refused", /^Not on subnet 1: .* It validates elsewhere/.test(await text(page, "#hotkey-note")), await text(page, "#hotkey-note"));
+  expect("…and the review stays locked", (await text(page, "#r-plan")) === "—" && (await page.$eval("#sign", (b) => b.disabled)), await text(page, "#r-plan"));
+  await setField("#hotkey-in", SUBNET1_OWNER_HOTKEY);
+  await waitText(page, "#hotkey-note", /Validator on subnet 1|Not on subnet 1|no validator permit/);
+  expect("a hotkey validating on the subnet passes, with its uid", /^Validator on subnet 1 · uid \d+/.test(await text(page, "#hotkey-note")), await text(page, "#hotkey-note"));
+  await waitText(page, "#r-plan", /subnet 1/);
+  expect("review names the subnet and the Alpha it mints", /^Stake about 0\.0\d+ Alpha on subnet 1/.test(await text(page, "#r-plan")), await text(page, "#r-plan"));
+  await setField("#netuid-in", "");
+  await setField("#hotkey-in", VALIDATOR);
+  await waitText(page, "#hotkey-note", /Registered validator/);
+  await waitText(page, "#r-plan", /on root/);
 
   const stakeGas = await text(page, "#r-gas");
   await clickEl(page, 'input[name="plan"][value="deliver"]');
