@@ -16,7 +16,7 @@ server {
     add_header X-Frame-Options          "DENY" always;
     add_header Referrer-Policy          "no-referrer" always;
     add_header Permissions-Policy       "geolocation=(), microphone=(), camera=(), payment=(), usb=()" always;
-    add_header Content-Security-Policy  "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.dexscreener.com https://api.llama.fi https://solana-rpc.publicnode.com https://lite.chain.opentensor.ai; base-uri 'none'; form-action 'self'; frame-ancestors 'none'" always;
+    add_header Content-Security-Policy  "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.dexscreener.com https://api.llama.fi https://solana-rpc.publicnode.com https://joell-lsu6ge-fast-mainnet.helius-rpc.com https://lite.chain.opentensor.ai; base-uri 'none'; form-action 'self'; frame-ancestors 'none'" always;
 
     gzip              on;
     gzip_vary         on;

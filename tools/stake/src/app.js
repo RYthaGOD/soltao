@@ -395,11 +395,12 @@ function gate() {
   note("amount-note", blocked ? "Finish the route in step 2 first." : amountErr, amountErr || blocked ? "bad" : null);
   const acked = $("review-ack-check").checked;
   const forwardReady = state.plan === "deliver" || Boolean(state.hotkey);
-  const planReady = state.direction === "forward" && keysReady && !blocked && state.amountLd > 0n && !amountErr && forwardReady && acked;
+  const reviewReady = state.direction === "forward" && keysReady && !blocked && state.amountLd > 0n && !amountErr && forwardReady;
+  const planReady = reviewReady && acked;
   if (planReady) setStep("step-plan", "done");
-  setStep("step-review", planReady || !acked ? "active" : "locked");
-  renderReview(state.direction === "forward" && keysReady && !blocked && state.amountLd > 0n && !amountErr && forwardReady);
-  if (planReady) requestQuote(); else { state.nativeFee = null; $("sign").disabled = true; }
+  setStep("step-review", reviewReady ? "active" : "locked");
+  renderReview(reviewReady);
+  if (reviewReady) requestQuote(); else { state.nativeFee = null; $("sign").disabled = true; }
 }
 
 function renderReview(ready) {
@@ -438,7 +439,7 @@ function requestQuote() {
       if (!LIVE) note("sign-note", "The quote is live; sending opens once the route goes live.", "warn");
       else if (lacking) note("sign-note", `Not enough SOL: you need about ${sol(total + 100_000n)} including the transaction fee.`, "bad");
       else note("sign-note", "");
-      $("sign").disabled = !LIVE || lacking || state.running;
+      $("sign").disabled = !LIVE || lacking || state.running || !$("review-ack-check").checked;
     } catch (e) {
       if (seq === state.quoteSeq) { $("r-lzfee").textContent = "unavailable"; note("sign-note", `Could not quote the bridge fee: ${e.message}`, "bad"); }
     }

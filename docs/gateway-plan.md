@@ -58,7 +58,7 @@ Acceptance:
 
 ## Milestone 3: bridge-back foundation
 
-Status: in progress. The foundation now has independently checked OFT calldata, explicit rao/wei/Solana-local conversions, a live mainnet fee quote, a coldkey signer identity check, and live runtime-metadata guards for transfer and unstake. It is not connected to the page yet.
+Status: return engine implemented behind the disabled production UI. It has independently checked OFT calldata, explicit rao/wei/Solana-local conversions, a live mainnet fee quote, a coldkey signer identity check, live runtime-metadata guards, resumable funding/wrap/send checkpoints, and a zero-cost replay through the real canonical wTAO and LayerZero contracts. It is not connected to the page yet.
 
 Goal: build return-to-Solana for free TAO first, then add unstake.
 
@@ -76,6 +76,16 @@ Evidence captured on 2026-09-23:
 - The return amount is floored to the OFT's six shared decimals; 1 rao maps to one 9-decimal Solana local unit after normalization.
 - The Substrate signer produced from the derived phrase matches the coldkey produced by the page.
 - Current runtime metadata orders unstake as `hotkey, netuid, amount`; the earlier reverse prototype had the last two arguments reversed and has been corrected.
+- `return_route.js` completes free-TAO funding, wrapping, final fee re-quoting, top-ups, and canonical OFT send while checkpointing the EVM transaction hash immediately after broadcast.
+- Recovery tests cover interruptions after coldkey funding, after wrapping, after OFT broadcast, and while the OFT transaction is pending; none duplicates a transfer, wrap, or send.
+- A read-only mainnet-state replay wrapped 1 TAO through the real wTAO contract and executed its real LayerZero send toward Solana. It measured 59,827 total gas for wrap and 246,363 for send, inside the configured 75,000 and 650,000 limits, with zero wTAO left behind.
+
+Remaining before the toggle can be enabled:
+
+- Persist the route checkpoints from the browser and render the free-return review/tracker states.
+- Track the destination Solana token account and prove arrival, including first-time token-account behavior.
+- Keep the Polkadot signer in a separately loaded return bundle so the current forward page does not absorb its size.
+- Complete one deliberately small real-funds free-TAO return after explicit approval.
 
 ## Milestone 4: unstake and return
 

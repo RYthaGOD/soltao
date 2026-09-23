@@ -259,6 +259,8 @@ const clean = async (page, problems, label) => {
   await clickEl(page, 'input[name="plan"][value="deliver"]');
   await page.type("#amount", "0.1");
   await waitText(page, "#r-lzfee", /SOL/);
+  expect("sign stays disabled until the permanent destination is acknowledged", await page.$eval("#sign", (button) => button.disabled));
+  await clickEl(page, "#review-ack-check");
   await page.waitForFunction(() => !document.querySelector("#sign").disabled, { timeout: 30_000 });
   expect("sign is enabled for a funded wallet once live", true);
 

@@ -62,11 +62,13 @@ export const getBalance = async (address) => BigInt(await rpc("eth_getBalance", 
 export const getGasPrice = async () => BigInt(await rpc("eth_gasPrice"));
 
 /** Sends one transaction from the transit key and waits for its receipt. Throws if it reverts. */
-export async function sendTx(privateKey, { to, value = 0n, data = "0x", gasLimit, gasPrice }, { pollMs = 3000, timeoutMs = 5 * 60_000 } = {}) {
+export async function sendTx(privateKey, { to, value = 0n, data = "0x", gasLimit, gasPrice }, { pollMs = 3000, timeoutMs = 5 * 60_000, onBroadcast = () => {} } = {}) {
   const from = evmAddress(privateKey);
   const nonce = BigInt(await rpc("eth_getTransactionCount", [from, "pending"]));
   const price = gasPrice ?? (await getGasPrice());
-  const hash = await rpc("eth_sendRawTransaction", [signLegacyTx({ nonce, gasPrice: price, gasLimit: BigInt(gasLimit), to, value, data }, privateKey)]);
+  const raw = signLegacyTx({ nonce, gasPrice: price, gasLimit: BigInt(gasLimit), to, value, data }, privateKey);
+  const hash = await rpc("eth_sendRawTransaction", [raw]);
+  onBroadcast({ hash, nonce });
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     let receipt;

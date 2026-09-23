@@ -46,6 +46,8 @@ expect("return planning reuses recoverable native TAO and wTAO already on transi
   resumedPlan.fundingRao === 603_630_000n && resumedPlan.existingWtaoUsed === 400_000_000_000_000_000n && resumedPlan.leftoverWtaoWei === 0n,
   `${resumedPlan.fundingRao} rao still needed`);
 expect("rao funding rounds upward without losing wei", resumedPlan.fundingRao * 1_000_000_000n >= resumedPlan.fundingWei && resumedPlan.fundingOverageWei < 1_000_000_000n);
+const wrappedPlan = planReturnFunding({ amountRao: 1_000_000_000n, nativeFeeWei: NATIVE_FEE, gasPriceWei: 5_000_000_000n, transitWtaoWei: 1_000_000_000_000_000_000n });
+expect("an already-wrapped return does not reserve wrap gas again", wrappedPlan.wrapWei === 0n && wrappedPlan.gasReserveWei === 3_900_000_000_000_000n);
 
 let rejected = false;
 try { await quoteReturn({ amountRao: 999n, solanaRecipient: TO }); } catch (e) { rejected = /0\.000001 TAO/.test(e.message); }

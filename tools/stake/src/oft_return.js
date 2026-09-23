@@ -67,7 +67,8 @@ export function planReturnFunding({ amountRao, nativeFeeWei, gasPriceWei, transi
   const existingWtaoUsed = wtao < amountWei ? wtao : amountWei;
   const wrapWei = amountWei - existingWtaoUsed;
   // Hold 20% above the two declared gas limits so a modest gas-price move does not strand a route.
-  const gasReserveWei = ceilDiv((RETURN_GAS_LIMIT.wrap + RETURN_GAS_LIMIT.send) * gasPrice * 12_000n, 10_000n);
+  const remainingGas = RETURN_GAS_LIMIT.send + (wrapWei > 0n ? RETURN_GAS_LIMIT.wrap : 0n);
+  const gasReserveWei = ceilDiv(remainingGas * gasPrice * 12_000n, 10_000n);
   const requiredNativeWei = wrapWei + nativeFee + gasReserveWei;
   const fundingWei = requiredNativeWei > native ? requiredNativeWei - native : 0n;
   const fundingRao = ceilDiv(fundingWei, WEI_PER_RAO);

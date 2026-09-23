@@ -5,11 +5,12 @@
   "description": "Source for /stake/. Bundled into one self-hosted file; the published page has no runtime dependencies.",
   "scripts": {
     "build": "node build.mjs",
-    "test": "node test/derive.test.mjs && node test/keyring.test.mjs && node test/oft_return.test.mjs && node test/evm.test.mjs && node test/route.test.mjs && node test/shim.test.mjs && node test/solana.test.mjs",
+    "test": "node test/derive.test.mjs && node test/keyring.test.mjs && node test/oft_return.test.mjs && node test/return_route.test.mjs && node test/evm.test.mjs && node test/route.test.mjs && node test/shim.test.mjs && node test/solana.test.mjs",
     "test:page": "node build.mjs && node test/page.test.mjs",
     "test:mainnet": "node test/mainnet.test.mjs",
     "test:return:live": "node test/oft_return_live.test.mjs && node test/substrate_quote_live.test.mjs",
     "test:return:metadata": "node test/polkadot.test.mjs",
+    "test:return:mainnet": "node test/return_mainnet.test.mjs",
     "serve": "node serve.mjs"
   },
   "dependencies": {

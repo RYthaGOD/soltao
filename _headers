@@ -5,7 +5,7 @@
   X-Frame-Options: DENY
   Referrer-Policy: no-referrer
   Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), usb=()
-  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.dexscreener.com https://api.llama.fi https://solana-rpc.publicnode.com https://lite.chain.opentensor.ai; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.dexscreener.com https://api.llama.fi https://solana-rpc.publicnode.com https://joell-lsu6ge-fast-mainnet.helius-rpc.com https://lite.chain.opentensor.ai; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
 
 # The registry is the one file that must not go stale behind a CDN edge.
 /pairs.json
