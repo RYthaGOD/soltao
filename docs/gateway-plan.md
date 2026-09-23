@@ -19,6 +19,10 @@ Stake and unstake are launch requirements. Discovery, comparison, and portfolio 
 
 ## Milestone 1: protect the current stake route
 
+Status: done, deployed to production 23 Sep 2026. The predictable-localhost-wallet bypass was
+removed from `app.js`; the bridge-back scaffold (direction toggle) ships in the same page but is
+disabled in HTML and hard-gated in JS, confirmed inert on the live domain post-deploy.
+
 Goal: keep the existing forward stake path safe while bridge-back is rebuilt.
 
 Acceptance:
@@ -37,8 +41,10 @@ cost, no funds spent): `tools/stake/test/mainnet.test.mjs` replays the exact sig
 real owner hotkey (independently confirmed live to be a registered delegate). Result: 0.1 TAO
 converted to ~11.2 Alpha, owned by the fresh coldkey, with zero root-stake cross-contamination,
 across 7 of 8 repeated runs (the one failure was an RPC rate-limit from our own repeated testing,
-not a reverted transaction). Still not verified via an actual real signed transaction with real
-funds through the live page — see `tools/stake/HANDOVER.md`.
+not a reverted transaction). Deployed to production 23 Sep 2026 on Craig's explicit go-ahead, on
+the strength of that verification plus the root-staking route's prior real-funds confirmation.
+Still not verified via an actual real signed transaction with real funds through the live page —
+see `tools/stake/HANDOVER.md` for the exact current gap.
 
 Goal: make the current stake route clear for both root TAO and subnet Alpha.
 

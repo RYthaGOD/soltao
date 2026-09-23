@@ -4,10 +4,10 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-09-23. Forward root-staking route is live-verified (see below). Subnet staking
-and the redesign are new since the last live test and have NOT themselves been through a real
-funded production transaction yet — see "Current state" before assuming anything beyond root
-staking is production-proven.
+Last updated: 2026-09-23. **Live in production at `soltao.xyz`** — the redesign, subnet staking,
+and the bridge-back foundation scaffold were deployed and verified error-free on the real domain
+this session. See "Current state" for exactly what has real-funds proof versus what shipped on
+zero-cost mainnet-state verification plus Craig's own informed go-ahead.
 
 ## What this is
 
@@ -58,7 +58,9 @@ main "Solana TAO Board" page which stays no-wallet-connect).
 - `tools/stake/src/evm.js` — Bittensor RPC calls, retry/backoff, receipt polling.
 - `tools/stake/src/bittensor.js` — precompile reads (delegate, stake, balance, wTAO, address map).
 - `tools/stake/src/config.js` — addresses, the soltao fee wallet
-  (`BgGFMbwUtKLifQYZogbDorEXTXYp3UKVAZSH41xQ72Na`).
+  (`BgGFMbwUtKLifQYZogbDorEXTXYp3UKVAZSH41xQ72Na`). `solanaRpc` switched from a public shared
+  endpoint to a dedicated Helius endpoint on 23 Sep 2026 — this is committed and public (visible in
+  the shipped bundle to anyone), a deliberate tradeoff Craig accepted for reliability.
 - `tools/stake/src/oft_return.js` — **new, not wired to the page.** Builds/quotes the canonical
   wTAO -> Solana OFT send for the bridge-back direction (rao/wei/6-decimal-dust conversions, funding
   math, live fee quoting). Pure functions only; nothing here sends a transaction.
@@ -150,49 +152,51 @@ This is **not** git-push-triggered. Steps, in order, every time:
 
 ## Current state
 
-### What's live-verified (real funds, production, before subnet staking existed)
-- **Wallet connection** (Phantom, Solflare, any standard provider)
-- **SIWS sign-in and wallet derivation** (production path works seamlessly on `soltao.xyz`)
-- **Transit account and coldkey generation**
-- **Transaction building, simulation, and quote**
-- **Root-staking forward route** (unwrap -> addStake root -> transferStake -> sweep) — confirmed by
-  Craig via a real funded transaction on `soltao.xyz`, per the "Final Verification" note below
-  (date not recorded here; treat as sometime on/before 22 Sep 2026, root netuid only).
-- **Error recovery** — messages persist, UI recovers, and background bridging picks up exactly where
-  it left off via deterministic local state.
+### Deployed 23 Sep 2026
+The redesign, netuid-aware `route.js`, the direction-toggle scaffold, and the Helius RPC switch
+were built, tested, committed, pushed, and deployed to `soltao.xyz` via `railway up --ci` this
+session, with Craig's explicit go-ahead. Post-deploy, `soltao.xyz/` and `soltao.xyz/stake/` were
+both checked headless against the real domain: HTTP 200, the served script hash matches the build
+(`stake.js?v=cc7fdecb` at deploy time — re-run the build to get the current one), zero console
+errors, zero CSP violations, zero failed asset requests. This is the live site right now, not a
+staging preview.
 
-### Final Verification (root staking, pre-subnet-staking build)
-A live production transaction was successfully sent and routed on the root-staking forward route:
-1. SIWS sign-in on `soltao.xyz` succeeded.
-2. Phantom approved the Solana bridge transaction.
-3. Bridge delivered wTAO + gas drop to the transit account.
-4. Route successfully unwrapped and swept to the user's coldkey.
+### What has real-funds proof
+- **Wallet connection, SIWS sign-in, wallet derivation, transit account/coldkey generation,
+  transaction building/simulation/quote** — all exercised live on `soltao.xyz` before today.
+- **Root-staking forward route** (unwrap -> addStake root -> transferStake -> sweep): a live
+  production transaction was sent and routed successfully — SIWS sign-in succeeded, Phantom
+  approved the Solana bridge tx, the bridge delivered wTAO + gas drop, the route unwrapped and
+  swept to the coldkey, and it landed in Craig's Talisman wallet with the soltao fee correctly
+  reaching the treasury wallet. Confirmed real by Craig on 23 Sep 2026 (predates subnet staking,
+  the localhost-bypass removal, and the redesign).
+- **Error recovery** — messages persist, UI recovers, background bridging resumes from chain state.
 
-Confirmed real by Craig on 23 Sep 2026. This predates subnet staking, the localhost-bypass removal,
-and the redesign — none of those three have had a real funded production run yet.
-
-### Built since that verification, NOT yet live-tested with real funds
+### What shipped on real-mainnet-state verification, not yet a real signed transaction
 - **Subnet staking** (`route.js` addStake/transferStake now take a netuid). Covered by a mocked
-  chain simulation (`route.test.mjs`, including a case that proves subnet resume never touches root
-  stake) and, as of 23 Sep 2026, by the same zero-cost mainnet-replay approach as the original
-  route: `test/mainnet.test.mjs` now has a subnet-staking scenario that replays the real signed
-  transactions through the real staking precompile against real subnet 1 (owner hotkey confirmed
-  live to be a registered delegate). Result across repeated runs: 0.1 TAO consistently converts to
-  ~11.2 Alpha, owned by the fresh coldkey, zero root-stake cross-contamination, every time addStake
-  itself ran (7 of 8 runs clean; the one miss was the shared public Bittensor RPC rate-limiting
-  under our own repeated testing, not a reverted transaction — addStake succeeded even in that run).
-  **What's still missing:** an actual real signed transaction with real funds through the live page.
-  The eth_call replay proves the precompile logic is correct against real state; it can't prove
-  Phantom signs the resulting calldata cleanly or that LayerZero's executor actually delivers.
-- **The visual redesign** (PR #1, merged 23 Sep 2026) — verified headless (zero console/CSP errors,
-  screenshot-checked) but not yet exercised with a real wallet on the real domain. Past bugs in this
-  project (items 1, 3, 4 above) were all real-browser/real-domain issues that headless testing
-  would not have caught, so don't skip a real-wallet pass just because the automated checks are
-  green.
+  chain simulation (`route.test.mjs`, proving subnet resume never touches root stake) and by a
+  zero-cost mainnet-replay extension added 23 Sep 2026: `test/mainnet.test.mjs` replays the real
+  signed transactions through the real staking precompile against real subnet 1 (owner hotkey
+  independently confirmed live to be a registered delegate). Across repeated runs, 0.1 TAO
+  consistently converts to ~11.2 Alpha owned by the fresh coldkey, zero root-stake
+  cross-contamination, `addStake` succeeding in 8 of 8 attempts (one run's *later* step hit the
+  shared public Bittensor RPC's rate limit from our own repeated testing, not a revert). This is
+  why Craig chose to ship without spending real subnet-stake funds first: the one thing a mock
+  can't prove (real precompile behavior on a real, currently-registered subnet) is now proven, for
+  free. What remains open — Phantom actually signing the real calldata cleanly, LayerZero's
+  executor actually delivering — is the same class of risk the root-staking route already cleared,
+  not something specific to subnets.
+- **The visual redesign** (PR #1, merged 23 Sep 2026) — verified headless pre-deploy and again
+  against the live production domain post-deploy (zero console/CSP errors both times), but not yet
+  exercised by a real wallet signing a real transaction on it. Past bugs in this project (items 1,
+  3, 4 above) were real-browser/real-domain issues headless testing would not have caught, so a
+  real-wallet pass is still the highest-value thing left to do, at Craig's convenience — not a
+  blocker, since it already shipped on his informed call.
 - **Bridge-back foundation** (`oft_return.js`, `substrate.js`) — Milestone 3 in `docs/gateway-plan.md`,
   in progress. Deliberately not reachable from the live page (disabled toggle, `app.js` gates on
-  `direction === "forward"`). Not a release blocker; just not a thing to enable yet.
+  `direction === "forward"`). Confirmed on the live domain that the toggle really is inert.
 
-**Not ready for a "ship it" recommendation as a whole.** The root-staking path has real-money proof;
-subnet staking and the redesign do not yet, and the standing deploy constraint above (explicit
-confirmation before every `railway up --ci`) still applies for exactly this reason.
+**Bottom line:** live in production. Root staking has full real-funds proof. Subnet staking has
+real-chain-state proof plus Craig's informed acceptance of the remaining gap. The redesign has
+headless proof on the real domain. The standing deploy constraint above (explicit confirmation
+before every `railway up --ci`) was followed for this deploy and still applies to the next one.
