@@ -1,6 +1,6 @@
 # soltao Gateway Plan
 
-Last updated: 2026-09-23
+Last updated: 2026-09-24
 
 ## Product promise
 
@@ -101,6 +101,10 @@ Acceptance:
 
 ## Milestone 5: gateway experience
 
+Status: not started. Data sources for the subnet directory and validator picker were researched on
+24 Sep 2026 — see `research/subnet-validator-data-research.md` for what taostats can and cannot
+supply, what the Bittensor metagraph precompile supplies for free, and the measured cost of each.
+
 Goal: make soltao feel like the place to enter Bittensor from Solana.
 
 Acceptance:
@@ -109,6 +113,11 @@ Acceptance:
 - Validator picker filtered by subnet, with take and basic status fields.
 - Portfolio shows Solana TAO, Bittensor free TAO, root stake, subnet Alpha positions, and return actions.
 - No hidden recommendations. If soltao ranks or filters, it explains the exact rule.
+
+Known prerequisite, ahead of any picker: the live hotkey check is subnet-blind. `onHotkey()` uses
+`getDelegate(hotkey)`, which takes no netuid, so a hotkey that validates nowhere on the chosen
+subnet still passes as a "registered validator". Confirmed against mainnet on 24 Sep 2026; details
+and the zero-cost way to settle the remaining unknown are in the research note above.
 
 ## Deferred
 

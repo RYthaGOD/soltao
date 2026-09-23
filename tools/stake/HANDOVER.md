@@ -49,6 +49,12 @@ main "Solana TAO Board" page which stays no-wallet-connect).
 - `docs/gateway-plan.md` — the current product/milestone plan (root: soltao as a Solana<->Bittensor
   gateway, not just a one-way stake page). Read that before this doc for what's next; this file is
   about the code that already exists.
+- `research/subnet-validator-data-research.md` — where subnet/validator data can come from, read
+  24 Sep 2026: the taostats API (per-subnet validator lists and 1h/1d/7d/30d APY, key required, quota
+  undocumented) versus the Bittensor metagraph precompile `0x802` (same validator lists free and
+  keyless, ~6 batched requests per subnet, no names). Also records an open correctness gap it found:
+  `onHotkey()`'s `getDelegate(hotkey)` check takes no netuid, so a hotkey that validates nowhere on
+  the chosen subnet still passes as a "registered validator". Nothing implemented; no API key created.
 - `tools/stake/src/derive.js` — the signature -> wallet derivation (coldkey + transit key). Also
   defines the exact SIWS message text (`signInFields`, `derivationMessage`).
 - `tools/stake/src/app.js` — browser controller: wallet connect, sign-in, route orchestration,
@@ -228,6 +234,18 @@ hash matches the local build, `og:title` on both pages returns the new copy, `og
 regenerated 170,825-byte file, and the CSP on `/stake/` includes the Helius origin. The Helius
 endpoint was additionally exercised by running the page's own wallet-connect `fetch()` from inside
 the live page (200 OK, zero CSP violations).
+
+**Session of 24 Sep 2026 (research only, no deploy).** Looked at where the data for a subnet
+directory and validator picker would come from — taostats' API versus Bittensor's own precompiles.
+Nothing was implemented, no API key was created, `npm run build` was not run and nothing was
+deployed. Findings are in `research/subnet-validator-data-research.md` (local only: `research/` is
+gitignored) with the durable summary in `docs/gateway-plan.md` under Milestone 5. The one thing
+worth acting on: the live hotkey check is subnet-blind, so the page can call a hotkey a "registered
+validator" for a subnet it does not validate on. Verified at close that every served file
+(`stake/stake.js`, `stake/index.html`, `stake/stake.css`, `index.html`, `app.js`, `styles.css`,
+`_headers`, `deploy/nginx.conf.template`) is byte-identical between the deployed commit `0dc334b`
+and HEAD, and that the live hash is still `stake.js?v=b5d4275d` — so every commit after `0dc334b`
+is documentation and the live site is not behind.
 
 **Note for whoever picks this up next:** at least one other agent/process was actively committing
 and deploying to this same repo across 23-24 Sep, without coordinating through this session. It
