@@ -12,7 +12,7 @@
 <link rel="icon" href="../favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="stake.css">
-<script src="stake.js?v=b3ce8b4e" defer></script>
+<script src="stake.js?v=69cad878" defer></script>
 </head>
 <body>
 <a class="skip" href="#steps">Skip to the steps</a>
@@ -36,20 +36,41 @@
 </header>
 
 <main>
+<div class="wrap">
+  <fieldset class="choice direction-toggle" id="direction-toggle" style="margin-top: 2rem; margin-bottom: 0;">
+    <legend class="sr">Direction</legend>
+    <label class="choice-opt">
+      <input type="radio" name="direction" value="forward" checked>
+      <span><b>Bridge to Bittensor</b></span>
+    </label>
+    <label class="choice-opt">
+      <input type="radio" name="direction" value="reverse" disabled>
+      <span><b>Bridge to Solana</b><i>planned: unstake, quote, and return canonical TAO</i></span>
+    </label>
+  </fieldset>
+</div>
+
 <section class="wrap stake-hero" aria-labelledby="stake-h">
   <span class="lbl lbl-amber">[ Stake route ]</span>
-  <h1 id="stake-h">Stake your Solana TAO, <em>in a wallet you own</em></h1>
+  <h1 id="stake-h">
+    <span class="dir-fwd">Stake your Solana TAO, <em>in a wallet you own</em></span>
+    <span class="dir-rev" hidden>Bridge your TAO back to Solana</span>
+  </h1>
   <p class="stake-lede">
-    One Solana transaction. Your TAO goes home over the LayerZero bridge it came in on, and this page
-    stakes it to the validator you choose, owned by your own Bittensor wallet. There is no receipt
-    token and no soltao contract: every key along the way comes from your signature, and nobody else
-    holds one.
+    <span class="dir-fwd">One Solana transaction. Your TAO goes home over the LayerZero bridge it came in on, and this page stakes it to the validator you choose, owned by your own Bittensor wallet. There is no receipt token and no soltao contract: every key along the way comes from your signature, and nobody else holds one.</span>
+    <span class="dir-rev" hidden>Unstake your TAO from Bittensor and bridge it back to Solana over LayerZero. Everything is signed securely by your derived Bittensor wallet, returning canonical TAO to your Solana wallet.</span>
   </p>
-  <ol class="hops stake-hops" aria-label="The route">
+  <ol class="hops stake-hops dir-fwd" aria-label="The route">
     <li><b>Solana</b><span>canonical TAO · you sign once</span></li>
     <li><b>LayerZero</b><span>the OFT bridge TAO arrived on</span></li>
     <li><b>Bittensor EVM</b><span>your transit account unwraps it</span></li>
-    <li><b>Your coldkey</b><span>staked on root · yours</span></li>
+    <li><b>Your coldkey</b><span>root TAO or subnet Alpha · yours</span></li>
+  </ol>
+  <ol class="hops stake-hops dir-rev" aria-label="The route" hidden>
+    <li><b>Your coldkey</b><span>unstake and transfer</span></li>
+    <li><b>Bittensor EVM</b><span>wrap to wTAO</span></li>
+    <li><b>LayerZero</b><span>OFT bridge to Solana</span></li>
+    <li><b>Solana</b><span>arrives in your wallet</span></li>
   </ol>
 </section>
 
@@ -79,8 +100,10 @@
     <p class="step-note sign-warn"><strong>Warning:</strong> Your Solana wallet IS your Bittensor key. If you lose access to this Solana wallet, you lose access to your TAO.</p>
     <dl class="kv" id="balances" hidden>
       <div><dt>Wallet</dt><dd class="num" id="sol-address"></dd></div>
-      <div><dt>TAO</dt><dd class="num" id="tao-balance"><span class="skel"></span></dd></div>
+      <div><dt>TAO on Solana</dt><dd class="num" id="tao-balance"><span class="skel"></span></dd></div>
       <div><dt>SOL</dt><dd class="num" id="sol-balance"><span class="skel"></span></dd></div>
+      <div class="dir-rev" hidden><dt>TAO on Bittensor (Staked)</dt><dd class="num" id="tao-staked"><span class="skel"></span></dd></div>
+      <div class="dir-rev" hidden><dt>TAO on Bittensor (Free)</dt><dd class="num" id="tao-free"><span class="skel"></span></dd></div>
     </dl>
   </li>
 
@@ -95,7 +118,7 @@
       transit account on Bittensor EVM, where the bridge delivers and where this page stakes your TAO and
       hands it to your wallet. Signing moves no funds.</p>
 
-    <fieldset class="choice">
+    <fieldset class="choice dir-fwd">
       <legend class="sr">Where the TAO should land</legend>
       <label class="choice-opt">
         <input type="radio" name="ck-mode" value="derive" checked>
@@ -108,6 +131,9 @@
         <i>Paste the coldkey address (starts with 5). Best if you already keep TAO in btcli, Talisman or another Bittensor wallet. You still sign once, for the transit account.</i></span>
       </label>
     </fieldset>
+    <div class="dir-rev callout callout-plain" hidden>
+      <p><b>Note:</b> The Bridge Back route is only available for TAO residing in the Bittensor wallet derived from your Solana signature.</p>
+    </div>
 
     <div class="ck-paste" id="ck-paste" hidden>
       <label class="field">
@@ -170,11 +196,17 @@
   <li class="panel step" id="step-plan" data-state="locked">
     <div class="step-head">
       <span class="rs-n">03</span>
-      <h2>Amount and what happens on arrival</h2>
+      <h2>
+        <span class="dir-fwd">Amount and what happens on arrival</span>
+        <span class="dir-rev" hidden>Amount to Bridge Back</span>
+      </h2>
     </div>
 
     <label class="field">
-      <span>TAO to send</span>
+      <span>
+        <span class="dir-fwd">TAO to send</span>
+        <span class="dir-rev" hidden>TAO to Unstake and Bridge</span>
+      </span>
       <span class="field-row">
         <input type="text" id="amount" inputmode="decimal" autocomplete="off" placeholder="0.00">
         <button type="button" class="btn btn-ghost" id="amount-max">max</button>
@@ -182,12 +214,12 @@
     </label>
     <span class="step-note" id="amount-note" role="status"></span>
 
-    <fieldset class="choice">
+    <fieldset class="choice dir-fwd">
       <legend class="sr">On arrival</legend>
       <label class="choice-opt">
         <input type="radio" name="plan" value="stake" checked>
         <span><b>Stake it for me</b>
-        <i>Staked on root to the validator below, owned by your coldkey. Four Bittensor transactions (unwrap, stake, hand over, sweep), paid in TAO.</i></span>
+        <i>Staked on the root or subnet you select below, owned by your coldkey. Four Bittensor transactions (unwrap, stake, hand over, sweep), paid in TAO.</i></span>
       </label>
       <label class="choice-opt">
         <input type="radio" name="plan" value="deliver">
@@ -196,7 +228,7 @@
       </label>
     </fieldset>
 
-    <div id="stake-opts">
+    <div id="stake-opts" class="dir-fwd">
       <label class="field">
         <span>Target Subnet</span>
         <input type="text" id="netuid-in" inputmode="numeric" autocomplete="off" spellcheck="false" value="0" placeholder="0 (Root)">
@@ -223,21 +255,22 @@
     <dl class="kv kv-review" id="review">
       <div><dt>You send</dt><dd class="num" id="r-send">—</dd></div>
       <div><dt>Lands in</dt><dd class="num" id="r-dest">—</dd></div>
-      <div><dt>Via</dt><dd class="num" id="r-via">—</dd></div>
-      <div><dt>On arrival</dt><dd id="r-plan">—</dd></div>
+      <div class="dir-fwd"><dt>Via</dt><dd class="num" id="r-via">—</dd></div>
+      <div class="dir-fwd"><dt>On arrival</dt><dd id="r-plan">—</dd></div>
       <div><dt>Bittensor gas, in TAO</dt><dd class="num" id="r-gas">—</dd></div>
       <div><dt>LayerZero network fee</dt><dd class="num" id="r-lzfee">—</dd></div>
-      <div><dt>soltao fee</dt><dd class="num" id="r-fee">—</dd></div>
-      <div class="kv-total"><dt>Total SOL</dt><dd class="num" id="r-total">—</dd></div>
+      <div class="dir-fwd"><dt>soltao fee</dt><dd class="num" id="r-fee">—</dd></div>
+      <div class="kv-total dir-fwd"><dt>Total SOL</dt><dd class="num" id="r-total">—</dd></div>
     </dl>
-    <p class="step-p small">The LayerZero fee includes 0.001 TAO dropped on your transit account to pay for its first
+    <p class="step-p small dir-fwd">The LayerZero fee includes 0.001 TAO dropped on your transit account to pay for its first
       Bittensor transaction; what it does not use comes back to you. The Solana transaction fee is added by
       your wallet. The transaction is simulated against mainnet before your wallet asks you to sign.</p>
+    <p class="step-p small dir-rev" hidden>The LayerZero network fee is paid from the bridged TAO on Bittensor. No soltao fee is charged for bridging back to Solana.</p>
     <p class="sign-warn">Keep this page open until step 5 finishes. Once the bridge delivers, usually within
       minutes, the page signs the Bittensor steps with your transit key; your wallet will not ask again. If
       the page closes, come back, sign the same message in step 2, and it finishes.</p>
       
-    <div class="review-ack" id="review-ack-box">
+    <div class="review-ack dir-fwd" id="review-ack-box">
       <h3>Your permanent Bittensor destination</h3>
       <div class="ack-address">
         <code class="huge-address num" id="r-huge-dest">—</code>
@@ -261,20 +294,27 @@
       <span class="rs-n">05</span>
       <h2>Where it is</h2>
     </div>
-    <ol class="track" id="track" aria-live="polite">
+    <ol class="track dir-fwd" id="track" aria-live="polite">
       <li data-k="solana"><b>Solana</b><span>—</span></li>
       <li data-k="bridge"><b>LayerZero</b><span>—</span></li>
       <li data-k="unwrap"><b>Unwrap wTAO</b><span>—</span></li>
       <li data-k="stake"><b>Stake and hand over</b><span>—</span></li>
       <li data-k="sweep"><b>Your Bittensor wallet</b><span>—</span></li>
     </ol>
+    <ol class="track dir-rev" id="track-rev" aria-live="polite" hidden>
+      <li data-k="unstake"><b>Unstake</b><span>—</span></li>
+      <li data-k="transfer"><b>Transfer to transit</b><span>—</span></li>
+      <li data-k="deposit"><b>Wrap to wTAO</b><span>—</span></li>
+      <li data-k="send"><b>LayerZero to Solana</b><span>—</span></li>
+      <li data-k="finish"><b>Arrived in wallet</b><span>—</span></li>
+    </ol>
     <p class="step-note" id="track-note" role="status"></p>
     <p class="step-p small" id="track-links"></p>
 
-    <div class="final-balance" id="final-balance" hidden>
+    <div class="final-balance dir-fwd" id="final-balance" hidden>
       <h3>Final Balance in <span class="num" id="f-dest"></span></h3>
       <dl class="kv">
-        <div><dt>Staked TAO</dt><dd class="num" id="f-staked">—</dd></div>
+        <div><dt id="f-staked-label">Staked TAO</dt><dd class="num" id="f-staked">—</dd></div>
         <div><dt>Free TAO</dt><dd class="num" id="f-free">—</dd></div>
       </dl>
       <p class="step-p small">You can manage this balance or unstake anytime using standard Bittensor tools (btcli, Talisman, etc.) with the recovery phrase from Step 2.</p>

@@ -20,6 +20,7 @@ function freshChain() {
 const get = (m, k) => m.get(k.toLowerCase()) ?? 0n;
 const add = (m, k, v) => m.set(k.toLowerCase(), get(m, k) + v);
 const mirror = (addr) => ethers.keccak256(ethers.concat([ethers.toUtf8Bytes("evm:"), addr]));
+const stakeKey = (hotkey, coldkey, netuid = 0n) => `${hotkey}|${coldkey}|${BigInt(netuid)}`;
 const word = (data, i) => "0x" + data.slice(10 + i * 64, 10 + (i + 1) * 64);
 const u = (data, i) => BigInt(word(data, i));
 
@@ -39,15 +40,16 @@ function execute(tx) {
     }
     if (to === STAKING && d.startsWith(S.addStake)) {
       kind = "addStake"; if (limit < MIN_GAS.addStake) return false;
-      const hk = word(d, 0), rao = u(d, 1);
+      const hk = word(d, 0), rao = u(d, 1), netuid = u(d, 2);
       if (!chain.hotkeys.has(hk) || rao < 2_000_000n || get(chain.native, from) < rao * RAO) return false;
-      add(chain.native, from, -rao * RAO); add(chain.stake, `${hk}|${mirror(from)}`, rao - 1n); return true;
+      add(chain.native, from, -rao * RAO); add(chain.stake, stakeKey(hk, mirror(from), netuid), rao - 1n); return true;
     }
     if (to === STAKING && d.startsWith(S.transferStake)) {
       kind = "transferStake"; if (limit < MIN_GAS.transferStake) return false;
-      const ck = word(d, 0), hk = word(d, 1), amt = u(d, 4), key = `${hk}|${mirror(from)}`;
+      const ck = word(d, 0), hk = word(d, 1), fromNetuid = u(d, 2), toNetuid = u(d, 3), amt = u(d, 4);
+      const key = stakeKey(hk, mirror(from), fromNetuid);
       if (get(chain.stake, key) < amt) return false;
-      add(chain.stake, key, -amt); add(chain.stake, `${hk}|${ck}`, amt - 1n); return true;
+      add(chain.stake, key, -amt); add(chain.stake, stakeKey(hk, ck, toNetuid), amt - 1n); return true;
     }
     if (to === XFER && d.startsWith(S.transferAll)) {
       kind = "transferAll"; if (limit < MIN_GAS.transferAll) return false;
@@ -84,7 +86,7 @@ globalThis.fetch = async (_url, { body }) => {
         return reply(ethers.toBeHex(get(chain.wtao, addr), 32));
       }
       if (to.toLowerCase() === MAP) return reply(mirror("0x" + data.slice(34, 74)));
-      if (to.toLowerCase() === STAKING && data.startsWith(S.getStake)) return reply(ethers.toBeHex(get(chain.stake, `${word(data, 0)}|${word(data, 1)}`), 32));
+      if (to.toLowerCase() === STAKING && data.startsWith(S.getStake)) return reply(ethers.toBeHex(get(chain.stake, stakeKey(word(data, 0), word(data, 1), u(data, 2))), 32));
       return fail(`unmocked call ${to} ${data.slice(0, 10)}`);
     }
     default: return fail(`unmocked ${method}`);
@@ -100,15 +102,15 @@ const fmt = (rao) => (Number(rao) / 1e9).toFixed(9);
 const bytes = (h) => Uint8Array.from(Buffer.from(h.slice(2), "hex"));
 const HOTKEY = ethers.hexlify(ethers.randomBytes(32));
 
-function setup({ wtao = 0n, native = 0n, delivery = null, transitStake = 0n } = {}) {
+function setup({ wtao = 0n, native = 0n, delivery = null, transitStake = 0n, netuid = 0n } = {}) {
   chain = freshChain(); chain.hotkeys.add(HOTKEY);
   const key = bytes(ethers.Wallet.createRandom().privateKey), addr = evmAddress(key);
   chain.native.set(addr, native); chain.wtao.set(addr, wtao); chain.pendingDelivery = delivery;
-  if (transitStake) chain.stake.set(`${HOTKEY}|${mirror(addr)}`, transitStake);
+  if (transitStake) chain.stake.set(stakeKey(HOTKEY, mirror(addr), netuid), transitStake);
   const coldkey = ethers.hexlify(ethers.randomBytes(32));
   return { key, addr, coldkey, ck: bytes(coldkey), hk: bytes(HOTKEY) };
 }
-const userStake = (t) => get(chain.stake, `${HOTKEY}|${t.coldkey}`);
+const userStake = (t, netuid = 0n) => get(chain.stake, stakeKey(HOTKEY, t.coldkey, netuid));
 const userFree = (t) => get(chain.free, t.coldkey);
 const DROP = 1_000_000_000_000_000n; // 0.001 TAO
 
@@ -120,7 +122,7 @@ const DROP = 1_000_000_000_000_000n; // 0.001 TAO
   const staked = userStake(t), free = userFree(t), dust = get(chain.native, t.addr);
   expect("stake lands on the user's coldkey", staked > 970_000_000n && r.stakedRao === staked, `${fmt(staked)} TAO staked`);
   expect("reserve and unused gas budget arrive as free TAO", free >= 10_000_000n && free < 30_000_000n, `${fmt(free)} TAO free`);
-  expect("transit account ends empty but for sub-deposit dust", get(chain.wtao, t.addr) === 0n && get(chain.stake, `${HOTKEY}|${mirror(t.addr)}`) === 0n && dust < 200_000n * RAO, `dust ${fmt(dust / RAO)} TAO`);
+  expect("transit account ends empty but for sub-deposit dust", get(chain.wtao, t.addr) === 0n && get(chain.stake, stakeKey(HOTKEY, mirror(t.addr))) === 0n && dust < 200_000n * RAO, `dust ${fmt(dust / RAO)} TAO`);
   const accounted = (staked + free) * RAO + dust + chain.gasSpent + 2n * RAO; // + the two rao the chain keeps as rounding
   expect("every rao accounted for (stake + free + dust + gas + rounding = delivered + drop)", accounted === TAO + DROP, `${accounted} vs ${TAO + DROP}`);
   expect("four transactions: unwrap, stake, handover, sweep", r.txs.map((x) => x.label).join(",") === "unwrap,stake,handover,sweep", r.txs.map((x) => x.label).join(","));
@@ -154,6 +156,16 @@ const DROP = 1_000_000_000_000_000n; // 0.001 TAO
   const t = setup({ native: DROP, delivery: 30_000_000n * RAO });
   await finishRoute({ transitKey: t.key, coldkey: t.ck, hotkey: t.hk, plan: "stake", reserveRao: 10_000_000n, expectLd: 30_000_000n });
   expect("0.03 TAO with a 0.01 reserve is delivered unstaked", userStake(t) === 0n && userFree(t) > 29_000_000n, `${fmt(userFree(t))} TAO free`);
+}
+
+// J. Resume a subnet route from the exact saved netuid, without touching root stake.
+{
+  const netuid = 17n;
+  const t = setup({ native: 20_000_000n * RAO, transitStake: 500_000_000n, netuid });
+  const r = await finishRoute({ transitKey: t.key, coldkey: t.ck, hotkey: t.hk, netuid, plan: "stake", reserveRao: 10_000_000n });
+  expect("subnet resume reads and hands over stake on the saved netuid",
+    userStake(t, netuid) === 499_999_999n && userStake(t, 0n) === 0n && r.stakedRao === 499_999_999n && r.txs[0].label === "handover",
+    `${fmt(userStake(t, netuid))} Alpha on subnet ${netuid}`);
 }
 
 // F. The page's minimum really is the minimum.

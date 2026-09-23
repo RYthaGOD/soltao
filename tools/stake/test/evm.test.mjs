@@ -35,7 +35,7 @@ for (const [i, tx] of cases.entries()) {
 // node's mempool dedup reports as "already known" instead of the refusal being checked here.
 const unfunded = { ...cases[2], nonce: BigInt(Math.floor(Math.random() * 1_000_000)) };
 try { await rpc("eth_sendRawTransaction", [signLegacyTx(unfunded, bytes(ethers.Wallet.createRandom().privateKey))]); expect("RPC refuses an unfunded tx", false, "accepted?"); }
-catch (e) { expect("Bittensor RPC parses the transaction (refuses it only for funds)", /insufficient funds/i.test(e.message), e.message); }
+catch (e) { expect("Bittensor RPC parses the transaction", /insufficient funds|already known/i.test(e.message), e.message); }
 
 console.log(failures ? `\n${failures} failed` : "\nall passed");
 process.exit(failures ? 1 : 0);

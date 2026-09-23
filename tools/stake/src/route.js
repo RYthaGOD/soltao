@@ -3,7 +3,7 @@
 //
 //   1. wait for the bridge to credit wTAO (and the gas drop) to the transit account
 //   2. unwrap wTAO to native TAO
-//   3. stake:  addStake to root as the transit account, then transferStake to the user's coldkey
+//   3. stake:  addStake on the selected netuid as the transit account, then transferStake to the user's coldkey
 //   4. sweep:  transferAll of whatever is left to the user's coldkey, as free TAO
 //
 // It works from chain state, not from memory, so it can be re-run after any interruption: it picks

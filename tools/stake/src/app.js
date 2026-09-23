@@ -21,9 +21,9 @@ const state = {
   provider: null, user: null, taoLd: 0n, lamports: 0n,
   signed: null, mode: "derive",
   coldkey: null, coldkeyAddress: null, mustAck: false,
-  plan: "stake", netuid: 0n, hotkey: null, amountLd: 0n, reserveRao: CONFIG.defaultReserveRao,
+  plan: "stake", netuid: 0n, netuidValid: true, hotkey: null, amountLd: 0n, reserveRao: CONFIG.defaultReserveRao,
   gasPrice: null, nativeFee: null, quoteSeq: 0,
-  running: false, unfinished: null, transitRead: false,
+  running: false, unfinished: null, transitRead: false, direction: "forward",
 };
 
 // ── formatting ──────────────────────────────────────────────────────────────
@@ -34,6 +34,8 @@ function fmtUnits(value, decimals, maxFrac = 6) {
   return (neg ? "-" : "") + whole.toLocaleString("en-US") + (frac ? "." + frac : "");
 }
 const tao = (rao) => `${fmtUnits(rao, 9)} TAO`;
+const bittensorStakeAsset = (netuid) => (BigInt(netuid) === 0n ? "TAO" : "Alpha");
+const stakeAmount = (amount, netuid) => `${fmtUnits(amount, 9)} ${bittensorStakeAsset(netuid)}`;
 const sol = (lamports) => `${fmtUnits(BigInt(lamports), 9)} SOL`;
 const short = (s, n = 4) => (s.length > n * 2 + 3 ? `${s.slice(0, n)}…${s.slice(-n)}` : s);
 const fromHex = (h) => Uint8Array.from(h.replace(/^0x/, "").match(/.{2}/g), (x) => parseInt(x, 16));
@@ -116,7 +118,7 @@ async function refreshBalances() {
   $("tao-balance").textContent = taoBal === null ? "unavailable" : tao(taoBal);
   $("sol-balance").textContent = lamports === null ? "unavailable" : sol(lamports);
   if (taoBal === null) note("connect-note", "Could not read your TAO balance from Solana. Try again in a moment.", "bad");
-  else if (taoBal === 0n) note("connect-note", "This wallet holds no canonical Solana TAO in its main token account.", "warn");
+  else if (taoBal === 0n && state.direction === "forward") note("connect-note", "This wallet holds no canonical Solana TAO in its main token account.", "warn");
   gate();
 }
 
@@ -155,24 +157,7 @@ function wireDebug() {
 async function sign() {
   if (state.signed) return checkTransit(); // already signed: this is the retry after a failed read
   // Prefer the wallet's own Sign In With Solana call: it builds and signs the message itself, so
-  // there's no risk of a wallet's own heuristic reprocessing of a plain signMessage() call (Phantom
-  const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-  if (isLocal) {
-    // Bypass Phantom entirely on localhost to avoid unfixable SIWS parser bugs.
-    // We generate a deterministic fake signature from the user's public key so they get a consistent local testing wallet.
-    note("derive-note", "Local test mode: bypassing Phantom signature.");
-    const bs58Bytes = new PublicKey(state.user).toBytes();
-    let signature = new Uint8Array(64);
-    signature.set(bs58Bytes.slice(0, 32), 0);
-    signature.set(bs58Bytes.slice(0, 32), 32);
-    const w = walletFromSignature(signature, state.user);
-    state.signed = { wallet: w, raw: true };
-    $("derive").textContent = "Signed (Local Bypass)";
-    $("transit-out").textContent = w.transitAddress;
-    applyMode();
-    return checkTransit();
-  }
-
+  // there is no risk of a wallet's own heuristic reprocessing of a plain signMessage() call.
   const canSignIn = typeof state.provider?.signIn === "function";
   if (!canSignIn && !state.provider?.signMessage) { note("derive-note", "This wallet cannot sign messages, and the route needs one signature to create your keys.", "bad"); return; }
   
@@ -268,7 +253,10 @@ async function checkTransit() {
   const pending = loadPending(w.transitAddress);
   state.transitRead = false;
   try {
-    const [t, price] = await Promise.all([transitState(w.transitKey, pending?.hotkey ? fromHex(pending.hotkey) : null), getGasPrice()]);
+    const [t, price] = await Promise.all([
+      transitState(w.transitKey, pending?.hotkey ? fromHex(pending.hotkey) : null, pending?.netuid ?? "0"),
+      getGasPrice(),
+    ]);
     state.gasPrice = price;
     const holds = t.wtao > 0n || t.native > sweepFloor(price) || t.stake > 0n;
     state.unfinished = holds || pending ? { ...t, holds, pending } : null;
@@ -290,7 +278,8 @@ function renderUnfinished() {
   if (!u) return;
   const p = u.pending;
   const dest = p?.coldkey ?? state.coldkeyAddress;
-  const parts = [u.wtao > 0n && `${tao(u.wtao / RAO)} still bridged (wTAO)`, u.native > sweepFloor(state.gasPrice) && `${tao(u.native / RAO)}`, u.stake > 0n && `${tao(u.stake)} staked but not yet handed over`].filter(Boolean);
+  const netuid = BigInt(p?.netuid ?? 0);
+  const parts = [u.wtao > 0n && `${tao(u.wtao / RAO)} still bridged (wTAO)`, u.native > sweepFloor(state.gasPrice) && `${tao(u.native / RAO)}`, u.stake > 0n && `${stakeAmount(u.stake, netuid)} staked but not yet handed over`].filter(Boolean);
   const plan = p?.plan === "stake" && p.hotkey ? `stake it to ${short(ss58Encode(fromHex(p.hotkey)), 6)} and send the rest` : "send it as free TAO";
   if (u.holds) {
     $("resume-text").textContent = `Your transit account holds ${parts.join(", ")} from a route that did not finish. Finishing will ${plan} to ${dest ? short(dest, 6) : "the Bittensor wallet above"}.`;
@@ -321,18 +310,20 @@ function forget() {
 // ── step 3: amount and plan ─────────────────────────────────────────────────
 function onNetuid() {
   const v = $("netuid-in").value.trim();
-  state.netuid = 0n;
+  state.netuid = 0n; state.netuidValid = true;
   if (!v) {
     $("netuid-in").removeAttribute("aria-invalid");
     note("netuid-note", "Default is 0 (Root network). Other subnets will mint Alpha tokens.");
     return gate();
   }
   if (!/^\d+$/.test(v)) {
+    state.netuidValid = false;
     $("netuid-in").setAttribute("aria-invalid", "true");
     note("netuid-note", "Subnet ID must be a number.", "bad");
     return gate();
   }
   state.netuid = BigInt(v);
+  state.netuidValid = true;
   $("netuid-in").setAttribute("aria-invalid", "false");
   note("netuid-note", state.netuid === 0n ? "Root network." : `Subnet ${state.netuid}.`, "ok");
   gate();
@@ -366,13 +357,17 @@ function readAmounts() {
   state.reserveRao = reserve ?? -1n;
   if ($("amount").value && amt === null) return "Enter an amount like 1.25";
   if (!state.amountLd) return "";
+  
+  if (state.direction !== "forward") return "Bridge back is being rebuilt with full unstake and return checks.";
   if (state.amountLd > state.taoLd) return `More than your ${tao(state.taoLd)}`;
   if (state.plan === "stake") {
+    if (!state.netuidValid) return "Enter a valid subnet ID.";
     if (state.reserveRao < 0n) return "Enter the reserve like 0.01";
     if (state.gasPrice === null) return "Reading Bittensor's gas price…";
     const min = minStakeAmount({ reserveRao: state.reserveRao, gasPriceWei: state.gasPrice });
     if (state.amountLd < min) return `Staking needs at least ${tao(min)} at today's gas price (${tao(CONFIG.minStakeRao)} minimum stake, your reserve, and gas held back), or choose "Just deliver it"`;
   }
+  
   return "";
 }
 
@@ -399,10 +394,11 @@ function gate() {
   setStep("step-plan", keysReady && !blocked ? "active" : "locked");
   note("amount-note", blocked ? "Finish the route in step 2 first." : amountErr, amountErr || blocked ? "bad" : null);
   const acked = $("review-ack-check").checked;
-  const planReady = keysReady && !blocked && state.amountLd > 0n && !amountErr && (state.plan === "deliver" || Boolean(state.hotkey)) && acked;
+  const forwardReady = state.plan === "deliver" || Boolean(state.hotkey);
+  const planReady = state.direction === "forward" && keysReady && !blocked && state.amountLd > 0n && !amountErr && forwardReady && acked;
   if (planReady) setStep("step-plan", "done");
   setStep("step-review", planReady || !acked ? "active" : "locked");
-  renderReview(keysReady && !blocked && state.amountLd > 0n && !amountErr && (state.plan === "deliver" || Boolean(state.hotkey)));
+  renderReview(state.direction === "forward" && keysReady && !blocked && state.amountLd > 0n && !amountErr && forwardReady);
   if (planReady) requestQuote(); else { state.nativeFee = null; $("sign").disabled = true; }
 }
 
@@ -417,7 +413,7 @@ function renderReview(ready) {
     const drop = CONFIG.gasDropWei / RAO, unwrap = (CONFIG.gasUsed.unwrap * state.gasPrice) / RAO;
     const stake = state.amountLd + drop - unwrap - state.reserveRao - stakeGasReserve(state.gasPrice) / RAO;
     const net = state.netuid === 0n ? "root" : `subnet ${state.netuid}`;
-    return `Stake about ${tao(stake)} on ${net} to ${short(ss58Encode(state.hotkey), 6)}. Your ${tao(state.reserveRao)} reserve and the unused gas money arrive as free TAO`;
+    return `Stake about ${stakeAmount(stake, state.netuid)} on ${net} to ${short(ss58Encode(state.hotkey), 6)}. Your ${tao(state.reserveRao)} reserve and the unused gas money arrive as free TAO`;
   });
   set("r-gas", () => { const g = bittensorGas(); return g === null ? "—" : `about ${tao(g)}`; });
   // Name the counterparty, not just the amount: the fee is a plain transfer to this address.
@@ -465,9 +461,11 @@ async function send() {
   track("solana", "busy", "building");
   let started = false;
   try {
-    const nativeFee = await quoteNativeFee(clients, { user: state.user, transit: w.transitAddress, amountLd: state.amountLd });
+    const minAmountLd = removeDust(state.amountLd);
+
+    const nativeFee = await quoteNativeFee(clients, { user: state.user, transit: w.transitAddress, amountLd: minAmountLd });
     const { transaction, blockhash, lastValidBlockHeight } = await buildRouteTransaction(clients, {
-      user: state.user, transit: w.transitAddress, amountLd: state.amountLd, nativeFee, fee: CONFIG.fee,
+      user: state.user, transit: w.transitAddress, amountLd: minAmountLd, nativeFee, fee: CONFIG.fee,
     });
     const sim = await clients.connection.simulateTransaction(transaction, { sigVerify: false });
     if (sim.value.err) {
@@ -475,11 +473,10 @@ async function send() {
       throw new Error(`Simulation failed, nothing was sent. ${why || JSON.stringify(sim.value.err)}`);
     }
 
-    // Remember the route before the wallet opens, so a closed tab can still finish it.
     const route = {
       plan: state.plan, hotkey: state.plan === "stake" ? toHex(state.hotkey) : null, coldkey: state.coldkeyAddress,
       netuid: String(state.netuid),
-      reserveRao: String(state.plan === "stake" ? state.reserveRao : 0n), amountLd: String(state.amountLd), sig: null, at: Date.now(),
+      reserveRao: String(state.plan === "stake" ? state.reserveRao : 0n), amountLd: String(minAmountLd), sig: null, at: Date.now(),
     };
     savePending(w.transitAddress, route);
 
@@ -498,7 +495,7 @@ async function send() {
     if (!confirmed.ok) { clearPending(w.transitAddress); track("solana", "bad", confirmed.why); throw new Error(confirmed.why); }
     track("solana", "ok", "confirmed"); setStep("step-review", "done");
     started = true;
-    await runRoute(route, { expectLd: state.amountLd, fresh: true });
+    await runRoute(route, { expectLd: minAmountLd, fresh: true });
   } catch (e) {
     if (!started) {
       state.running = false;
@@ -547,19 +544,21 @@ async function runRoute(route, { expectLd = null, fresh = false } = {}) {
   note("track-note", "Keep this page open: it signs the Bittensor steps for you with your transit key.", "warn");
   const freeBefore = await getFreeBalance(coldkey).catch(() => null);
   try {
+    const netuid = BigInt(route.netuid || "0");
     const summary = await finishRoute({
-      transitKey: w.transitKey, coldkey, hotkey, netuid: BigInt(route.netuid || "0"), plan: route.plan, reserveRao: BigInt(route.reserveRao || 0), expectLd,
+      transitKey: w.transitKey, coldkey, hotkey, netuid, plan: route.plan, reserveRao: BigInt(route.reserveRao || 0), expectLd,
       onStep: (k, s, msg) => track(k, s, msg),
     });
     clearPending(w.transitAddress);
     const freeAfter = await getFreeBalance(coldkey).catch(() => null);
     const free = freeBefore !== null && freeAfter !== null && freeAfter > freeBefore ? freeAfter - freeBefore : null;
-    track("sweep", "ok", [summary.stakedRao > 0n && `staked ${tao(summary.stakedRao)}`, free !== null && `${tao(free)} free`].filter(Boolean).join(" · ") || "done");
-    note("track-note", summary.stakedRao > 0n ? "Done. The stake is owned by your coldkey; unstake it any time from any Bittensor wallet."
+    track("sweep", "ok", [summary.stakedRao > 0n && `staked ${stakeAmount(summary.stakedRao, netuid)}`, free !== null && `${tao(free)} free`].filter(Boolean).join(" · ") || "done");
+    note("track-note", summary.stakedRao > 0n ? `Done. The ${bittensorStakeAsset(netuid)} stake is owned by your coldkey; unstake it any time from any Bittensor wallet.`
       : summary.stakeRefused ? "Bittensor refused the stake, so your TAO arrived unstaked. It is free TAO in your wallet: stake it from any Bittensor wallet." : "Done. It is free TAO in your Bittensor wallet.", summary.stakeRefused ? "warn" : "ok");
       
     $("f-dest").textContent = short(route.coldkey, 6);
-    $("f-staked").textContent = summary.stakedRao > 0n ? tao(summary.stakedRao) : "0 TAO";
+    $("f-staked-label").textContent = netuid === 0n ? "Staked TAO" : `Staked Alpha, subnet ${netuid}`;
+    $("f-staked").textContent = summary.stakedRao > 0n ? stakeAmount(summary.stakedRao, netuid) : `0 ${bittensorStakeAsset(netuid)}`;
     $("f-free").textContent = free !== null ? tao(free) : (summary.stakedRao === 0n && expectLd ? tao(expectLd) : "0 TAO");
     $("final-balance").hidden = false;
     
@@ -579,6 +578,19 @@ async function runRoute(route, { expectLd = null, fresh = false } = {}) {
 function init() {
   if (!LIVE) $("not-live").hidden = false;
   $("connect").addEventListener("click", connect);
+  
+  // ── direction toggle ────────────────────────────────────────────────────────
+  Array.from(document.querySelectorAll("input[name=direction]")).forEach(opt => {
+    opt.addEventListener("change", (e) => {
+      if (state.running) { e.preventDefault(); return; }
+      state.direction = e.target.value;
+      document.querySelectorAll(".dir-fwd").forEach(el => el.hidden = (state.direction !== "forward"));
+      document.querySelectorAll(".dir-rev").forEach(el => el.hidden = (state.direction !== "reverse"));
+      
+      $("amount").value = "";
+      gate();
+    });
+  });
   $("derive").addEventListener("click", sign);
   $("coldkey-in").addEventListener("input", onPaste);
   document.querySelectorAll('input[name="ck-mode"]').forEach((r) => r.addEventListener("change", applyMode));
