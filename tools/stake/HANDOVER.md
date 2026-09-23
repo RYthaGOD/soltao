@@ -4,15 +4,17 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-09-23. **Live in production at `soltao.xyz`** — the redesign, subnet staking,
-and the bridge-back foundation scaffold were deployed and load-verified on the real domain this
-session. See "Current state" for exactly what has real-funds proof versus what shipped on zero-cost
-mainnet-state verification plus Craig's own informed go-ahead, and the unreleased CSP fix below.
+Last updated: 2026-09-24. **Live in production at `soltao.xyz`, nothing unreleased.** The redesign,
+subnet staking, the bridge-back scaffold, the Helius RPC switch with its matching CSP fix, and the
+link-preview/SEO metadata are all deployed and verified against the real domain. The deployed
+artifact is commit `0dc334b`, script hash `stake.js?v=b5d4275d`; any commit after that on `main` is
+documentation only and changes nothing that is served.
+See "Current state" for what has real-funds proof versus what shipped on zero-cost mainnet-state
+verification plus Craig's own informed go-ahead.
 
-**Unreleased local fix:** the deployed CSP omits the Helius origin now configured in `config.js`,
-so production wallet connection cannot read Solana balances. `_headers` and
-`deploy/nginx.conf.template` are corrected locally and the full headless wallet/CSP flow passes.
-This still needs an explicitly approved Railway deployment.
+An earlier version of this header warned about an unreleased CSP fix. That is resolved: the live
+CSP on both `/` and `/stake/` now includes the configured Helius origin, confirmed by simulating
+the page's own wallet-connect `fetch()` from inside the live page (200 OK, zero violations).
 
 ## What this is
 
@@ -114,7 +116,12 @@ This is **not** git-push-triggered. Steps, in order, every time:
 4. `railway up --ci` from the repo root (`D:\TAO`) — this is what actually deploys to `soltao.xyz`.
    Ask the user for explicit confirmation before running this each time.
 5. Verify: `curl -s https://soltao.xyz/stake/ | grep -o 'stake\.js?v=[0-9a-f]*'` — confirm the hash
-   matches what `npm run build` just printed.
+   matches what `npm run build` just printed. **`railway up --ci` exits before the rollout is
+   live** — a zero exit code only means the build was accepted, and `railway status --json` can
+   still show `BUILDING` afterwards. Poll the live URL until the change actually appears; do not
+   report a deploy as done off the command's exit code. Verify the thing you changed, not just
+   that the page loads: a page-load smoke test would not have caught the CSP bug in item 7,
+   because the violation only fires once the wallet flow makes its first request.
 
 ## Bug history (chronological, all confirmed via live testing)
 
@@ -168,6 +175,29 @@ This is **not** git-push-triggered. Steps, in order, every time:
    startup, shows the live quote once the route fields are complete, and enables signing only after
    the user acknowledges the permanent destination. Covered by the headless browser flow.
 
+9. **Link previews described the pre-redesign site, and `/stake/` had none at all.** The homepage's
+   `og:`/`twitter:` title and description still said "which TAO is the real one" after the hero copy
+   had moved to "Solana TAO is a bridged wrapper, not native TAO", so pasting the link produced a
+   preview that did not match the page. `/stake/` had no Open Graph or Twitter Card tags whatsoever,
+   so sharing it produced no card. Both fixed 24 Sep 2026: homepage tags rewritten from the actual
+   on-page copy, `og.png` regenerated from `og.html` with the matching headline (still exactly
+   1200x630; `og.html` already used the redesign's own teal/copper tokens, so no visual drift), and
+   a full tag set added to `/stake/` reusing the shared `og.png`. **Fixed and deployed**, verified
+   by reading the tags back off the live domain. Stale `sitemap.xml` lastmod dates bumped too.
+
+## Link previews and SEO
+
+`index.html` and `stake/index.html` each carry their own `og:`/`twitter:` block; they are hand-
+maintained and do **not** update themselves when page copy changes. When you change a hero headline
+or a page's positioning, change these too or the shared link silently starts lying:
+
+- `og.png` is generated, not hand-drawn: edit `og.html`, then re-render it to exactly 1200x630 and
+  overwrite `og.png`. A headless screenshot of `og.html` at that viewport is all it takes.
+- Both pages point at the same `/og.png`. A dedicated card for `/stake/` would be a nice-to-have,
+  not a gap.
+- Platforms cache unfurls hard. After changing these, expect to force a re-scrape (or wait) before
+  a previously-pasted link shows the new card.
+
 ## Standing constraints
 
 - **No WalletConnect.** The bugs were inside Phantom's own signing logic, not transport-related.
@@ -178,7 +208,7 @@ This is **not** git-push-triggered. Steps, in order, every time:
 
 ## Current state
 
-### Deployed 23 Sep 2026 (two rounds, same day)
+### Deployed 23-24 Sep 2026 (three rounds)
 Round one: the redesign, netuid-aware `route.js`, the direction-toggle scaffold, and the Helius RPC
 switch were built, tested, committed, pushed, and deployed via `railway up --ci` with Craig's
 explicit go-ahead. That deploy shipped a real bug — `config.js` pointed at Helius but the CSP
@@ -188,17 +218,24 @@ directly rather than trusting a page-load-only smoke test.
 Round two happened separately and concurrently: another session/process (commit `a1de8dc`, "Build
 resumable free-TAO return foundation") fixed the CSP gap, refined the review-step gating (bug
 history item 8), and pushed further Milestone 3 work (`return_route.js`, resumable free-TAO
-return), then deployed it. By the time this was checked, `soltao.xyz` was already serving that
-build. **Current state:** local `main`, `origin/main`, and the live site are all in sync at commit
-`a1de8dc`, script hash `stake.js?v=b5d4275d` — confirmed by comparing the hash directly and by
-simulating the actual `fetch()` the page's wallet-connect code makes to the Helius endpoint from
-inside the real, live page (200 OK, zero CSP violations). This is the live site right now, not a
-staging preview.
+return), then deployed it.
+
+Round three (24 Sep): the link-preview/SEO metadata fix (bug history item 9), deployed and verified.
+
+**Current state:** local `main`, `origin/main`, and the live site are in sync at commit `0dc334b`,
+script hash `stake.js?v=b5d4275d`. Verified directly against the live domain, not inferred: script
+hash matches the local build, `og:title` on both pages returns the new copy, `og.png` is the
+regenerated 170,825-byte file, and the CSP on `/stake/` includes the Helius origin. The Helius
+endpoint was additionally exercised by running the page's own wallet-connect `fetch()` from inside
+the live page (200 OK, zero CSP violations).
 
 **Note for whoever picks this up next:** at least one other agent/process was actively committing
-and deploying to this same repo today, without coordinating through this session. Re-check
-`git log origin/main` and the live script hash before assuming this document is still ahead of
-reality — it may not be.
+and deploying to this same repo across 23-24 Sep, without coordinating through this session. It
+overwrote parts of this document mid-session, including re-introducing a stale "unreleased CSP fix"
+warning after the fix had shipped. Re-check `git log origin/main`, the live script hash, and the
+live response headers before trusting any claim in here — including this one. `railway up --ci`
+also exits before the rollout finishes, so a clean exit code does **not** mean the new build is
+serving; poll the live site until the change actually appears.
 
 ### What has real-funds proof
 - **Wallet connection, SIWS sign-in, wallet derivation, transit account/coldkey generation,
