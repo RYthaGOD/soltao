@@ -6,10 +6,11 @@
 <title>Stake Solana TAO — soltao</title>
 <meta name="description" content="Send canonical Solana TAO home to Bittensor and stake it, in a Bittensor wallet you hold. One Solana transaction. No receipt token, no soltao contract, no custody.">
 <link rel="canonical" href="https://soltao.xyz/stake/">
-<meta name="theme-color" content="#0a0c10">
+<meta name="theme-color" content="#0b0b0c">
 <meta name="color-scheme" content="dark">
 <meta name="robots" content="index,follow">
 <link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../logo.png">
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="stake.css">
 <script src="stake.js?v=b3ce8b4e" defer></script>
@@ -17,27 +18,25 @@
 <body>
 <a class="skip" href="#steps">Skip to the steps</a>
 
-<header class="topbar">
-  <div class="wrap">
-    <div class="topbar-in">
-      <a class="brand brand-link" href="../">
-        <span class="brand-mark" aria-hidden="true">τ</span>
-        <span class="brand-text">
-          <span class="brand-name">Solana TAO Board</span>
-          <span class="brand-sub">unofficial · community reference</span>
-        </span>
-      </a>
-      <div class="topbar-right">
-        <a class="btn btn-ghost" href="../">← back to the board</a>
-        <span class="wallet-pill" id="wallet-pill" hidden></span>
-      </div>
+<header class="topbar topbar-solid">
+  <div class="wrap topbar-in">
+    <a class="brand brand-link" href="../">
+      <img class="brand-mark" src="../logo.png" width="36" height="36" alt="">
+      <span class="brand-text">
+        <span class="brand-name">Solana TAO Board</span>
+        <span class="brand-sub">Unofficial community reference</span>
+      </span>
+    </a>
+    <div class="topbar-right">
+      <a class="btn btn-ghost btn-sm" href="../">← Back to the board</a>
+      <span class="wallet-pill" id="wallet-pill" hidden></span>
     </div>
   </div>
 </header>
 
 <main>
 <section class="wrap stake-hero" aria-labelledby="stake-h">
-  <span class="lbl lbl-amber">[ Stake route ]</span>
+  <p class="eyebrow"><span class="eyebrow-n">↗</span>Stake route</p>
   <h1 id="stake-h">Stake your Solana TAO, <em>in a wallet you own</em></h1>
   <p class="stake-lede">
     One Solana transaction. Your TAO goes home over the LayerZero bridge it came in on, and this page
@@ -284,7 +283,7 @@
 
 <section class="wrap sec" aria-labelledby="trust-h">
   <div class="sec-head">
-    <span class="lbl">[ What you are trusting ]</span>
+    <p class="eyebrow"><span class="eyebrow-n">?</span>What you are trusting</p>
     <h2 id="trust-h">Every hop, and who holds a key over it</h2>
   </div>
   <div class="trust-grid">

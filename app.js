@@ -441,7 +441,7 @@ function renderPairs() {
     (hidden ? ', ' + hidden + ' hidden with under ' + fmtUsd(DEAD_LIQ) + ' liquidity' : '') +
     '. "Unverified" means the TAO-quoted pool is real but the reward mechanic has not been confirmed at the source — check before you size in.' +
     (state.registry.pairs.some((t) => t.self)
-      ? ' "Ours" marks the coin launched by whoever runs this page. It never takes the verified green however well it checks out, and it is never hidden by the liquidity filter — hover it for what was actually read on-chain.'
+      ? ' "Ours" marks the coin launched by whoever runs this page. It never takes the verified teal however well it checks out, and it is never hidden by the liquidity filter — hover it for what was actually read on-chain.'
       : '');
 }
 
@@ -510,12 +510,29 @@ function renderYield(tvl, ts, degraded) {
 
   // headline contrast
   const cwrap = $('contrast');
-  cwrap.replaceChildren(...y.contrast.map((c) => {
+  const cells = y.contrast.map((c) => {
     const box = el('div', 'contrast-cell');
     box.append(el('span', 'contrast-k', c.label));
     box.append(el('span', 'contrast-v num', fmtUsd(tvlOf(tvl, c.llama))));
     return box;
-  }));
+  });
+  // The gap is the point of the section, so say it as one number when both sides answered.
+  const [big, small] = y.contrast.map((c) => tvlOf(tvl, c.llama));
+  if (y.contrast.length === 2 && big > 0 && small > 0) {
+    const x = el('div', 'contrast-x');
+    x.append(el('span', 'contrast-k', 'The gap'));
+    const ratio = big / small;
+    x.append(el('span', 'contrast-v num', (ratio >= 100 ? fmtQty(ratio, 0) : ratio.toFixed(1)) + '×'));
+    const bar = el('span', 'contrast-bar');
+    const fill = el('i');
+    fill.style.width = Math.max(small / big * 100, 0.5) + '%';
+    bar.append(fill);
+    bar.setAttribute('aria-hidden', 'true');
+    x.append(bar);
+    x.append(el('span', 'cell-s', 'EVM DeFi as a share of the base chain'));
+    cells.push(x);
+  }
+  cwrap.replaceChildren(...cells);
 
   const body = $('yield-body');
   const rows = y.routes.map((r) => {
@@ -715,6 +732,22 @@ $('checker').addEventListener('submit', (e) => {
 
 $('refresh').addEventListener('click', () => loadMarket(true));
 $('show-dead').addEventListener('change', (e) => { state.showDead = e.target.checked; renderPairs(); });
+
+/* Header rule appears once the page scrolls; the section you are reading lights up in the nav. */
+const onScroll = () => { document.body.toggleAttribute('data-scrolled', window.scrollY > 8); };
+window.addEventListener('scroll', onScroll, { passive: true });
+onScroll();
+
+if ('IntersectionObserver' in window) {
+  const navLinks = new Map([...document.querySelectorAll('.subnav a[href^="#"]')].map((a) => [a.getAttribute('href').slice(1), a]));
+  const visible = new Set();
+  const spy = new IntersectionObserver((entries) => {
+    for (const e of entries) { if (e.isIntersecting) visible.add(e.target.id); else visible.delete(e.target.id); }
+    const current = [...navLinks.keys()].find((id) => visible.has(id));
+    for (const [id, a] of navLinks) { if (id === current) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current'); }
+  }, { rootMargin: '-35% 0px -60% 0px' });
+  for (const id of navLinks.keys()) { const s = $(id); if (s) spy.observe(s); }
+}
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
