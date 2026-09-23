@@ -12,7 +12,7 @@
 <link rel="icon" href="../favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="stake.css">
-<script src="stake.js?v=e3bf7970" defer></script>
+<script src="stake.js?v=b3ce8b4e" defer></script>
 </head>
 <body>
 <a class="skip" href="#steps">Skip to the steps</a>
@@ -76,6 +76,7 @@
       <button type="button" class="btn btn-primary" id="connect">Connect wallet</button>
       <span class="step-note" id="connect-note" role="status"></span>
     </div>
+    <p class="step-note sign-warn"><strong>Warning:</strong> Your Solana wallet IS your Bittensor key. If you lose access to this Solana wallet, you lose access to your TAO.</p>
     <dl class="kv" id="balances" hidden>
       <div><dt>Wallet</dt><dd class="num" id="sol-address"></dd></div>
       <div><dt>TAO</dt><dd class="num" id="tao-balance"><span class="skel"></span></dd></div>
@@ -197,6 +198,11 @@
 
     <div id="stake-opts">
       <label class="field">
+        <span>Target Subnet</span>
+        <input type="text" id="netuid-in" inputmode="numeric" autocomplete="off" spellcheck="false" value="0" placeholder="0 (Root)">
+      </label>
+      <span class="step-note" id="netuid-note" role="status">Default is 0 (Root network). Other subnets will mint Alpha tokens.</span>
+      <label class="field">
         <span>Validator hotkey</span>
         <input type="text" id="hotkey-in" autocomplete="off" spellcheck="false" placeholder="5… (the validator's hotkey address)">
       </label>
@@ -230,6 +236,19 @@
     <p class="sign-warn">Keep this page open until step 5 finishes. Once the bridge delivers, usually within
       minutes, the page signs the Bittensor steps with your transit key; your wallet will not ask again. If
       the page closes, come back, sign the same message in step 2, and it finishes.</p>
+      
+    <div class="review-ack" id="review-ack-box">
+      <h3>Your permanent Bittensor destination</h3>
+      <div class="ack-address">
+        <code class="huge-address num" id="r-huge-dest">—</code>
+        <button type="button" class="btn btn-ghost" id="r-huge-copy">copy</button>
+      </div>
+      <label class="ack">
+        <input type="checkbox" id="review-ack-check">
+        <span>I understand this is where my TAO will land, and that my Solana wallet is the only key to it.</span>
+      </label>
+    </div>
+
     <div class="step-row">
       <button type="button" class="btn btn-primary" id="sign" disabled>Sign and send</button>
       <span class="step-note" id="sign-note" role="status"></span>
@@ -251,6 +270,15 @@
     </ol>
     <p class="step-note" id="track-note" role="status"></p>
     <p class="step-p small" id="track-links"></p>
+
+    <div class="final-balance" id="final-balance" hidden>
+      <h3>Final Balance in <span class="num" id="f-dest"></span></h3>
+      <dl class="kv">
+        <div><dt>Staked TAO</dt><dd class="num" id="f-staked">—</dd></div>
+        <div><dt>Free TAO</dt><dd class="num" id="f-free">—</dd></div>
+      </dl>
+      <p class="step-p small">You can manage this balance or unstake anytime using standard Bittensor tools (btcli, Talisman, etc.) with the recovery phrase from Step 2.</p>
+    </div>
   </li>
 </ol>
 

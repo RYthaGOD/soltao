@@ -31,6 +31,8 @@ export async function getDelegate(hotkey) {
 }
 /** Root stake (rao) owned by `coldkey` under `hotkey`. */
 export const getRootStake = (hotkey, coldkey) => readUint(PRECOMPILE.staking, encode("getStake(bytes32,bytes32,uint256)", hotkey, coldkey, 0n));
+/** Stake (rao or alpha) owned by `coldkey` under `hotkey` on `netuid`. */
+export const getStake = (hotkey, coldkey, netuid) => readUint(PRECOMPILE.staking, encode("getStake(bytes32,bytes32,uint256)", hotkey, coldkey, BigInt(netuid)));
 /** Free balance (rao) of an SS58 account. */
 export const getFreeBalance = (coldkey) => readUint(PRECOMPILE.balance, encode("getFreeBalance(bytes32)", coldkey));
 /** wTAO (18 decimals) held by an H160. */

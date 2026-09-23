@@ -42,7 +42,7 @@ export const CONFIG = {
   // soltao's fee: a plain SOL transfer inside the same Solana transaction, shown before signing.
   // The page refuses to send until the wallet is set. Wallet supplied by Craig on 21 Sep 2026; checked
   // on chain that day: an on-curve key owned by the System Program, so an ordinary wallet.
-  fee: { wallet: "BgGFMbwUtKLifQYZogbDorEXTXYp3UKVAZSH41xQ72Na", lamports: 7_500_000n }, // 0.0075 SOL
+  fee: { wallet: "BgGFMbwUtKLifQYZogbDorEXTXYp3UKVAZSH41xQ72Na", lamports: 3_000_000n }, // 0.003 SOL
 
   // Kept unstaked in the user's wallet so they can pay for their own unstake later.
   defaultReserveRao: 10_000_000n, // 0.01 TAO

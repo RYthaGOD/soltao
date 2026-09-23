@@ -14,7 +14,7 @@
 import { CONFIG } from "./config.js";
 import { evmAddress } from "./derive.js";
 import { sendTx, getBalance, getGasPrice } from "./evm.js";
-import { PRECOMPILE, encode, getWtao, getRootStake, mirrorColdkey } from "./bittensor.js";
+import { PRECOMPILE, encode, getWtao, getStake, mirrorColdkey } from "./bittensor.js";
 
 const RAO = 1_000_000_000n; // wei per rao
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -36,10 +36,10 @@ export function minStakeAmount({ reserveRao, gasPriceWei }) {
 export const sweepFloor = (price) => CONFIG.gasLimit.sweep * price + 1000n * RAO;
 
 /** What the transit account holds right now: enough to decide whether there is a route to finish. */
-export async function transitState(transitKey, hotkey) {
+export async function transitState(transitKey, hotkey, netuid = 0n) {
   const address = evmAddress(transitKey);
   const [wtao, native, self] = await Promise.all([getWtao(address), getBalance(address), mirrorColdkey(address)]);
-  const stake = hotkey ? await getRootStake(hotkey, self) : 0n;
+  const stake = hotkey ? await getStake(hotkey, self, BigInt(netuid)) : 0n;
   return { address, self, wtao, native, stake };
 }
 
@@ -47,7 +47,7 @@ export async function transitState(transitKey, hotkey) {
  * Finish a route. `expectLd` (9-decimal units) makes it wait for a delivery of at least that size;
  * leave it null to finish whatever is already there. `onStep(key, status, text)` reports progress.
  */
-export async function finishRoute({ transitKey, coldkey, hotkey, plan, reserveRao, expectLd = null, onStep = () => {}, waitMs = 25 * 60_000, dropWaitMs = 10 * 60_000 }) {
+export async function finishRoute({ transitKey, coldkey, hotkey, netuid = 0n, plan, reserveRao, expectLd = null, onStep = () => {}, waitMs = 25 * 60_000, dropWaitMs = 10 * 60_000 }) {
   const address = evmAddress(transitKey);
   const self = await mirrorColdkey(address);
   const summary = { stakedRao: 0n, txs: [] };
@@ -89,16 +89,17 @@ export async function finishRoute({ transitKey, coldkey, hotkey, plan, reserveRa
 
   // 3. stake, then hand it over
   if (plan === "stake" && hotkey) {
-    let owned = await getRootStake(hotkey, self);
+    const netuidBn = BigInt(netuid);
+    let owned = await getStake(hotkey, self, netuidBn);
     if (owned === 0n) {
       const price = await getGasPrice();
       const balance = await getBalance(address);
       const free = balance - BigInt(reserveRao) * RAO - stakeGasReserve(price);
       const stakeRao = free > 0n ? free / RAO : 0n;
       if (stakeRao >= CONFIG.minStakeRao) {
-        onStep("stake", "busy", "staking on root");
+        onStep("stake", "busy", netuidBn === 0n ? "staking on root" : `staking on subnet ${netuidBn}`);
         try {
-          track(await sendTx(transitKey, { to: PRECOMPILE.staking, data: encode("addStake(bytes32,uint256,uint256)", hotkey, stakeRao, 0n), gasLimit: CONFIG.gasLimit.addStake, gasPrice: price }), "stake");
+          track(await sendTx(transitKey, { to: PRECOMPILE.staking, data: encode("addStake(bytes32,uint256,uint256)", hotkey, stakeRao, netuidBn), gasLimit: CONFIG.gasLimit.addStake, gasPrice: price }), "stake");
         } catch (e) {
           // Refused by the chain (the hotkey stopped being a validator, a rule changed): retrying the
           // same stake would fail again, so deliver the TAO unstaked instead of leaving it here.
@@ -107,19 +108,19 @@ export async function finishRoute({ transitKey, coldkey, hotkey, plan, reserveRa
           summary.stakeRefused = true;
           onStep("stake", "bad", "staking was refused on Bittensor: delivering it unstaked");
         }
-        owned = await getRootStake(hotkey, self);
+        owned = await getStake(hotkey, self, netuidBn);
       } else {
         onStep("stake", "bad", "too little left to stake after gas: delivering it unstaked");
       }
     }
     if (owned > 0n) {
       onStep("stake", "busy", "handing the stake to your coldkey");
-      const before = await getRootStake(hotkey, coldkey);
-      track(await sendTx(transitKey, { to: PRECOMPILE.staking, data: encode("transferStake(bytes32,bytes32,uint256,uint256,uint256)", coldkey, hotkey, 0n, 0n, owned), gasLimit: CONFIG.gasLimit.transferStake }), "handover");
-      const after = await getRootStake(hotkey, coldkey);
+      const before = await getStake(hotkey, coldkey, netuidBn);
+      track(await sendTx(transitKey, { to: PRECOMPILE.staking, data: encode("transferStake(bytes32,bytes32,uint256,uint256,uint256)", coldkey, hotkey, netuidBn, netuidBn, owned), gasLimit: CONFIG.gasLimit.transferStake }), "handover");
+      const after = await getStake(hotkey, coldkey, netuidBn);
       if (after <= before) throw new Error("the handover did not land: the stake is still on your transit account; sign again to retry");
       summary.stakedRao = after - before;
-      onStep("stake", "ok", `staked on root, owned by your coldkey`);
+      onStep("stake", "ok", netuidBn === 0n ? `staked on root, owned by your coldkey` : `staked on subnet ${netuidBn}, owned by your coldkey`);
     }
   }
 
