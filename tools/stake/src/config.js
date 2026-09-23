@@ -3,7 +3,7 @@
 // soltao's is involved: the route uses the canonical TAO OFT, wTAO and Bittensor's precompiles only.
 
 export const CONFIG = {
-  solanaRpc: "https://solana-rpc.publicnode.com",
+  solanaRpc: "https://joell-lsu6ge-fast-mainnet.helius-rpc.com",
   bittensorEvmRpc: "https://lite.chain.opentensor.ai",
 
   // Canonical Solana TAO: LayerZero V2 OFT, SPL Token, 9 decimals, 6 shared.

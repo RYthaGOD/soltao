@@ -23,6 +23,11 @@ const ENDPOINT = "0x6F475642a6e85809B1c36Fa62763669b1b48DD5B"; // LayerZero V2 e
 const WTAO = "0x134f59E8B8637FD70ae12f263492B1dc73A25D1e"; // really holds TAO: pays the gas drop inside the call
 // A registered root delegate, used as a known-good hotkey, not a recommendation.
 const HOTKEY = "0x20b0f8ac1d5416d32f5a552f98b570f06e8392ccb803029e04f63fbe0553c954";
+// Subnet 1's owner hotkey: confirmed live on 23 Sep 2026 to be a registered delegate (18% take) on
+// netuid 1, via subtensorModule.subnetOwnerHotkey(1) + the staking precompile's getDelegate. Used as
+// a known-good non-root hotkey for the subnet-staking scenario below, not a recommendation.
+const SUBNET_HOTKEY = "0xe2ee75ea11e4c5b7f5dac2e735278cfa0b1590c9856690f66653bdd85b709104";
+const SUBNET_NETUID = 1n;
 const RAO = 1_000_000_000n;
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -88,7 +93,7 @@ globalThis.fetch = async (_url, { body }) => {
 
 const { finishRoute, sweepFloor } = await import("../src/route.js");
 const { transitKeyFromSignature, evmAddress } = await import("../src/derive.js");
-const { getRootStake, getFreeBalance, getWtao, mirrorColdkey, encode, selector } = await import("../src/bittensor.js");
+const { getRootStake, getStake, getFreeBalance, getWtao, mirrorColdkey, encode, selector } = await import("../src/bittensor.js");
 const { CONFIG } = await import("../src/config.js");
 
 let failures = 0;
@@ -136,6 +141,29 @@ function checkSigning(label) {
   expect("the transit account ends with no wTAO, no stake, and native TAO under the sweep floor", leftWtao === 0n && leftStake === 0n && leftNative <= sweepFloor(price), `${leftNative} wei left`);
   const inRao = amountSD * 1000n + CONFIG.gasDropWei / RAO, outRao = stake + free + leftNative / RAO;
   expect("every rao accounted for (no gas is charged inside eth_call)", inRao - outRao >= 0n && inRao - outRao <= 10n, `in ${fmt(inRao)}, out ${fmt(outRao)}, Δ ${inRao - outRao} rao`);
+}
+
+// ── 1b. Stake it for me, on a real subnet (not root): 0.1 TAO ──────────────
+{
+  const u = freshUser(), amountSD = 100_000n;
+  scenario({ transit: u.transit, amountSD, dropWei: CONFIG.gasDropWei });
+  const before = await getStake(bytes(SUBNET_HOTKEY), u.coldkey, SUBNET_NETUID);
+  const summary = await finishRoute({ transitKey: u.transitKey, coldkey: u.coldkey, hotkey: bytes(SUBNET_HOTKEY), netuid: SUBNET_NETUID, plan: "stake", reserveRao: CONFIG.defaultReserveRao, expectLd: amountSD * 1000n });
+  expect("subnet stake plan: unwrap, stake, handover, sweep, all succeed on mainnet", steps() === "unwrap,stake,handover,sweep" && S.calls.every((c) => c.ok), steps());
+  checkSigning("subnet stake plan");
+
+  const stake = (await getStake(bytes(SUBNET_HOTKEY), u.coldkey, SUBNET_NETUID)) - before;
+  const rootStake = await getRootStake(bytes(SUBNET_HOTKEY), u.coldkey);
+  const free = await getFreeBalance(u.coldkey);
+  const self = await mirrorColdkey(u.transit);
+  const leftStake = await getStake(bytes(SUBNET_HOTKEY), self, SUBNET_NETUID);
+  const leftWtao = await getWtao(u.transit), leftNative = (await replay()).transitBalance;
+  // dTAO subnets convert TAO to Alpha at the subnet's own price, so the amount staked need not equal
+  // the TAO amount sent — only that it landed on the coldkey, on this netuid, and nowhere else.
+  expect("real subnet: the stake is owned by the user's coldkey on netuid " + SUBNET_NETUID, stake > 0n && stake === summary.stakedRao, `${fmt(stake)} Alpha on subnet ${SUBNET_NETUID}`);
+  expect("staking on a subnet does not also create or touch root stake for this hotkey", rootStake === 0n, `${fmt(rootStake)} TAO on root`);
+  expect("the reserve and unused gas money arrive as free TAO", free > CONFIG.defaultReserveRao, `${fmt(free)} TAO free`);
+  expect("the transit account ends with no wTAO, no stake on this netuid, and native TAO under the sweep floor", leftWtao === 0n && leftStake === 0n && leftNative <= sweepFloor(price), `${leftNative} wei left`);
 }
 
 // ── 2. Just deliver it: 0.05 TAO ────────────────────────────────────────────

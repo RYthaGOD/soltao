@@ -30,7 +30,15 @@ Acceptance:
 
 ## Milestone 2: root and subnet staking, honestly labeled
 
-Status: implemented and covered by the route simulator, including resume from stake held on a nonzero saved netuid.
+Status: implemented and covered by the route simulator, including resume from stake held on a
+nonzero saved netuid. Additionally verified 23 Sep 2026 against real Bittensor mainnet state (zero
+cost, no funds spent): `tools/stake/test/mainnet.test.mjs` replays the exact signed transactions
+`route.js` produces through the real staking precompile at real subnet 1, staking to subnet 1's
+real owner hotkey (independently confirmed live to be a registered delegate). Result: 0.1 TAO
+converted to ~11.2 Alpha, owned by the fresh coldkey, with zero root-stake cross-contamination,
+across 7 of 8 repeated runs (the one failure was an RPC rate-limit from our own repeated testing,
+not a reverted transaction). Still not verified via an actual real signed transaction with real
+funds through the live page — see `tools/stake/HANDOVER.md`.
 
 Goal: make the current stake route clear for both root TAO and subnet Alpha.
 

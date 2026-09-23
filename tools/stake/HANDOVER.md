@@ -174,11 +174,16 @@ and the redesign — none of those three have had a real funded production run y
 ### Built since that verification, NOT yet live-tested with real funds
 - **Subnet staking** (`route.js` addStake/transferStake now take a netuid). Covered by a mocked
   chain simulation (`route.test.mjs`, including a case that proves subnet resume never touches root
-  stake) and by the same no-funds mainnet-replay approach as the original route, but **no real
-  subnet stake has been sent through the live page yet.** Do the root-staking verification above
-  again, on a non-zero subnet, before calling this production-proven — Bittensor subnet mechanics
-  (registration state, per-subnet dynamics) are exactly the kind of thing a mock can't fully stand
-  in for.
+  stake) and, as of 23 Sep 2026, by the same zero-cost mainnet-replay approach as the original
+  route: `test/mainnet.test.mjs` now has a subnet-staking scenario that replays the real signed
+  transactions through the real staking precompile against real subnet 1 (owner hotkey confirmed
+  live to be a registered delegate). Result across repeated runs: 0.1 TAO consistently converts to
+  ~11.2 Alpha, owned by the fresh coldkey, zero root-stake cross-contamination, every time addStake
+  itself ran (7 of 8 runs clean; the one miss was the shared public Bittensor RPC rate-limiting
+  under our own repeated testing, not a reverted transaction — addStake succeeded even in that run).
+  **What's still missing:** an actual real signed transaction with real funds through the live page.
+  The eth_call replay proves the precompile logic is correct against real state; it can't prove
+  Phantom signs the resulting calldata cleanly or that LayerZero's executor actually delivers.
 - **The visual redesign** (PR #1, merged 23 Sep 2026) — verified headless (zero console/CSP errors,
   screenshot-checked) but not yet exercised with a real wallet on the real domain. Past bugs in this
   project (items 1, 3, 4 above) were all real-browser/real-domain issues that headless testing
