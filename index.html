@@ -6,7 +6,7 @@
 <title>Solana TAO Board — the canonical TAO mint, and the ones that aren't</title>
 <meta name="description" content="One page: the canonical Solana TAO mint address, live liquidity depth, the imposter contracts, and every TAO-quoted reward coin. Built for pasting into CT replies.">
 <link rel="canonical" href="https://soltao.xyz/">
-<meta name="theme-color" content="#0a0c10">
+<meta name="theme-color" content="#0b0b0c">
 <meta name="color-scheme" content="dark">
 
 <meta property="og:type" content="website">
@@ -23,6 +23,7 @@
 <meta name="twitter:image" content="https://soltao.xyz/og.png">
 
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="logo.png">
 <link rel="stylesheet" href="styles.css">
 <link rel="preconnect" href="https://api.dexscreener.com" crossorigin>
 <link rel="preconnect" href="https://solana-rpc.publicnode.com" crossorigin>
@@ -31,150 +32,139 @@
 <a class="skip" href="#mint">Skip to the mint address</a>
 
 <header class="topbar">
-  <div class="wrap">
+  <div class="wrap topbar-in">
+    <a class="brand" href="#top" aria-label="Solana TAO Board, back to top">
+      <img class="brand-mark" src="logo.png" width="36" height="36" alt="">
+      <span class="brand-text">
+        <span class="brand-name">Solana TAO Board</span>
+        <span class="brand-sub">Unofficial community reference</span>
+      </span>
+    </a>
 
-    <div class="ticker">
-      <span class="tick"><i class="tick-dot tick-dot-green" aria-hidden="true"></i>Dexscreener · 30s poll</span>
-      <span class="tick-sep" aria-hidden="true"></span>
-      <span class="tick"><i class="tick-dot tick-dot-green" aria-hidden="true"></i>DefiLlama · 10min poll</span>
-      <span class="tick-sep" aria-hidden="true"></span>
-      <span class="tick"><i class="tick-dot tick-dot-amber" aria-hidden="true"></i>Mint account · read on-chain</span>
-      <span class="tick tick-end">No wallet connect · no backend · no tracking</span>
+    <nav class="subnav" aria-label="Sections">
+      <a href="#mint">Mint</a>
+      <a href="#which">Verify</a>
+      <a href="#buy">Buy</a>
+      <a href="#exit">Exit</a>
+      <a href="#yield">Yield</a>
+      <a href="#pairs">TAO pairs</a>
+      <a class="nav-ext" href="stake/">Stake route →</a>
+    </nav>
+
+    <div class="topbar-right">
+      <span class="feed" id="feed-state" data-state="init" title="Dexscreener every 30s · DefiLlama every 10 min · mint account read on-chain">
+        <span class="feed-dot" aria-hidden="true"></span>
+        <span id="feed-label">connecting</span>
+        <button type="button" class="feed-refresh" id="refresh" aria-label="Refresh market data now" title="Refresh now"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </span>
+      <span class="social">
+        <a class="social-link" href="https://x.com/SOLTENSOR" rel="noopener" target="_blank" title="soltao on X"><span class="sr">soltao on X</span><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18.9 2.3h3.4l-7.4 8.5 8.7 11.5h-6.8l-5.3-7-6.1 7H1.9l7.9-9.1L1.5 2.3h7l4.8 6.4 5.6-6.4Zm-1.2 17.9h1.9L7.4 4.2H5.4l12.3 16Z"/></svg></a>
+        <a class="social-link" href="https://t.me/+oFgZVIsOEwxhZTU8" rel="noopener" target="_blank" title="soltao on Telegram"><span class="sr">soltao on Telegram</span><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path fill="currentColor" d="M21.9 4.3 18.9 19c-.2 1-.8 1.3-1.7.8l-4.6-3.4-2.2 2.1c-.2.2-.5.5-1 .5l.3-4.7 8.5-7.7c.4-.3-.1-.5-.6-.2L7.1 12l-4.5-1.4c-1-.3-1-1 .2-1.4l17.6-6.8c.8-.3 1.5.2 1.5 1.3Z"/></svg></a>
+      </span>
+      <a class="btn btn-primary btn-sm topbar-cta" href="https://jup.ag/swap/So11111111111111111111111111111111111111112-taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY" rel="noopener" target="_blank">Swap on Jupiter</a>
     </div>
-
-    <div class="topbar-in">
-      <div class="brand">
-        <span class="brand-mark" aria-hidden="true">τ</span>
-        <span class="brand-text">
-          <span class="brand-name">Solana TAO Board</span>
-          <span class="brand-sub">unofficial · community reference</span>
-        </span>
-      </div>
-      <div class="topbar-right">
-        <span class="feed" id="feed-state" data-state="init">
-          <span class="feed-dot" aria-hidden="true"></span>
-          <span id="feed-label">connecting</span>
-        </span>
-        <button type="button" class="btn btn-ghost" id="refresh" aria-label="Refresh market data now">refresh</button>
-        <span class="social">
-          <a class="social-link" href="https://x.com/SOLTENSOR" rel="noopener" target="_blank" title="soltao on X"><span class="sr">soltao on X</span><svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18.9 2.3h3.4l-7.4 8.5 8.7 11.5h-6.8l-5.3-7-6.1 7H1.9l7.9-9.1L1.5 2.3h7l4.8 6.4 5.6-6.4Zm-1.2 17.9h1.9L7.4 4.2H5.4l12.3 16Z"/></svg></a>
-          <a class="social-link" href="https://t.me/+oFgZVIsOEwxhZTU8" rel="noopener" target="_blank" title="soltao on Telegram"><span class="sr">soltao on Telegram</span><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false"><path fill="currentColor" d="M21.9 4.3 18.9 19c-.2 1-.8 1.3-1.7.8l-4.6-3.4-2.2 2.1c-.2.2-.5.5-1 .5l.3-4.7 8.5-7.7c.4-.3-.1-.5-.6-.2L7.1 12l-4.5-1.4c-1-.3-1-1 .2-1.4l17.6-6.8c.8-.3 1.5.2 1.5 1.3Z"/></svg></a>
-        </span>
-        <a class="btn btn-primary btn-sm" href="https://jup.ag/swap/So11111111111111111111111111111111111111112-taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY" rel="noopener" target="_blank">Swap on Jupiter</a>
-      </div>
-    </div>
-
-    <div class="navrow">
-      <nav class="subnav" aria-label="Sections">
-        <a href="#mint">Canonical mint &amp; checker</a>
-        <a href="#buy">Buying it</a>
-        <a href="#exit">Getting out</a>
-        <a href="#yield">Yield vs staking</a>
-        <a href="#pairs">Coins quoted in TAO</a>
-        <a href="stake/">Stake route</a>
-      </nav>
-      <span class="navrow-note"><i class="tick-dot tick-dot-green" aria-hidden="true"></i>Solana mainnet · live in your browser</span>
-    </div>
-
   </div>
 </header>
 
-<main>
+<main id="top">
+
+<div class="hero-zone">
 
 <!-- ─────────────────────────── HERO / THE ONE WARNING ─────────────────────── -->
 <section class="hero">
   <div class="wrap">
-    <div class="hero-in">
-      <div class="hero-grid">
-        <div>
-          <div class="hero-kick">
-            <span class="hero-chip">Read this first</span>
-            <span class="lbl">Canonical primitive</span>
-          </div>
-          <h1>
-            Solana TAO is a <em>bridged wrapper</em>.
-            You cannot stake it on a Bittensor subnet from Phantom.
-          </h1>
-          <p class="hero-body">
-            The token at the mint below is real, canonical, and tradeable on Solana. It is
-            <strong>not</strong> native TAO. Holding it earns no subnet emissions, no validator
-            yield, and no dTAO. To stake, you bridge back to Bittensor —
-            <a href="#exit">the route out is below</a>.
-          </p>
+    <div class="hero-grid">
+      <div>
+        <div class="hero-kick">
+          <span class="hero-chip"><span class="dot dot-amber" aria-hidden="true"></span>Read this first</span>
+          <span class="hero-kick-t">Live from Solana mainnet · no wallet connect · no tracking</span>
         </div>
+        <h1>
+          Solana TAO is a <em>bridged wrapper</em>.
+          <span class="h1-sub">You cannot stake it on a Bittensor subnet from Phantom.</span>
+        </h1>
+        <p class="hero-body">
+          The token at the mint below is real, canonical, and tradeable on Solana. It is
+          <strong>not</strong> native TAO. Holding it earns no subnet emissions, no validator
+          yield, and no dTAO. To stake, you bridge back to Bittensor —
+          <a href="#exit">the route out is below</a>.
+        </p>
+      </div>
 
-        <div class="hero-card">
-          <div class="hero-card-top">
-            <span>What this token is</span>
-            <span class="hero-card-v">wrapper</span>
-          </div>
-          <dl>
-            <div><dt>Bridge</dt><dd>LayerZero OFT · Sunrise</dd></div>
-            <div><dt>Live since</dt><dd>5 May 2026</dd></div>
-            <div><dt>Subnet emissions</dt><dd class="hero-card-no">none</dd></div>
-          </dl>
-          <p class="hero-card-foot">Every figure on this page is fetched live in your browser</p>
+      <div class="hero-card">
+        <div class="hero-card-top">
+          <span>What this token is</span>
+          <span class="hero-card-v">wrapper</span>
         </div>
+        <dl>
+          <div><dt>Bridge</dt><dd>LayerZero OFT · Sunrise</dd></div>
+          <div><dt>Live since</dt><dd>5 May 2026</dd></div>
+          <div><dt>Subnet emissions</dt><dd class="hero-card-no">none</dd></div>
+        </dl>
+        <p class="hero-card-foot"><span class="dot dot-green" aria-hidden="true"></span>Every figure on this page is fetched live in your browser</p>
       </div>
     </div>
   </div>
 </section>
 
 <!-- ─────────────────────────── CANONICAL MINT ─────────────────────────────── -->
-<section class="wrap sec" id="mint" aria-labelledby="mint-h">
+<section class="wrap sec sec-mint" id="mint" aria-labelledby="mint-h">
   <div class="panel panel-mint">
-    <div class="panel-head">
-      <h2 id="mint-h">Canonical mint</h2>
-      <span class="tag tag-ok">LayerZero OFT · via Sunrise</span>
+    <div class="mint-main">
+      <div class="panel-head">
+        <h2 id="mint-h"><span class="ico ico-yes" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Canonical mint</h2>
+        <span class="tag tag-ok">LayerZero OFT · via Sunrise</span>
+      </div>
+
+      <div class="ca-row">
+        <code class="ca" id="ca" tabindex="0"><b>taoC</b>6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kc<b>BRrBY</b></code>
+        <button type="button" class="btn btn-copy" data-copy="taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY">copy</button>
+      </div>
+
+      <p class="ca-hint">
+        <span>Starts <code>taoC</code>, ends <code>BRrBY</code>. That prefix is a vanity address —
+        check <strong>both ends</strong>, not just the first four characters.</span>
+        <span class="ca-hint-r"><span id="v-program">—</span> · <span id="v-decimals">—</span> decimals</span>
+      </p>
+
+      <nav class="linkrow" aria-label="Open the canonical mint elsewhere">
+        <a class="btn btn-primary" href="https://jup.ag/swap/So11111111111111111111111111111111111111112-taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY" rel="noopener" target="_blank">Swap on Jupiter <span aria-hidden="true">→</span></a>
+        <a class="btn" href="https://dexscreener.com/solana/taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY" rel="noopener" target="_blank">Dexscreener <span aria-hidden="true">↗</span></a>
+        <a class="btn" href="https://solscan.io/token/taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY" rel="noopener" target="_blank">Solscan <span aria-hidden="true">↗</span></a>
+      </nav>
     </div>
 
-    <div class="ca-row">
-      <code class="ca" id="ca" tabindex="0"><b>taoC</b>6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kc<b>BRrBY</b></code>
-      <button type="button" class="btn btn-copy" data-copy="taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY">copy</button>
-    </div>
-
-    <p class="ca-hint">
-      <span>Starts <code>taoC</code>, ends <code>BRrBY</code>. That prefix is a vanity address —
-      check <strong>both ends</strong>, not just the first four characters.</span>
-      <span class="ca-hint-r"><span id="v-program">—</span> · <span id="v-decimals">—</span> decimals</span>
-    </p>
-
-    <nav class="linkrow" aria-label="Open the canonical mint elsewhere">
-      <a class="btn btn-primary" href="https://jup.ag/swap/So11111111111111111111111111111111111111112-taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY" rel="noopener" target="_blank">Swap on Jupiter →</a>
-      <a class="btn" href="https://dexscreener.com/solana/taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY" rel="noopener" target="_blank">Dexscreener</a>
-      <a class="btn" href="https://solscan.io/token/taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY" rel="noopener" target="_blank">Solscan</a>
-    </nav>
-  </div>
-
-  <div class="strip" id="strip" aria-live="polite">
-    <div class="cell">
-      <span class="cell-k">Price</span>
-      <span class="cell-v num" id="v-price">—</span>
-      <span class="cell-s" id="v-price-sol">—</span>
-    </div>
-    <div class="cell">
-      <span class="cell-k">24h</span>
-      <span class="cell-v num" id="v-change">—</span>
-      <span class="cell-s" id="v-txns">—</span>
-    </div>
-    <div class="cell">
-      <span class="cell-k">24h volume</span>
-      <span class="cell-v num" id="v-vol">—</span>
-      <span class="cell-s" id="v-pools">—</span>
-    </div>
-    <div class="cell cell-liq">
-      <span class="cell-k">
-        <span>Liquidity <span class="cell-k-note">all TAO books</span></span>
-        <span class="cell-flag" aria-hidden="true">thin book</span>
-      </span>
-      <span class="cell-v num" id="v-liq">—</span>
-      <span class="cell-s" id="v-liq-note">—</span>
+    <div class="strip" id="strip" aria-live="polite">
+      <div class="cell">
+        <span class="cell-k">Price</span>
+        <span class="cell-v num" id="v-price">—</span>
+        <span class="cell-s" id="v-price-sol">—</span>
+      </div>
+      <div class="cell">
+        <span class="cell-k">24h change</span>
+        <span class="cell-v num" id="v-change">—</span>
+        <span class="cell-s" id="v-txns">—</span>
+      </div>
+      <div class="cell">
+        <span class="cell-k">24h volume</span>
+        <span class="cell-v num" id="v-vol">—</span>
+        <span class="cell-s" id="v-pools">—</span>
+      </div>
+      <div class="cell cell-liq">
+        <span class="cell-k">
+          <span>Liquidity <span class="cell-k-note">· all TAO books</span></span>
+          <span class="cell-flag" aria-hidden="true">thin book</span>
+        </span>
+        <span class="cell-v num" id="v-liq">—</span>
+        <span class="cell-s" id="v-liq-note">—</span>
+      </div>
     </div>
   </div>
 
   <div class="alert alert-thin" id="thin-alert" hidden>
-    <strong>Thin book.</strong>
-    <span id="thin-copy"></span>
+    <span class="ico ico-warn" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M8 4v5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="8" cy="12" r="1.2" fill="currentColor"/></svg></span>
+    <p><strong>Thin book.</strong>
+    <span id="thin-copy"></span></p>
   </div>
 
   <details class="slip" id="slip-wrap">
@@ -194,10 +184,12 @@
   </details>
 </section>
 
+</div>
+
 <!-- ─────────────────────────── WHICH MINT? ────────────────────────────────── -->
 <section class="wrap sec" id="which" aria-labelledby="which-h">
   <div class="sec-head">
-    <span class="lbl lbl-amber">[ Local registry check ]</span>
+    <p class="eyebrow"><span class="eyebrow-n">01</span>Verify</p>
     <h2 id="which-h">Which mint?</h2>
     <p>Paste any address or Dexscreener link someone drops in your replies. Checked against the
       registry locally — nothing leaves your browser.</p>
@@ -205,7 +197,8 @@
 
   <form class="checker" id="checker" autocomplete="off">
     <label class="sr" for="check-in">Contract address to verify</label>
-    <input type="text" id="check-in" placeholder="paste a contract address, Solscan URL, or Dexscreener link" spellcheck="false">
+    <svg class="checker-ico" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><circle cx="7" cy="7" r="4.8" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10.6 10.6 14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    <input type="text" id="check-in" placeholder="Paste a contract address, Solscan URL, or Dexscreener link" spellcheck="false">
     <button type="submit" class="btn btn-primary">Check address</button>
   </form>
   <div class="check-out" id="check-out" role="status" aria-live="polite" hidden></div>
@@ -283,7 +276,7 @@
 <!-- ─────────────────────────── HOW TO BUY ─────────────────────────────────── -->
 <section class="wrap sec" id="buy" aria-labelledby="buy-h">
   <div class="sec-head">
-    <span class="lbl lbl-amber">[ Operational protocol ]</span>
+    <p class="eyebrow"><span class="eyebrow-n">02</span>Buy</p>
     <h2 id="buy-h">Buying it, and the thing people get wrong afterwards</h2>
   </div>
 
@@ -329,14 +322,14 @@
         position runs through a chokepoint most people never price.
       </p>
     </div>
-    <a class="btn" href="#exit">View chokepoints ↓</a>
+    <a class="btn" href="#exit">See the chokepoint ↓</a>
   </div>
 </section>
 
 <!-- ─────────────────────────── GETTING OUT ────────────────────────────────── -->
 <section class="wrap sec" id="exit" aria-labelledby="exit-h">
   <div class="sec-head">
-    <span class="lbl lbl-amber">[ Structural risk ]</span>
+    <p class="eyebrow"><span class="eyebrow-n">03</span>Exit</p>
     <h2 id="exit-h">Getting out</h2>
     <p>
       Everybody checks the depth on the way in. The way back to native, stakeable TAO is the leg
@@ -414,7 +407,7 @@
     </article>
   </div>
 
-  <div class="callout callout-plain">
+  <div class="callout callout-route">
     <div>
       <h3>The route this site runs</h3>
       <p>
@@ -424,6 +417,7 @@
         comes from your own signature. soltao charges a flat SOL fee on it, shown before you sign.
       </p>
     </div>
+  <a class="btn btn-primary" href="stake/">Open the stake route →</a>
   </div>
 
   <div class="callout callout-plain">
@@ -448,7 +442,7 @@
 <!-- ─────────────────────────── THE YIELD MENU ─────────────────────────────── -->
 <section class="wrap sec" id="yield" aria-labelledby="yield-h">
   <div class="sec-head">
-    <span class="lbl lbl-amber">[ Capital distribution ]</span>
+    <p class="eyebrow"><span class="eyebrow-n">04</span>Yield</p>
     <h2 id="yield-h">So where is the yield, actually?</h2>
     <p>
       Every real option for earning on TAO, with live size attached. The gap between the first
@@ -480,7 +474,7 @@
 <section class="wrap sec" id="pairs" aria-labelledby="pairs-h">
   <div class="sec-head sec-head-row">
     <div>
-      <span class="lbl lbl-amber">[ TAO-quoted book ]</span>
+      <p class="eyebrow"><span class="eyebrow-n">05</span>TAO pairs</p>
       <h2 id="pairs-h">Coins quoted in TAO</h2>
       <p>
         StonkFun reward coins pay holders pro-rata in the quote token their launch is paired
@@ -556,36 +550,53 @@
 </main>
 
 <footer class="wrap foot">
-  <p>
-    Price, volume and liquidity from the public
-    <a href="https://docs.dexscreener.com/api/reference" rel="noopener" target="_blank">Dexscreener API</a>,
-    refreshed every 30s. TVL from the public
-    <a href="https://defillama.com/docs/api" rel="noopener" target="_blank">DefiLlama API</a>.
-    Mint supply, decimals and token program read straight from the mint account on Solana mainnet.
-    All of it cached in your browser. Registry hand-curated
-    <time datetime="2026-09-20">20 Sep 2026</time><span id="foot-counts"></span>
-  </p>
-  <p class="foot-soc">
-    <a href="https://x.com/SOLTENSOR" rel="noopener" target="_blank">X · @SOLTENSOR</a>
-    <span aria-hidden="true">·</span>
-    <a href="https://t.me/+oFgZVIsOEwxhZTU8" rel="noopener" target="_blank">Telegram</a>
-  </p>
-  <p class="foot-dis">
-    <strong>Disclosure:</strong> the person who runs this page also launched the SOLTAO coin on
-    StonkFun — <code>8P1XmDhzU8qR3oiXHd2YfmBpB92Rn4hwunMsMGdghvCn</code>, a Token-2022 mint with a
-    1% transfer tax, a fixed 1,000,000,000 supply and no mint or freeze authority, all read from the
-    mint account on <time datetime="2026-09-20">20 Sep 2026</time>. It is listed in the TAO-quoted
-    table above, marked <em>ours</em>, never hidden by the liquidity filter, and never rendered in
-    the verified green however well it checks out. Its book is quoted against canonical TAO but is
-    not indexed by Dexscreener, so every live figure in its row reads as no data. Nothing on this
-    page is a recommendation to buy it.
-  </p>
-  <p class="foot-dis">
-    Not affiliated with Bittensor, the Opentensor Foundation, Sunrise, LayerZero, Jupiter or StonkFun.
-    This page has no wallet connection, no tracking and no backend; the stake route connects a
-    wallet on its own page, <a href="stake/">/stake/</a>. Verify every address yourself before you sign
-    anything. None of this is financial advice.
-  </p>
+  <div class="foot-grid">
+    <div class="foot-brand">
+      <a class="brand" href="#top" aria-label="Back to top">
+        <img class="brand-mark" src="logo.png" width="36" height="36" alt="">
+        <span class="brand-text">
+          <span class="brand-name">Solana TAO Board</span>
+          <span class="brand-sub">Unofficial community reference</span>
+        </span>
+      </a>
+      <p>Which TAO on Solana is the real one, how deep its book is, and the way back home.</p>
+      <p class="foot-soc">
+        <a href="https://x.com/SOLTENSOR" rel="noopener" target="_blank">X · @SOLTENSOR</a>
+        <a href="https://t.me/+oFgZVIsOEwxhZTU8" rel="noopener" target="_blank">Telegram</a>
+      </p>
+    </div>
+    <div>
+      <p>
+        Price, volume and liquidity from the public
+        <a href="https://docs.dexscreener.com/api/reference" rel="noopener" target="_blank">Dexscreener API</a>,
+        refreshed every 30s. TVL from the public
+        <a href="https://defillama.com/docs/api" rel="noopener" target="_blank">DefiLlama API</a>.
+        Mint supply, decimals and token program read straight from the mint account on Solana mainnet.
+        All of it cached in your browser. Registry hand-curated
+        <time datetime="2026-09-20">20 Sep 2026</time><span id="foot-counts"></span>
+      </p>
+      <p class="foot-dis">
+        <strong>Disclosure:</strong> the person who runs this page also launched the SOLTAO coin on
+        StonkFun — <code>8P1XmDhzU8qR3oiXHd2YfmBpB92Rn4hwunMsMGdghvCn</code>, a Token-2022 mint with a
+        1% transfer tax, a fixed 1,000,000,000 supply and no mint or freeze authority, all read from the
+        mint account on <time datetime="2026-09-20">20 Sep 2026</time>. It is listed in the TAO-quoted
+        table above, marked <em>ours</em>, never hidden by the liquidity filter, and never rendered in
+        the verified teal however well it checks out. Its book is quoted against canonical TAO but is
+        not indexed by Dexscreener, so every live figure in its row reads as no data. Nothing on this
+        page is a recommendation to buy it.
+      </p>
+      <p class="foot-dis">
+        Not affiliated with Bittensor, the Opentensor Foundation, Sunrise, LayerZero, Jupiter or StonkFun.
+        This page has no wallet connection, no tracking and no backend; the stake route connects a
+        wallet on its own page, <a href="stake/">/stake/</a>. Verify every address yourself before you sign
+        anything. None of this is financial advice.
+      </p>
+    </div>
+  </div>
+  <div class="foot-bottom">
+    <span><span class="dot dot-green" aria-hidden="true"></span>Solana mainnet · live in your browser</span>
+    <span>No wallet connect · no backend · no tracking</span>
+  </div>
 </footer>
 
 <noscript>
