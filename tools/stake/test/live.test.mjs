@@ -111,7 +111,7 @@ try {
     const res = await fetch(`${SITE}/stake/${returnSrc}`, { method: "HEAD" });
     expect("the return bundle the page names is served, cached for a year", res.status === 200 && /max-age=31536000/.test(res.headers.get("cache-control") || ""), `${returnSrc} · ${res.status} · ${res.headers.get("cache-control")}`);
   }
-  expect("return direction is still disabled", await page.evaluate(() => [...document.querySelectorAll('input[name="direction"]')].some((i) => i.value !== "forward" && i.disabled) || !document.querySelector('input[name="direction"]')));
+  expect("the return direction is open (CONFIG.returnLive)", await page.evaluate(() => document.querySelector('input[name="direction"][value="reverse"]')?.disabled === false));
   const csp = await page.evaluate(() => window.__csp);
   expect("/stake/: no CSP violations", csp.length === 0, csp.join(" | "));
   expect("/stake/: no page or console errors", problems.length === 0, problems.join(" | "));
