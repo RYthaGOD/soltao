@@ -1,7 +1,8 @@
 // "Top up Chutes" (src/payments.js) against a simulated Substrate account with a transaction pool.
 // Counts transfers the chain APPLIED, since the danger is paying twice.
 
-import { runPayment, payeeProblem, CHUTES_MIN_RAO } from "../src/payments.js";
+import { runPayment, payeeProblem, paymentCall, CHUTES_MIN_RAO, SOLTAO_TAG, SOLTAO_TAG_HASH } from "../src/payments.js";
+import { blake2b } from "@noble/hashes/blake2b";
 import { ss58Encode } from "../src/derive.js";
 
 let failures = 0;
@@ -108,6 +109,24 @@ expect("an empty address is refused", payeeProblem("", OWN) !== null);
   await run({ amount: 100_000_000n });
   const again = await run({ amount: 100_000_000n }, saved());
   expect("a finished top-up is not repeated by a stale resume", again.done && s.applied === 1);
+}
+
+{
+  // The call a top-up signs: one all-or-nothing batch of the transfer, then the public tag.
+  const api = { tx: {
+    utility: { batchAll: (calls) => ({ call: "utility.batchAll", calls }) },
+    balances: { transferAllowDeath: (to, amount) => ({ call: "balances.transferAllowDeath", to, amount }) },
+    system: { remarkWithEvent: (remark) => ({ call: "system.remarkWithEvent", remark }) },
+  } };
+  const c = paymentCall(api, CHUTES, 250_000_000n);
+  expect("a top-up is one batchAll: the transfer to Chutes, then the soltao tag", c.call === "utility.batchAll" && c.calls.length === 2
+    && c.calls[0].call === "balances.transferAllowDeath" && c.calls[0].to === CHUTES && c.calls[0].amount === 250_000_000n
+    && c.calls[1].call === "system.remarkWithEvent" && c.calls[1].remark === "soltao.xyz:chutes-topup:v1", JSON.stringify(c, (_k, v) => typeof v === "bigint" ? String(v) : v));
+  const want = "0x" + Buffer.from(blake2b(Buffer.from(SOLTAO_TAG), { dkLen: 32 })).toString("hex");
+  expect("the Remarked event hash every tagged top-up carries is published", SOLTAO_TAG_HASH === want && SOLTAO_TAG_HASH === "0x0f0d95b0ed710d56d26bcf41bea776f5ca2dee9f4de60b0995538a30fb321cc4", SOLTAO_TAG_HASH);
+  let err = null;
+  try { paymentCall({ tx: { balances: api.tx.balances, system: api.tx.system } }, CHUTES, 1n); } catch (e) { err = e; }
+  expect("without batching on the chain nothing untagged is sent instead", err && /nothing was sent/.test(err.message));
 }
 
 if (failures) { console.log(`\n${failures} failure(s)`); process.exit(1); }

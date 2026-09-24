@@ -7,22 +7,51 @@
 // part of the route: it is a separate action the user takes on free TAO in their own wallet, to an
 // address they paste. The chain cannot tell us an address belongs to Chutes; the page says so.
 //
+// Every top-up carries a public tag, so top-ups made through soltao can be counted by anyone, soltao
+// and Chutes included, from the chain alone (soltao has no server to count them). The transfer and a
+// `system.remarkWithEvent(SOLTAO_TAG)` are sent together as one `utility.batchAll`: both happen or
+// neither does. The remark emits `System.Remarked { sender, hash }`, where `hash` is the blake2-256 of
+// the tag, the same for every soltao top-up (SOLTAO_TAG_HASH). Chutes' watcher reads every event in
+// every block, so the Balances.Transfer inside the batch is credited as before. The live runtime allows
+// batch_all of these calls; it refuses only a batch nested inside a batch (NoNestingCallFilter in
+// opentensor/subtensor's runtime, read at 923fd1f, 23 Sep 2026).
+//
 // Same discipline as stake moves (src/stake_moves.js): the transfer is signed and its identity (signed
 // bytes, nonce) handed to `onCheckpoint` before it is submitted, and a resume settles that exact
 // transfer before doing anything new, so a closed tab can never pay twice. The outcome is judged by the
 // coldkey's free balance, read before and after.
 
+import { blake2b } from "@noble/hashes/blake2b";
 import { settleSigned } from "./settle.js";
 import { ss58Decode } from "./derive.js";
-import { accountNonce, coldkeySigner, freeBalance, prepareTransfer, submitSigned } from "./substrate.js";
+import { accountNonce, coldkeySigner, freeBalance, getApi, prepareCall, submitSigned } from "./substrate.js";
 
 /** Chutes ignores smaller payments as dust (DUST_THRESHOLD_RAO in chutesai/chutes-api). */
 export const CHUTES_MIN_RAO = 10_000_000n; // 0.01 TAO
 
+/** The public tag on every soltao top-up, and the hash its System.Remarked event carries. */
+export const SOLTAO_TAG = "soltao.xyz:chutes-topup:v1";
+export const SOLTAO_TAG_HASH = "0x" + Array.from(blake2b(new TextEncoder().encode(SOLTAO_TAG), { dkLen: 32 }), (x) => x.toString(16).padStart(2, "0")).join("");
+
+/** The tagged top-up as one call: the transfer and the tag, all or nothing. */
+export function paymentCall(api, to, amount) {
+  if (!api.tx.utility?.batchAll || !api.tx.system?.remarkWithEvent) throw new Error("Bittensor no longer offers the calls a tagged top-up needs; nothing was sent");
+  return api.tx.utility.batchAll([api.tx.balances.transferAllowDeath(String(to), BigInt(amount)), api.tx.system.remarkWithEvent(SOLTAO_TAG)]);
+}
+
+/** Read-only fee and balance check for a tagged top-up: { freeRao, feeRao, remainingRao }. */
+export async function quotePayment(mnemonic, to, amount) {
+  const api = await getApi();
+  const { address } = coldkeySigner(mnemonic);
+  const [payment, account] = await Promise.all([paymentCall(api, to, amount).paymentInfo(address), api.query.system.account(address)]);
+  const feeRao = payment.partialFee.toBigInt(), freeRao = account.data.free.toBigInt();
+  return { freeRao, feeRao, remainingRao: freeRao - BigInt(amount) - feeRao };
+}
+
 const realOps = {
   signerAddress: (mnemonic) => coldkeySigner(mnemonic).address,
   free: freeBalance,
-  prepare: prepareTransfer,
+  prepare: (mnemonic, to, amount) => prepareCall(mnemonic, (api) => paymentCall(api, to, amount)),
   submit: submitSigned,
   coldkeyNonce: accountNonce,
 };

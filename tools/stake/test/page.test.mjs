@@ -503,7 +503,7 @@ if (want("F")) {
   expect("…and more than the free TAO, keeping 0.01 TAO for fees", /More than the 1\.99 TAO available/.test(await text(page, "#pay-quote")) && (await page.$eval("#pay-go", (b) => b.disabled)), await text(page, "#pay-quote"));
   await setFieldE(page, "#pay-amount", "0.5");
   await waitText(page, "#pay-quote", /^Sends|Could not/, 60_000);
-  expect("…quotes the transfer and its network fee from the chain", /^Sends 0\.5 TAO to 5Grwva…\w+\. Bittensor network fee about [\d.]+ TAO; [\d.]+ TAO stays free here\./.test(await text(page, "#pay-quote")), await text(page, "#pay-quote"));
+  expect("…quotes the transfer and its network fee from the chain", /^Sends 0\.5 TAO to 5Grwva…\w+\. Bittensor network fee about [\d.]+ TAO; [\d.]+ TAO stays free here\./.test(await text(page, "#pay-quote")) && /public "via soltao" tag/.test(await text(page, "#pay-quote")), await text(page, "#pay-quote"));
   expect("…and stays closed until the address is acknowledged", await page.$eval("#pay-go", (b) => b.disabled));
   await clickEl(page, "#pay-ack");
   expect("…then opens", !(await page.$eval("#pay-go", (b) => b.disabled)));

@@ -413,6 +413,16 @@ This is **not** git-push-triggered. Steps, in order, every time:
       and ignores anything under 0.01 TAO as dust (`DUST_THRESHOLD_RAO`), so the page refuses less.
       Its autostaker then stakes the TAO into SN64 and burns the Alpha. Chutes' own setup text: "The
       payment address accepts both TAO and subnet alpha tokens to top up your balance."
+    - *The "via soltao" tag (added the same day):* each top-up is one `utility.batchAll` of the
+      transfer and `system.remarkWithEvent("soltao.xyz:chutes-topup:v1")`, all or nothing
+      (`paymentCall()`), so top-ups through soltao can be counted from the chain alone. Every one emits
+      `System.Remarked` with hash `0x0f0d95b0ed710d56d26bcf41bea776f5ca2dee9f4de60b0995538a30fb321cc4`
+      (blake2-256 of the tag; the runtime's `Hashing` is `BlakeTwo256`). The live runtime allows
+      `batch_all` of these calls (it only refuses nested batches, `NoNestingCallFilter`, subtensor
+      `923fd1f`). Chutes' watcher reads every event in the block, so the transfer inside the batch is
+      credited as before. **Confirm on the real-funds run**: Chutes credits it, and the extrinsic
+      shows the remark. No counting script yet: counting means searching the chain (an indexer such
+      as taostats, or a block scan) for that event hash.
     - *Checks:* SS58 with checksum, not the wallet's own address, at least 0.01 TAO, at most the free
       balance less the 0.01 TAO reserve, and the live network fee must fit. The page cannot know an
       address is Chutes'; it says so, and the send button stays shut until that is acknowledged.

@@ -849,11 +849,11 @@ async function quotePayNow() {
   if (amt < lib.CHUTES_MIN_RAO) { note("pay-quote", `Send at least ${tao(lib.CHUTES_MIN_RAO)}: Chutes ignores smaller payments.`, "bad"); return; }
   if (amt > pay.max) { note("pay-quote", `More than the ${tao(pay.max)} available (${tao(CONFIG.defaultReserveRao)} stays free for fees).`, "bad"); return; }
   try {
-    const q = await lib.quoteTransfer(state.signed.wallet.mnemonic, to, amt);
+    const q = await lib.quotePayment(state.signed.wallet.mnemonic, to, amt);
     if (seq !== payQuoteSeq) return;
     if (q.remainingRao < 0n) { note("pay-quote", `That plus the ${tao(q.feeRao)} network fee is more than this wallet holds.`, "bad"); return; }
     pay.quoted = true; gatePay();
-    note("pay-quote", `Sends ${tao(amt)} to ${short(to, 6)}. Bittensor network fee about ${tao(q.feeRao)}; ${tao(q.remainingRao)} stays free here. Chutes adds it to your balance in dollars at the TAO price when it lands, usually within a minute.`);
+    note("pay-quote", `Sends ${tao(amt)} to ${short(to, 6)}. Bittensor network fee about ${tao(q.feeRao)}; ${tao(q.remainingRao)} stays free here. Chutes adds it to your balance in dollars at the TAO price when it lands, usually within a minute. It carries a public "via soltao" tag, so top-ups through this page can be counted.`);
   } catch (e) { if (seq === payQuoteSeq) note("pay-quote", `Could not read the fee from Bittensor: ${e.message}`, "bad"); }
 }
 function resumePay() {
