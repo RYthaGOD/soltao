@@ -5,8 +5,11 @@ continue without re-deriving context. Keep it updated after every meaningful ste
 go stale.
 
 Last updated: 2026-09-24. **Live in production at `soltao.xyz`, nothing unreleased.** Latest deploy:
-commit `9f22575` (the subnet directory, bug history item 14), `stake.js?v=d8f02947` +
-`return.js?v=5f50824e`, `test:live` all passed. The deploy before it, `994f394` (Craig: "deploy once
+commit `ad1161c` (polish, bug history item 15: unstake-then-return, send again after a revert,
+"TAO added per day" in the directory), `stake.js?v=1e178c2d` + `return.js?v=3598743b`, served on the
+first poll, `/healthz` 200, `test:live` all passed; the return and stake moves are still switched off.
+Before it, `9f22575` (the subnet directory, item 14), `stake.js?v=d8f02947` +
+`return.js?v=5f50824e`, `test:live` all passed. The deploy before that, `994f394` (Craig: "deploy once
 you are happy"), `stake.js?v=412be73a` + `return.js?v=8406712c`: Served on the first poll; `/healthz` 200 (so the new nginx rules are valid);
 `npm run test:live` 23/23 on the real domain, including both cache headers, both mirror redirects,
 `return.js` served and the return option still disabled.
