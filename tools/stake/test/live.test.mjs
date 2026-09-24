@@ -13,6 +13,7 @@ import { dirname, join } from "node:path";
 import { CONFIG } from "../src/config.js";
 
 const SITE = (process.env.SITE || "https://soltao.xyz").replace(/\/$/, "");
+const MIRRORS = SITE === "https://soltao.xyz" ? ["https://soltao-production.up.railway.app/stake/", "https://rythagod.github.io/soltao/stake/"] : [];
 const CHROME = process.env.CHROME || "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const here = dirname(fileURLToPath(import.meta.url));
 const builtHash = readFileSync(join(here, "../../../stake/index.html"), "utf8").match(/stake\.js\?v=([0-9a-f]+)/)[1];
@@ -95,10 +96,22 @@ try {
   await waitText(page, "#hotkey-note", /Registered validator|Not a registered|Could not reach/);
   expect("the root validator used by the page test still passes", /Registered validator · take/.test(await text(page, "#hotkey-note")), await text(page, "#hotkey-note"));
 
+  // Bug history item 1: the bundle once leaked Node's `process`/`Buffer` onto window and broke Phantom.
+  const leaks = await page.evaluate(() => ["process", "Buffer", "global"].filter((k) => k in window));
+  expect("the bundle adds no Node globals to window", leaks.length === 0, leaks.join(", "));
   expect("return direction is still disabled", await page.evaluate(() => [...document.querySelectorAll('input[name="direction"]')].some((i) => i.value !== "forward" && i.disabled) || !document.querySelector('input[name="direction"]')));
   const csp = await page.evaluate(() => window.__csp);
   expect("/stake/: no CSP violations", csp.length === 0, csp.join(" | "));
   expect("/stake/: no page or console errors", problems.length === 0, problems.join(" | "));
+  await page.close();
+
+  // Mirrors cannot sign in (the message names soltao.xyz) or serve the CSP, so they must hand off.
+  for (const mirror of MIRRORS) {
+    const p = await browser.newPage();
+    await p.goto(`${mirror}?from=mirror`, { waitUntil: "networkidle2", timeout: 60_000 });
+    expect(`mirror ${new URL(mirror).host} sends /stake/ to the real domain`, p.url().startsWith(`${SITE}/stake/?from=mirror`), p.url());
+    await p.close();
+  }
 } finally {
   await browser.close();
 }

@@ -41,7 +41,7 @@ cost, no funds spent): `tools/stake/test/mainnet.test.mjs` replays the exact sig
 real owner hotkey (independently confirmed live to be a registered delegate). Result: 0.1 TAO
 converted to ~11.2 Alpha, owned by the fresh coldkey, with zero root-stake cross-contamination,
 across 7 of 8 repeated runs (the one failure was an RPC rate-limit from our own repeated testing,
-not a reverted transaction). Deployed to production 23 Sep 2026 on Craig's explicit go-ahead, on
+not a reverted transaction; the harness has retried rate limits since 24 Sep 2026). Deployed to production 23 Sep 2026 on Craig's explicit go-ahead, on
 the strength of that verification plus the root-staking route's prior real-funds confirmation.
 Still not verified via an actual real signed transaction with real funds through the live page —
 see `tools/stake/HANDOVER.md` for the exact current gap.

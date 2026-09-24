@@ -122,37 +122,6 @@ async function refreshBalances() {
   gate();
 }
 
-// ── temporary debug aid: isolate which SIWS field trips Phantom's internal signIn() error ───
-// Remove once the -32603 "Unexpected error" investigation (see HANDOVER.md) is resolved.
-function wireDebug() {
-  if (!new URLSearchParams(location.search).has("debug")) return;
-  $("debug-row").hidden = false;
-  $("debug-signin").addEventListener("click", async () => {
-    if (!state.provider) { note("debug-note", "connect a wallet first", "bad"); return; }
-    note("debug-note", "check your wallet…");
-    const iso = new Date().toISOString();
-    const attempts = [
-      ["empty object", {}],
-      ["only domain", { domain: location.host }],
-      ["phantom doc exact (no address/uri)", { domain: location.host, statement: "test", version: "1", nonce: "oBbLoEldZs", chainId: "mainnet", issuedAt: iso }],
-      ["phantom doc + origin uri", { domain: location.host, statement: "test", uri: location.origin, version: "1", nonce: "oBbLoEldZs", chainId: "mainnet", issuedAt: iso }],
-      ["phantom doc + address", { domain: location.host, address: state.user, statement: "test", version: "1", nonce: "oBbLoEldZs", chainId: "mainnet", issuedAt: iso }],
-      ["full production + nonce + origin", { ...signInFields(state.user), nonce: "1234567890", uri: location.origin }],
-    ];
-    const results = [];
-    for (const [label, input] of attempts) {
-      try {
-        await state.provider.signIn(input);
-        results.push(`${label}: OK`);
-      } catch (e) {
-        results.push(`${label}: FAIL ${e?.message || e} (code ${e?.code})`);
-      }
-    }
-    note("debug-note", results.join("  |  "));
-    console.log("debug sign-in sweep:\n" + results.join("\n"));
-  });
-}
-
 // ── step 2: the Bittensor wallet and the transit account ────────────────────
 async function sign() {
   if (state.signed) return checkTransit(); // already signed: this is the retry after a failed read
@@ -625,7 +594,19 @@ async function runRoute(route, { expectLd = null, fresh = false } = {}) {
 }
 
 // ── wiring ──────────────────────────────────────────────────────────────────
+// The sign-in message names soltao.xyz, so wallets refuse it on any other origin, and static mirrors
+// (GitHub Pages, Railway's generated domain) cannot serve this page's CSP. Send them to the real one.
+// Local hosts stay, for development and the headless tests.
+const CANONICAL = "soltao.xyz";
+const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])$/;
+function onCanonicalHost() {
+  if (location.hostname === CANONICAL || LOCAL.test(location.hostname)) return true;
+  location.replace(`https://${CANONICAL}/stake/${location.search}${location.hash}`);
+  return false;
+}
+
 function init() {
+  if (!onCanonicalHost()) return;
   if (!LIVE) $("not-live").hidden = false;
   $("connect").addEventListener("click", connect);
   
@@ -658,7 +639,6 @@ function init() {
   $("netuid-in").addEventListener("input", onNetuid);
   $("hotkey-in").addEventListener("input", onHotkey);
   $("sign").addEventListener("click", send);
-  wireDebug();
   getGasPrice().then((p) => { state.gasPrice = p; gate(); }).catch(() => {});
   addEventListener("beforeunload", (e) => { if (state.running) { e.preventDefault(); e.returnValue = ""; } });
   // Keys live only in memory; drop them when the page goes away.

@@ -4,11 +4,14 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-09-24. **Live in production at `soltao.xyz`, nothing unreleased.** The deployed
-artifact is commit `292b68b`, script hash `stake.js?v=65f935e0`, which adds the subnet-aware hotkey
-check (bug history item 10). Deployed with Craig's go-ahead and verified on the real domain with
-`npm run test:live` (16/16). The redesign, subnet staking, the bridge-back scaffold, the Helius RPC
-switch with its CSP fix, and the link-preview metadata are all live.
+Last updated: 2026-09-24. **Live in production at `soltao.xyz`, with one cleanup build unreleased.**
+The live site is commit `292b68b`, script hash `stake.js?v=65f935e0`, which adds the subnet-aware
+hotkey check (bug history item 10), verified on the real domain with `npm run test:live`. `main`
+also carries a cleanup build, `stake.js?v=a5a5207c`: the temporary `?debug` sign-in panel removed,
+and `/stake/` on the mirrors redirected to `soltao.xyz`. It passes `npm test` and `npm run
+test:page`, and awaits Craig's deploy go-ahead. After deploying it, `npm run test:live` also checks
+both mirror redirects. The redesign, subnet staking, the bridge-back scaffold, the Helius RPC switch
+with its CSP fix, and the link-preview metadata are all live.
 See "Current state" for what has real-funds proof versus what shipped on zero-cost mainnet-state
 verification plus Craig's own informed go-ahead.
 
@@ -158,7 +161,9 @@ This is **not** git-push-triggered. Steps, in order, every time:
    safety gap, not just a convenience. `sign()` now always goes through the real wallet, on every
    host. Local testing of the sign-in step needs a real wallet extension that tolerates the
    `localhost:<port>` origin (or a real domain via a local DNS/hosts-file override) — there is no
-   shortcut anymore.
+   shortcut anymore. The temporary `?debug` SIWS sweep panel used to chase this was removed on
+   24 Sep 2026, along with `minimal-test.html` and `check-leaks.mjs`. The globals check the latter
+   did lives on in `test/page.test.mjs` and `test/live.test.mjs`.
 
 5. **"not sent" with no visible error after clicking Sign and Send.** Two issues:
    - (a) `gate()` was called after `send()` errors, which fired `requestQuote()` on a 350ms timer
@@ -236,6 +241,15 @@ or a page's positioning, change these too or the shared link silently starts lyi
 - **Keep the SIWS statement plain ASCII.** Enforced by `test/derive.test.mjs`.
 - **Always rebuild before deploying.** `stake/stake.js` is generated output.
 - **Deploys need explicit fresh confirmation each time** — ask before every `railway up --ci`.
+- **`/stake/` only runs on `soltao.xyz` or a local host.** The SIWS message names `soltao.xyz`, and
+  the GitHub Pages and Railway-generated mirrors serve no CSP, so `init()` redirects any other host
+  to the canonical page. `test/live.test.mjs` checks both mirrors hand off.
+- **Space out the live test runs.** `lite.chain.opentensor.ai` rate-limits per client over a 60 s
+  window (`429`, `retry-after: 60`, `x-ratelimit-policy: http_60s`), and it limits requests that
+  carry a browser `Origin` more readily than bare ones. Running the mainnet replay, the page test and
+  the live check back to back tripped it on 24 Sep 2026. In the browser that shows up as "Failed to
+  fetch", not as a CSP violation. Despite the 60 s header, a 2-minute pause was not enough that day
+  and a 5-minute fully quiet pause was. Rerun after a quiet pause before suspecting the code.
 
 ## Current state
 

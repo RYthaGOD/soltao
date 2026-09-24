@@ -11,8 +11,10 @@ look-alikes are, and which TAO-quoted coins exist.
 
 ## Stack
 
-Static HTML5 + CSS3 + vanilla ES6. No framework, no bundler, no npm install, no backend,
-no wallet connection, no analytics. Market data comes from the keyless
+The board is static HTML5 + CSS3 + vanilla ES6. No framework, no bundler, no npm install, no
+backend, no wallet connection, no analytics. (The separate `/stake/` page does connect a wallet
+and is bundled from `tools/stake/`; its built output is committed, so serving still needs no
+build. See "/stake/" below.) Market data comes from the keyless
 [Dexscreener REST API](https://docs.dexscreener.com/api/reference) straight from the browser,
 cached in `localStorage` for 30 seconds.
 
@@ -67,7 +69,9 @@ Then open `http://localhost:3000`.
 
 Any static host. There is no build step — point it at the repo root and publish.
 
-Currently live on three hosts, serving byte-identical content:
+Currently live on three hosts, serving byte-identical content. Only `soltao.xyz` serves the
+security headers, and the stake page's sign-in message names `soltao.xyz`, so `/stake/` on either
+mirror redirects to the canonical domain:
 
 | | URL |
 |---|---|
@@ -200,8 +204,14 @@ the Bittensor half itself, with a key derived from the user's own signature.
 sign once ─► coldkey (sr25519, 12 words) + transit key (secp256k1, Bittensor EVM)
 Solana tx: OFT send to the transit account, with a 0.001 TAO gas drop  +  soltao's flat SOL fee
 Bittensor EVM, signed by the page with the transit key:
-  wTAO.withdraw → addStake (root, chosen validator) → transferStake to the coldkey → transferAll the rest
+  wTAO.withdraw → addStake (root or a chosen subnet, chosen validator) → transferStake to the coldkey → transferAll the rest
 ```
+
+**Subnets.** Root is the default. On any other subnet the stake mints that subnet's Alpha, and the
+page checks the subnet's own metagraph before letting the user send: the subnet must exist and the
+pasted hotkey must hold a uid with a validator permit there. A validator on one subnet is not one on
+another, and the chain accepts a stake to a hotkey with no slot on the subnet, where it earns nothing
+(tested against mainnet state, 24 Sep 2026).
 
 **The keys.** The user signs a fixed Sign-In-With-Solana message. HKDF over that ed25519 signature
 gives two independent keys: a 12-word phrase that is an ordinary sr25519 coldkey and imports into
@@ -228,7 +238,7 @@ that whole limit through LayerZero's compose option (≈0.05 SOL a route); a pla
 stake and 0.0004 TAO to deliver, at 5 gwei (21 Sep 2026). The LayerZero fee for 0.1 TAO, drop
 included, was 0.0144 SOL the same day; the page quotes it live from the TAO program before signing.
 
-**soltao's fee** is 0.0075 SOL, a plain SOL transfer in the same transaction, shown in the review
+**soltao's fee** is 0.003 SOL, a plain SOL transfer in the same transaction, shown in the review
 with its receiving address before the wallet opens. With no contract, anyone can bridge to their
 own address without the page and skip it; the fee pays for the page, not for access.
 
@@ -244,10 +254,12 @@ script. The footer of /stake/ says the same.
 | `tools/stake/src/derive.js` | The coldkey and transit key from one signature |
 | `tools/stake/src/solana.js` | The Solana transaction: OFT send with the gas drop, plus the fee |
 | `tools/stake/src/route.js` | The Bittensor half: unwrap, stake, hand over, sweep, resumable |
-| `tools/stake/src/evm.js`, `bittensor.js` | Legacy EIP-155 signing and the precompile reads it needs |
+| `tools/stake/src/evm.js`, `bittensor.js` | Legacy EIP-155 signing, batched RPC, and the precompile reads it needs, including the subnet metagraph |
 | `tools/stake/src/config.js` | Every address, gas limit and the fee, with where each was measured |
 | `tools/stake/src/app.js` | The page controller |
-| `tools/stake/test/` | Derivation vectors, signing against ethers, the runner against a simulated chain, the Solana transaction simulated on mainnet, and a headless-browser run under the production CSP |
+| `tools/stake/src/oft_return.js`, `return_route.js`, `substrate.js` | Bridge-back to Solana: built and tested, not reachable from the page yet |
+| `tools/stake/test/` | Derivation vectors, signing against ethers, the runner against a simulated chain, the Solana transaction simulated on mainnet, zero-cost mainnet replays, a headless-browser run under the production CSP, and a post-deploy check of the live domain |
+| `tools/stake/HANDOVER.md` | Current state, bug history and the deploy procedure. Read it first |
 | `stake/` | What is served: `index.html`, `stake.css`, `stake.js` (built) and its licence notices |
 
 The first design used an ownerless router contract on Bittensor EVM. It is retired, not deployed,
@@ -257,10 +269,15 @@ and kept only in the private `research/archive/`.
 
 ```bash
 cd tools/stake && npm install
-npm test              # derivation, EVM signing, route runner, build shim, Solana mainnet simulation
-npm run test:mainnet  # the real route.js against live Bittensor mainnet state, in eth_call only
-npm run test:page     # builds stake/stake.js, then drives it in Chrome under the production CSP
-npm run serve         # the site on http://localhost:8788 with the production headers
+npm test                     # derivation, EVM signing, route runner, subnet lookup, return engine, build shim, Solana simulation
+npm run test:mainnet         # the real route.js against live Bittensor mainnet state, in eth_call only
+npm run test:page            # builds stake/stake.js, then drives it in Chrome under the production CSP
+npm run test:subnet:live     # the subnet/hotkey lookup against mainnet, read-only
+npm run test:return:live     # bridge-back fee and transfer quotes, read-only
+npm run test:return:metadata # bridge-back call shapes against the live runtime metadata
+npm run test:return:mainnet  # bridge-back wrap and send, replayed in eth_call only
+npm run test:live            # after a deploy: the real domain, read-only, no wallet
+npm run serve                # the site on http://localhost:8788 with the production headers
 ```
 
 None of it needs funds or sends anything. `test:mainnet` places `test/Replay.sol` at LayerZero's
@@ -271,26 +288,25 @@ that (78 of 78 Solana → Bittensor TAO messages delivered since 1 May 2026, med
 earlier native drops succeeded, each to a plain address like the transit account).
 
 The build fails if the bundle contains `eval` or `new Function`, so it can never need
-`'unsafe-eval'`. The only CSP change the page needed is `https://lite.chain.opentensor.ai` in
-`connect-src`, in both `_headers` and `deploy/nginx.conf.template`.
+`'unsafe-eval'`. The page added two origins to `connect-src`: `https://lite.chain.opentensor.ai`
+(Bittensor) and the Helius Solana RPC set in `config.js`. They must be in **both** `_headers` and
+`deploy/nginx.conf.template`; the two drifting apart once shipped a CSP bug.
 
-### Going live, in order
+### Status
 
-Nothing deploys: there is no contract and no lookup table of soltao's. Until `fee.wallet` is set
-in `tools/stake/src/config.js` the page shows "Not live yet" and cannot send, but still derives
-wallets and still quotes.
-
-1. Set `fee.wallet` in `config.js`, `npm run build`, `npm test`, `npm run test:page`. Done 21 Sep
-   2026: `BgGFMbwUtKLifQYZogbDorEXTXYp3UKVAZSH41xQ72Na`, checked on chain as an ordinary wallet, and
-   the Solana test decodes the fee instruction to confirm exactly 0.0075 SOL goes to it.
-2. Route a small amount yourself through both plans, closing the page once mid-route to prove the
-   resume, and watch it land on Taostats.
-3. Only then publish.
+Live on `soltao.xyz` since 23 Sep 2026. The fee wallet is
+`BgGFMbwUtKLifQYZogbDorEXTXYp3UKVAZSH41xQ72Na`, checked on chain as an ordinary wallet, and the
+Solana test decodes the fee instruction to confirm exactly 0.003 SOL goes to it. Root staking has
+been routed end to end with real funds. Subnet staking is verified against real mainnet state at
+zero cost but has not yet carried real funds. `tools/stake/HANDOVER.md` tracks exactly what has
+which kind of proof, and how to deploy.
 
 ## Things this deliberately does not do
 
-No wallet connect on the board; the stake route connects one on its own page. No backend or database. No charts. No subnet, validator or dTAO
-analytics — [Taostats](https://taostats.io/) already does that and does it properly. No swap
+No wallet connect on the board; the stake route connects one on its own page. No backend or
+database. No charts. No subnet, validator or dTAO analytics on the board —
+[Taostats](https://taostats.io/) already does that and does it properly. The stake page reads only
+the on-chain facts it needs to check a stake before it is sent, and ranks nothing. No swap
 routing; Jupiter handles the swap and the link is prefilled.
 
 ## The conflict, and where it is disclosed
