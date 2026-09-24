@@ -4,17 +4,22 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-09-24. **Live in production at `soltao.xyz`, with review fixes unreleased.**
-The live site is commit `292b68b`, script hash `stake.js?v=65f935e0`, which adds the subnet-aware
-hotkey check (bug history item 10), verified on the real domain with `npm run test:live`. `main`
-carries two unreleased rounds, built together as `stake.js?v=30a1f8a5`: the cleanup (the `?debug`
-sign-in panel removed, `/stake/` on the mirrors redirected to `soltao.xyz`) and the review fixes in
-bug history item 11 (price-limited subnet stakes, the review line that called TAO "Alpha", debounced
-and cached subnet checks, a mobile open-in-wallet link, cache headers). Everything passes `npm test`,
-`npm run test:page` and `npm run test:mainnet`, and awaits Craig's deploy go-ahead. The nginx change
-could not be syntax-checked locally (no Docker), so after deploying, confirm `/healthz` and run
-`npm run test:live`, which now also checks the mirror redirects and both cache headers. The redesign, subnet staking, the bridge-back scaffold, the Helius RPC switch
-with its CSP fix, and the link-preview metadata are all live.
+Last updated: 2026-09-24. **Live in production at `soltao.xyz`; ten commits on `main` are unreleased.**
+The live site is commit `292b68b`, script hash `stake.js?v=65f935e0` (the subnet-aware hotkey check,
+bug history item 10). `main` (from `b800b93` to `b4abce8`, built as `stake.js?v=605f6fa1` +
+`return.js?v=2562e61a`) adds: the cleanup; the review fixes in item 11 (price-limited subnet stakes,
+the TAO/Alpha wording, debounced subnet checks, mobile wallet links, cache headers, Solana priority
+fee, sealed resume routes); both Codex P1 fixes (legacy saved routes, pending return mutations, item
+12); the roast fixes (validator picker, shareable links, who-runs-this line, USD in the review,
+holdings view, `npm run usage`); and the return direction, wired but **off in production**
+(`CONFIG.returnLive` false). All pass `npm test`, `test:page` (runs A-E, then F after a quiet pause),
+`test:mainnet` and the live Substrate test. Awaiting Craig's deploy go-ahead.
+
+Deploy notes for this batch: the Dockerfile now also copies `stake/return.js` and its licence file;
+the nginx change could not be syntax-checked locally (no Docker), so after `railway up --ci` confirm
+`/healthz`, then run `npm run test:live` (it checks the served hashes, both cache headers, the mirror
+redirects, that the return option is still disabled and that `return.js` is served). The redesign,
+subnet staking, the Helius RPC switch with its CSP fix, and the link-preview metadata are all live.
 See "Current state" for what has real-funds proof versus what shipped on zero-cost mainnet-state
 verification plus Craig's own informed go-ahead.
 
