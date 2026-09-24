@@ -197,3 +197,7 @@
 .holdings #holdings-wrap { width: 100%; display: grid; gap: 8px; }
 .move-panel { width: 100%; display: grid; gap: 8px; padding: 14px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--panel-2); }
 .move-panel h3 { margin: 0; font-size: 14px; }
+.dir-controls { gap: 8px; flex-wrap: wrap; }
+.dir-controls input, .dir-controls select { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line-2); border-radius: 8px; padding: 7px 10px; min-width: 0; }
+.dir-controls input { flex: 1 1 200px; }
+.dir-controls input:focus, .dir-controls select:focus { border-color: var(--green-mid); outline: none; }

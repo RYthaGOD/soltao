@@ -385,6 +385,24 @@ if (want("E")) {
   await setFieldE(page, "#netuid-in", "2");
   expect("changing the subnet clears the list", (await page.$eval("#pick-wrap", (el) => el.hidden)) && (await text(page, "#pick-btn")) === "List subnet 2's validators");
 
+  // The subnet directory: every subnet from the chain, two named orders, search, and "Use" fills the field.
+  await clickEl(page, "#dir-btn");
+  await waitText(page, "#dir-rule", /subnets, in subnet-number order|Could not/, 90_000);
+  const dirRule = await text(page, "#dir-rule"), total = Number((dirRule.match(/of (\d+) subnets/) || [])[1]);
+  const first = await page.$$eval("#dir-body tr", (trs) => trs.slice(0, 2).map((tr) => [...tr.children].map((td) => td.textContent.trim())));
+  expect("the directory lists every subnet from the chain, root first, with name, price and pool", total > 100 && first[0][0] === "0" && first[0][2] === "1 (root)" && first[1][0] === "1" && first[1][1].length > 0 && parseFloat(first[1][2]) > 0 && parseFloat(first[1][3].replace(/,/g, "")) > 0, `${total} · ${first.map((r) => r.join(" | ")).join(" / ")}`);
+  expect("…and says its order, that names are not endorsements, and when it read them", /in subnet-number order\. Names are what each owner registered on-chain; a name is not an endorsement\. Read \d\d:\d\d UTC\./.test(dirRule), dirRule);
+  await setFieldE(page, "#dir-search", "7");
+  expect("search by number finds that subnet", (await page.$$eval("#dir-body tr", (trs) => trs.map((tr) => tr.firstChild.textContent))).includes("7"));
+  await setFieldE(page, "#dir-search", "");
+  await page.select("#dir-sort", "pool");
+  const pools = await page.$$eval("#dir-body tr", (trs) => trs.map((tr) => [tr.children[0].textContent, parseFloat(tr.children[3].textContent.replace(/,/g, ""))]));
+  expect("sorting by TAO in the pool orders it so, leaves root out, and says so", pools.every((p, i) => i === 0 || pools[i - 1][1] >= p[1]) && !pools.some((p) => p[0] === "0") && /sorted by TAO in each subnet's pool, most first \(root has no pool and is left out\)/.test(await text(page, "#dir-rule")), `${pools.slice(0, 3).map((p) => p.join(":")).join(" ")}`);
+  const pickNet = pools[0][0];
+  await page.$$eval("#dir-body tr", (trs) => trs[0].querySelector("button").click());
+  expect("choosing a subnet fills the field and runs the usual check", (await page.$eval("#netuid-in", (el) => el.value)) === pickNet, await page.$eval("#netuid-in", (el) => el.value));
+  await waitText(page, "#netuid-note", /registered hotkeys|Could not reach/);
+
   const who = (await text(page, ".stake-who")).replace(/\s+/g, " ");
   expect("the page says who runs it and what they can take, near the top", /never sent to them/.test(who) && /only charge is a flat SOL fee/.test(who), who);
   await clean(page, problems, "run E");

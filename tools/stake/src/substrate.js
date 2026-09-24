@@ -142,6 +142,38 @@ export function prepareStakeMove(mnemonic, { kind, hotkey, netuid, amount, limit
   });
 }
 
+/**
+ * Every subnet, from the chain's own SubnetInfo runtime API (getAllDynamicInfo, one read-only call, ~50
+ * KB): netuid, name and symbol (the owner's on-chain identity, as registered), the pool's reserves, and
+ * the spot price those reserves imply (TAO in / Alpha in, rao per Alpha), which is how the pool prices
+ * a swap. Root (netuid 0) has no pool.
+ */
+export async function subnetDirectory() {
+  const api = await getApi();
+  const all = await api.call.subnetInfoRuntimeApi.getAllDynamicInfo();
+  // Names and symbols are Vec<Compact<u8>> (a list of numbers), identity fields are plain Bytes.
+  const text = (v) => {
+    try {
+      const j = v.toJSON();
+      const bytes = Array.isArray(j) ? Uint8Array.from(j) : v.toU8a(true);
+      return new TextDecoder().decode(bytes).replace(/[\u0000-\u001f]/g, "").trim();
+    } catch { return ""; }
+  };
+  return all.map((o) => (o.isSome ? o.unwrap() : o)).filter((d) => d && d.netuid !== undefined).map((d) => {
+    const netuid = Number(d.netuid.toString());
+    const taoIn = BigInt(d.taoIn.toString()), alphaIn = BigInt(d.alphaIn.toString());
+    const identity = d.subnetIdentity?.isSome ? d.subnetIdentity.unwrap() : null;
+    return {
+      netuid,
+      name: netuid === 0 ? "Root" : text(d.subnetName) || (identity ? text(identity.subnetName) : ""),
+      symbol: text(d.tokenSymbol),
+      description: identity ? text(identity.description) : "",
+      taoInRao: taoIn,
+      priceRao: netuid === 0 ? 1_000_000_000n : alphaIn > 0n ? (taoIn * 1_000_000_000n) / alphaIn : null,
+    };
+  }).sort((a, b) => a.netuid - b.netuid);
+}
+
 /** A subnet's Alpha price in rao of TAO per Alpha, from the chain's swap runtime API. Root is 1 TAO. */
 export async function alphaPriceRao(netuid) {
   if (Number(netuid) === 0) return 1_000_000_000n;

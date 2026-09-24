@@ -27,7 +27,7 @@
 <link rel="apple-touch-icon" href="../logo.png">
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="stake.css">
-<script src="stake.js?v=412be73a" defer></script>
+<script src="stake.js?v=d8f02947" defer></script>
 </head>
 <body>
 <a class="skip" href="#steps">Skip to the steps</a>
@@ -275,6 +275,25 @@
         <input type="text" id="netuid-in" inputmode="numeric" autocomplete="off" spellcheck="false" value="0" placeholder="0 (Root)">
       </label>
       <span class="step-note" id="netuid-note" role="status">Default is 0 (Root network). Other subnets will mint Alpha tokens.</span>
+      <div class="picker">
+        <button type="button" class="btn btn-ghost btn-sm" id="dir-btn">Browse subnets</button>
+        <div id="dir-wrap" hidden>
+          <div class="field-row dir-controls">
+            <input type="text" id="dir-search" autocomplete="off" spellcheck="false" placeholder="Search by name or number" aria-label="Search subnets">
+            <select id="dir-sort" aria-label="Sort subnets">
+              <option value="netuid">By subnet number</option>
+              <option value="pool">By TAO in the pool, most first</option>
+            </select>
+          </div>
+          <p class="step-note" id="dir-rule" role="status"></p>
+          <div class="pick-scroll">
+            <table class="pick">
+              <thead><tr><th scope="col">Subnet</th><th scope="col">Name</th><th scope="col">Price, TAO per Alpha</th><th scope="col">TAO in pool</th><th scope="col"><span class="sr">Choose</span></th></tr></thead>
+              <tbody id="dir-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
       <label class="field">
         <span>Validator hotkey</span>
         <input type="text" id="hotkey-in" autocomplete="off" spellcheck="false" placeholder="5… (the validator's hotkey address)">

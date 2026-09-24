@@ -129,7 +129,11 @@ subnet's validator-permit holders from the metagraph, with uid, take and last-ep
 one stated sort rule, no names (not on-chain) and no stake column (unit unconfirmed). Shareable
 `?netuid=&hotkey=` links are done. A first portfolio view is done: free TAO and every stake position
 of the coldkey on screen, from the chain's StakeInfo runtime API (Solana TAO is already shown in step
-1). Open: subnet directory, return actions per position.
+1). The subnet directory is done: "Browse subnets" lists every subnet from the chain's SubnetInfo
+runtime API (one call, ~50 KB, ~1 s) with its registered name and symbol, the pool's spot price and
+its TAO, a search, and two orders stated on the page (subnet number, or TAO in the pool with root
+left out); names are labelled as owner-registered, not endorsed. Per-position actions are done
+(Milestone 4, gated). Emissions and take per subnet are not shown yet.
 
 Data sources for the subnet directory and validator picker were researched on
 24 Sep 2026 — see `research/subnet-validator-data-research.md` for what taostats can and cannot

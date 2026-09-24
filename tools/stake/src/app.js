@@ -358,6 +358,52 @@ async function onNetuid() {
   gate();
 }
 
+// ── the subnet directory ────────────────────────────────────────────────────
+// Every subnet from the chain's SubnetInfo runtime API (one call, through the Bittensor-side bundle,
+// on request): name and symbol as the owner registered them, the pool's spot price and its TAO. Two
+// orders, both named on the page; nothing is ranked beyond them. Choosing a row only fills the field.
+let directory = null; // { at, rows }
+async function openDirectory() {
+  $("dir-wrap").hidden = false; $("dir-btn").disabled = true;
+  try {
+    if (!directory || Date.now() - directory.at > 5 * 60_000) {
+      note("dir-rule", "reading every subnet from Bittensor…");
+      const lib = await loadReturnLib();
+      directory = { at: Date.now(), rows: await lib.subnetDirectory() };
+    }
+    renderDirectory();
+  } catch (e) {
+    note("dir-rule", `Could not read the subnets from Bittensor: ${e.message}`, "bad");
+  } finally {
+    $("dir-btn").disabled = false;
+  }
+}
+function renderDirectory() {
+  if (!directory) return;
+  const q = $("dir-search").value.trim().toLowerCase(), byPool = $("dir-sort").value === "pool";
+  let rows = directory.rows.filter((r) => !q || String(r.netuid) === q || r.name.toLowerCase().includes(q) || r.symbol.toLowerCase().includes(q));
+  if (byPool) rows = [...rows].filter((r) => r.netuid !== 0).sort((a, b) => (b.taoInRao > a.taoInRao ? 1 : b.taoInRao < a.taoInRao ? -1 : a.netuid - b.netuid));
+  const at = new Date(directory.at).toISOString().slice(11, 16);
+  note("dir-rule", `${rows.length} of ${directory.rows.length} subnets, ${byPool ? "sorted by TAO in each subnet's pool, most first (root has no pool and is left out)" : "in subnet-number order"}. Names are what each owner registered on-chain; a name is not an endorsement. Read ${at} UTC.`);
+  const current = state.netuidValid ? Number(state.netuid) : null;
+  $("dir-body").replaceChildren(...rows.map((r) => {
+    const tr = document.createElement("tr");
+    if (r.netuid === current) tr.setAttribute("aria-current", "true");
+    if (r.description) tr.title = r.description;
+    const td = (t, cls) => Object.assign(document.createElement("td"), { textContent: t, className: cls || "" });
+    const use = Object.assign(document.createElement("button"), { type: "button", textContent: "Use" });
+    use.setAttribute("aria-label", `Use subnet ${r.netuid}, ${r.name}`);
+    use.addEventListener("click", () => { $("netuid-in").value = String(r.netuid); onNetuid(); renderDirectory(); });
+    const cell = document.createElement("td"); cell.append(use);
+    tr.append(
+      td(String(r.netuid), "num"), td(`${r.name}${r.symbol ? ` ${r.symbol}` : ""}`),
+      td(r.netuid === 0 ? "1 (root)" : r.priceRao === null ? "—" : fmtUnits(r.priceRao, 9), "num"),
+      td(r.netuid === 0 ? "no pool" : fmtUnits(r.taoInRao, 9, 0), "num"), cell,
+    );
+    return tr;
+  }));
+}
+
 // ── the validator picker ────────────────────────────────────────────────────
 // Lists the chosen subnet's validator-permit holders from the metagraph, on request (about 13 reads
 // against a rate-limited RPC, so never on every keystroke). It states its one sort rule and picks
@@ -1034,6 +1080,9 @@ function init() {
   $("netuid-in").addEventListener("input", onNetuid);
   $("hotkey-in").addEventListener("input", onHotkey);
   $("pick-btn").addEventListener("click", openPicker);
+  $("dir-btn").addEventListener("click", openDirectory);
+  $("dir-search").addEventListener("input", renderDirectory);
+  $("dir-sort").addEventListener("change", renderDirectory);
   $("holdings-btn").addEventListener("click", showHoldings);
   $("move-amount").addEventListener("input", quoteMove);
   $("move-max").addEventListener("click", () => { if (move) { $("move-amount").value = fmtUnits(move.max, 9, 9).replace(/,/g, ""); quoteMove(); } });

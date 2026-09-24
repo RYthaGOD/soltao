@@ -325,6 +325,16 @@ This is **not** git-push-triggered. Steps, in order, every time:
     test wallet has no position, and faking one means answering a SCALE runtime call. No real-funds
     move yet.
 
+14. **Subnet directory (Milestone 5), 24 Sep 2026.** "Browse subnets" beside the subnet field lists
+    all subnets from `subnetInfoRuntimeApi.getAllDynamicInfo` (`subnetDirectory()` in `substrate.js`,
+    through the Bittensor-side bundle, on request, cached 5 minutes): name and symbol as registered
+    (stored as `Vec<Compact<u8>>`, so decoded from the plain values, not raw bytes), the spot price
+    implied by the pool's reserves (subnet 1: 0.006818 TAO per Alpha, within 1 rao of the swap
+    runtime API) and the TAO in the pool. Search by name, symbol or number; sort by subnet number or
+    by TAO in the pool (root left out: it has no pool), with the rule and read time stated on the
+    page and names labelled as not endorsements. "Use" fills the subnet field and runs the usual
+    check. Not live-gated: it only reads. Note it loads `return.js` (~800 KB) when opened.
+
 ## Link previews and SEO
 
 `index.html` and `stake/index.html` each carry their own `og:`/`twitter:` block; they are hand-
