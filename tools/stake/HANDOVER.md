@@ -63,18 +63,22 @@ main "Solana TAO Board" page which stays no-wallet-connect).
 - `research/subnet-validator-data-research.md` — where subnet/validator data can come from, read
   24 Sep 2026: the taostats API (per-subnet validator lists and 1h/1d/7d/30d APY, key required, quota
   undocumented) versus the Bittensor metagraph precompile `0x802` (same validator lists free and
-  keyless, ~6 batched requests per subnet, no names). Also records an open correctness gap it found:
-  `onHotkey()`'s `getDelegate(hotkey)` check takes no netuid, so a hotkey that validates nowhere on
-  the chosen subnet still passes as a "registered validator". Nothing implemented; no API key created.
+  keyless, ~6 batched requests per subnet, no names). The correctness gap it found (a subnet-blind
+  hotkey check) was fixed and deployed (bug history item 10), and the keyless validator picker was
+  built from the same scan (item 11 table). No taostats API key was ever created.
 - `tools/stake/src/derive.js` — the signature -> wallet derivation (coldkey + transit key). Also
   defines the exact SIWS message text (`signInFields`, `derivationMessage`).
 - `tools/stake/src/app.js` — browser controller: wallet connect, sign-in, route orchestration,
   localStorage resumption. `findProvider()` (~line 75) is wallet-detection; `sign()` (~line 157) is
   the sign-in flow (always goes through the real wallet, including on localhost — see standing
-  constraints); `send()` is the Solana transaction; `runRoute()` drives the Bittensor half. Also
-  owns a "Bridge to Bittensor" / "Bridge to Solana" direction toggle in the page, but the reverse
-  option is `disabled` in the HTML and `planReady` hard-gates on `direction === "forward"` — nothing
-  live can reach the return code below yet.
+  constraints); `send()` is the Solana transaction; `runRoute()` drives the Bittensor half. It also
+  runs the return direction, the holdings view and its stake moves, the validator picker and the
+  subnet directory. The return and the stake moves are open only where `RETURN_OPEN` (local hosts,
+  or `CONFIG.returnLive`, which is false), so production cannot reach them.
+- `tools/stake/src/stake_moves.js` + `src/settle.js` — unstake / re-stake from the coldkey (item 13)
+  and the shared settling of a signed coldkey extrinsic.
+- `tools/stake/src/prices.js` — display-only USD prices from Dexscreener for the review.
+- `tools/stake/usage.mjs` — `npm run usage`: completed routes counted on-chain from the fee wallet.
 - `tools/stake/src/route.js` — the 4-step Bittensor route logic (unwrap/stake/handover/sweep) for
   the forward direction, now netuid-aware (stakes and hands over on whichever subnet the user
   picked, root by default), including the stake-refusal fallback.
