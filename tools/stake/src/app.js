@@ -7,9 +7,10 @@ import { PublicKey } from "@solana/web3.js";
 import { ed25519 } from "@noble/curves/ed25519";
 import { CONFIG } from "./config.js";
 import { derivationMessage, signInFields, walletFromSignature, ss58Decode, ss58Encode, toHex } from "./derive.js";
-import { createClients, getTaoBalance, quoteNativeFee, buildRouteTransaction, removeDust } from "./solana.js";
+import { createClients, getTaoBalance, quoteNativeFee, quotePriorityFee, priorityFeeLamports, buildRouteTransaction, removeDust } from "./solana.js";
 import { findOnSubnet, getDelegate, getFreeBalance, getUidCount } from "./bittensor.js";
 import { getGasPrice } from "./evm.js";
+import { sealRoute, openRoute } from "./pending.js";
 import { finishRoute, transitState, minStakeAmount, stakeGasReserve, sweepFloor } from "./route.js";
 
 const $ = (id) => document.getElementById(id);
@@ -22,7 +23,7 @@ const state = {
   signed: null, mode: "derive",
   coldkey: null, coldkeyAddress: null, mustAck: false,
   plan: "stake", netuid: 0n, netuidValid: true, netuidChecking: false, hotkey: null, amountLd: 0n, reserveRao: CONFIG.defaultReserveRao,
-  gasPrice: null, nativeFee: null, quoteSeq: 0,
+  gasPrice: null, nativeFee: null, priorityMicro: null, quoteSeq: 0,
   running: false, unfinished: null, transitRead: false, direction: "forward",
 };
 
@@ -62,15 +63,13 @@ function setStep(id, s) { $(id).dataset.state = s; }
 const isRejection = (e) => e?.code === 4001 || /reject|cancel|denied|declined/i.test(e?.message || "");
 
 // ── an unfinished route, remembered in this browser only ────────────────────
-// Settings only: plan, validator, destination, amount, the Solana signature. Never a key.
+// Settings only: plan, validator, destination, amount, the Solana signature. Never a key. Sealed with
+// a MAC from the transit key (src/pending.js), so an edited destination is ignored, not honoured.
 const pendingKey = (transit) => `soltao.stake.pending.${transit}`;
-function loadPending(transit) {
-  try {
-    const v = JSON.parse(localStorage.getItem(pendingKey(transit)) || "null");
-    return v && typeof v.coldkey === "string" && /^\d+$/.test(v.amountLd) && /^\d+$/.test(v.reserveRao) ? v : null;
-  } catch { return null; }
+function loadPending(w) {
+  try { return openRoute(JSON.parse(localStorage.getItem(pendingKey(w.transitAddress)) || "null"), w.transitKey); } catch { return null; }
 }
-function savePending(transit, route) { try { localStorage.setItem(pendingKey(transit), JSON.stringify(route)); } catch { /* storage off: the route still finishes while the page is open */ } }
+function savePending(w, route) { try { localStorage.setItem(pendingKey(w.transitAddress), JSON.stringify(sealRoute(route, w.transitKey))); } catch { /* storage off: the route still finishes while the page is open */ } }
 function clearPending(transit) { try { localStorage.removeItem(pendingKey(transit)); } catch { /* nothing stored */ } }
 
 // ── step 1: wallet ──────────────────────────────────────────────────────────
@@ -226,7 +225,7 @@ function togglePhrase() {
 async function checkTransit() {
   const w = state.signed?.wallet;
   if (!w) return;
-  const pending = loadPending(w.transitAddress);
+  const pending = loadPending(w);
   state.transitRead = false;
   try {
     const [t, price] = await Promise.all([
@@ -454,7 +453,7 @@ function renderReview(ready) {
   set("r-gas", () => { const g = bittensorGas(); return g === null ? "—" : `about ${tao(g)}`; });
   // Name the counterparty, not just the amount: the fee is a plain transfer to this address.
   $("r-fee").textContent = CONFIG.fee.lamports ? `${sol(CONFIG.fee.lamports)}${CONFIG.fee.wallet ? ` → ${short(CONFIG.fee.wallet, 4)}` : ""}` : "none";
-  if (!ready) { $("r-lzfee").textContent = "—"; $("r-total").textContent = "—"; }
+  if (!ready) { $("r-lzfee").textContent = "—"; $("r-prio").textContent = "—"; $("r-total").textContent = "—"; }
 }
 
 let quoteTimer;
@@ -465,11 +464,16 @@ function requestQuote() {
   quoteTimer = setTimeout(async () => {
     const seq = ++state.quoteSeq;
     try {
-      const fee = await quoteNativeFee(clients, { user: state.user, transit: state.signed.wallet.transitAddress, amountLd: state.amountLd });
+      const [fee, priority] = await Promise.all([
+        quoteNativeFee(clients, { user: state.user, transit: state.signed.wallet.transitAddress, amountLd: state.amountLd }),
+        // A failed estimate is not worth blocking the route over: fall back to the configured floor.
+        quotePriorityFee(clients.connection).catch(() => CONFIG.priorityFee.minMicroLamports),
+      ]);
       if (seq !== state.quoteSeq) return;
-      state.nativeFee = fee;
-      const total = fee + BigInt(CONFIG.fee.lamports ?? 0n);
-      $("r-lzfee").textContent = sol(fee); $("r-total").textContent = sol(total);
+      state.nativeFee = fee; state.priorityMicro = priority;
+      const prio = priorityFeeLamports(priority);
+      const total = fee + prio + BigInt(CONFIG.fee.lamports ?? 0n);
+      $("r-lzfee").textContent = sol(fee); $("r-prio").textContent = sol(prio); $("r-total").textContent = sol(total);
       const lacking = state.lamports < total + 100_000n;
       if (!LIVE) note("sign-note", "The quote is live; sending opens once the route goes live.", "warn");
       else if (lacking) note("sign-note", `Not enough SOL: you need about ${sol(total + 100_000n)} including the transaction fee.`, "bad");
@@ -502,6 +506,7 @@ async function send() {
     const nativeFee = await quoteNativeFee(clients, { user: state.user, transit: w.transitAddress, amountLd: minAmountLd });
     const { transaction, blockhash, lastValidBlockHeight } = await buildRouteTransaction(clients, {
       user: state.user, transit: w.transitAddress, amountLd: minAmountLd, nativeFee, fee: CONFIG.fee,
+      priorityMicroLamports: state.priorityMicro ?? CONFIG.priorityFee.minMicroLamports, // exactly what the review showed
     });
     const sim = await clients.connection.simulateTransaction(transaction, { sigVerify: false });
     if (sim.value.err) {
@@ -514,7 +519,7 @@ async function send() {
       netuid: String(state.netuid),
       reserveRao: String(state.plan === "stake" ? state.reserveRao : 0n), amountLd: String(minAmountLd), sig: null, at: Date.now(),
     };
-    savePending(w.transitAddress, route);
+    savePending(w, route);
 
     note("sign-note", "check your wallet…"); track("solana", "busy", "waiting for your signature");
     let signature;
@@ -522,7 +527,7 @@ async function send() {
       if (state.provider.signAndSendTransaction) ({ signature } = await state.provider.signAndSendTransaction(transaction));
       else signature = await clients.connection.sendRawTransaction((await state.provider.signTransaction(transaction)).serialize(), { skipPreflight: false });
     } catch (e) { clearPending(w.transitAddress); throw e; }
-    route.sig = signature; savePending(w.transitAddress, route);
+    route.sig = signature; savePending(w, route);
     note("sign-note", "sent");
     $("track-links").replaceChildren(link(`https://solscan.io/tx/${signature}`, "Solscan ↗"), text("  ·  "), link(`https://layerzeroscan.com/tx/${signature}`, "LayerZero Scan ↗"), text("  ·  "), link(`https://taostats.io/account/${state.coldkeyAddress}`, "your Bittensor wallet ↗"));
     track("solana", "busy", "confirming…");

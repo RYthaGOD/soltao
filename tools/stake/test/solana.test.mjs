@@ -5,7 +5,7 @@
 
 import { PublicKey } from "@solana/web3.js";
 import { Options } from "@layerzerolabs/lz-v2-utilities";
-import { createClients, buildRouteTransaction, quoteNativeFee, lzOptions, h160Bytes32, removeDust, getTaoBalance } from "../src/solana.js";
+import { createClients, buildRouteTransaction, quoteNativeFee, lzOptions, h160Bytes32, removeDust, getTaoBalance, quotePriorityFee, priorityFeeLamports } from "../src/solana.js";
 import { CONFIG } from "../src/config.js";
 
 let failures = 0;
@@ -44,7 +44,14 @@ const why = (r) => JSON.stringify(r.value.err) + " " + (r.value.logs || []).filt
   const nativeFee = await quoteNativeFee(clients, { user: HOLDER, transit: TRANSIT, amountLd });
   expect("LayerZero fee is quoted from the TAO program", nativeFee > 0n && nativeFee < 50_000_000n, `${Number(nativeFee) / 1e9} SOL incl. the ${Number(CONFIG.gasDropWei) / 1e18} TAO gas drop`);
 
-  const { transaction } = await buildRouteTransaction(clients, { user: HOLDER, transit: TRANSIT, amountLd, nativeFee, fee: FEE });
+  const priority = await quotePriorityFee(clients.connection);
+  const { minMicroLamports: lo, maxMicroLamports: hi } = CONFIG.priorityFee;
+  expect("priority fee is quoted from recent fees and clamped", priority >= lo && priority <= hi, `${priority} µlamports/CU = ${Number(priorityFeeLamports(priority)) / 1e9} SOL`);
+
+  const { transaction } = await buildRouteTransaction(clients, { user: HOLDER, transit: TRANSIT, amountLd, nativeFee, fee: FEE, priorityMicroLamports: priority });
+  const budget = transaction.message.compiledInstructions.filter((ix) => transaction.message.staticAccountKeys[ix.programIdIndex].toBase58() === "ComputeBudget111111111111111111111111111111");
+  const price = budget.map((ix) => Buffer.from(ix.data)).find((d) => d[0] === 3);
+  expect("the transaction carries exactly the quoted priority fee", price && price.readBigUInt64LE(1) === priority, price ? `${price.readBigUInt64LE(1)}` : "none");
   const size = transaction.serialize().length;
   expect("transaction fits with LayerZero's lookup table alone", size <= 1232, `${size} of 1232 bytes`);
 

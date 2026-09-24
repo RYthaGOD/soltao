@@ -1,5 +1,5 @@
 // Builds the one Solana transaction the page asks the user to sign:
-//   1. compute budget
+//   1. compute budget: the unit limit, and a priority fee shown in the review before signing
 //   2. the canonical TAO OFT `send` to the user's own transit account on Bittensor EVM, asking
 //      LayerZero's executor to drop a little native TAO there for gas
 //   3. soltao's flat fee, a plain SOL transfer (only when configured)
@@ -88,8 +88,20 @@ export async function quoteNativeFee(clients, { user, transit, amountLd }) {
   return q.nativeFee;
 }
 
+/** A priority fee (micro-lamports per compute unit) from recent fees on the TAO program's accounts. */
+export async function quotePriorityFee(connection) {
+  const { minMicroLamports: lo, maxMicroLamports: hi } = CONFIG.priorityFee;
+  const recent = await connection.getRecentPrioritizationFees({ lockedWritableAccounts: [new PublicKey(CONFIG.taoMint), new PublicKey(CONFIG.taoOftEscrow)] });
+  const paid = recent.map((f) => BigInt(f.prioritizationFee)).filter((x) => x > 0n).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  const p75 = paid.length ? paid[Math.floor(paid.length * 0.75)] : 0n;
+  return p75 < lo ? lo : p75 > hi ? hi : p75;
+}
+
+/** What a priority fee costs in lamports: price x the compute limit requested, rounded up. */
+export const priorityFeeLamports = (microLamports, units = CONFIG.computeUnits) => (BigInt(microLamports) * BigInt(units) + 999_999n) / 1_000_000n;
+
 /** The unsigned transaction, ready for the wallet. */
-export async function buildRouteTransaction(clients, { user, transit, amountLd, nativeFee, fee, computeUnits = CONFIG.computeUnits }) {
+export async function buildRouteTransaction(clients, { user, transit, amountLd, nativeFee, fee, priorityMicroLamports = 0n, computeUnits = CONFIG.computeUnits }) {
   const owner = new PublicKey(user);
   const send = await oft.send(
     clients.rpc,
@@ -98,7 +110,9 @@ export async function buildRouteTransaction(clients, { user, transit, amountLd, 
     programs(),
   );
 
-  const instructions = [ComputeBudgetProgram.setComputeUnitLimit({ units: computeUnits }), toWeb3JsInstruction(send.instruction)];
+  const instructions = [ComputeBudgetProgram.setComputeUnitLimit({ units: computeUnits })];
+  if (BigInt(priorityMicroLamports) > 0n) instructions.push(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: BigInt(priorityMicroLamports) }));
+  instructions.push(toWeb3JsInstruction(send.instruction));
   if (fee?.wallet && fee?.lamports) {
     instructions.push(SystemProgram.transfer({ fromPubkey: owner, toPubkey: new PublicKey(fee.wallet), lamports: BigInt(fee.lamports) }));
   }

@@ -249,14 +249,17 @@ This is **not** git-push-triggered. Steps, in order, every time:
       which reopen it inside the wallet app.
     - **Low, fixed: caching.** The hashed script is cached for a year, and the stake HTML for 5
       minutes, in both `deploy/nginx.conf.template` and `_headers`.
-    - **Low, open: no Solana priority fee.** Under congestion the transaction can expire (item 6
-      handled the aftermath, not the cause). Adding `ComputeBudgetProgram.setComputeUnitPrice` from
-      a recent-fees estimate would help, at a small cost to the user.
-    - **Low, open: the saved resume route is unauthenticated.** Anything that can write this origin's
-      `localStorage` (a malicious extension, local access) could change the destination a resume
-      pays out to. The resume screen shows the destination and needs a click, the CSP allows no
-      third-party script and no framing, and the board renders no HTML from API data. A MAC over the
-      saved route, keyed from the signature-derived transit key, would close it.
+    - **Low, fixed: no Solana priority fee.** Under congestion the transaction could expire (item 6
+      handled the aftermath, not the cause). `quotePriorityFee()` in `src/solana.js` takes the 75th
+      percentile of recent fees on the TAO mint and OFT escrow, clamped to 5,000-200,000
+      micro-lamports per unit, so at most 0.00013 SOL. The review shows it as "Solana priority fee"
+      and the transaction carries exactly the quoted value. Live quote on 24 Sep 2026: 125,000,
+      about 0.00008 SOL. Covered by `test/solana.test.mjs` and `test/page.test.mjs`.
+    - **Low, fixed: the saved resume route was unauthenticated.** Anything that could write this
+      origin's `localStorage` could have changed where a resume pays out. `src/pending.js` now seals
+      the route with an HMAC keyed from the transit key (HKDF, `soltao.xyz/pending-route/v1`), which
+      exists only in memory after signing. An edited, foreign or pre-sealing route is ignored, and
+      the page falls back to finishing to the wallet on screen. Covered by `test/pending.test.mjs`.
     - Clean: key derivation, SIWS text, no HTML-injection sinks anywhere, strict CSP, no Polkadot
       code in the forward bundle (checked), secrets dropped on `pagehide`.
 
@@ -289,6 +292,34 @@ or a page's positioning, change these too or the shared link silently starts lyi
   the live check back to back tripped it on 24 Sep 2026. In the browser that shows up as "Failed to
   fetch", not as a CSP violation. Despite the 60 s header, a 2-minute pause was not enough that day
   and a 5-minute fully quiet pause was. Rerun after a quiet pause before suspecting the code.
+
+## Product roast and usage, 24 Sep 2026
+
+A deliberately harsh product critique (roast-my-product) ran alongside the code review in bug
+history item 11. Full report, private to Craig: https://claude.ai/artifact/3ZEokBPmJqJGaZKv8huZWc
+
+**Usage, read from chain.** The fee wallet's entire history (949 transactions) holds exactly one
+completed route, meaning a transaction that both pays soltao's fee and calls the canonical TAO OFT
+program: 23 Sep 2026, 00:23 UTC, Craig's own real-funds test. No outside user has completed a route.
+The fee wallet also carries ~900 unrelated transactions, so revenue cannot be read off it cleanly.
+
+**Score: 55 / 110** ("needs significant work"). Value proposition 6 (x2), crypto necessity 9, target
+user 5, first-time experience 4, core loop 2, moat 3, technical execution 8, naming 4, monetization
+3, timing 5. The engineering is ahead of the product.
+
+**Worst issues, and the plan for each:**
+
+| Issue | Plan |
+|---|---|
+| Nobody has used it, and nothing measured that | `tools/stake/usage.mjs` counts routes on-chain. A dedicated fee wallet is Craig's decision |
+| It only opens one way: stake in, no return through soltao | Milestone 3: wire the built free-TAO return, then unstake and return (Milestone 4) |
+| Subnet stakers must find a valid hotkey on taostats themselves | Validator picker from the on-chain metagraph scan, sort rule stated on the page |
+| The board, the stake route and the SOLTAO coin share one name; the stake page header says "Unofficial community reference" | The stake page states who runs it and what they can and cannot touch |
+| Amounts are TAO and SOL only, never money | Show USD beside fees and amounts, labelled with source and time |
+| No shareable state | `?netuid=` and `?hotkey=` prefill the form |
+
+Sins flagged: phantom users, bridge to nowhere, jargon overload, and MEV bait (fixed in item 11).
+Avoided: token-first thinking; the $SOLTAO gate was rejected and the conflict is disclosed.
 
 ## Current state
 

@@ -16,6 +16,7 @@ import { base58 } from "@scure/base";
 import { VersionedTransaction } from "@solana/web3.js";
 import { derivationMessage, walletFromSignature } from "../src/derive.js";
 import { CONFIG } from "../src/config.js";
+import { sealRoute } from "../src/pending.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const CHROME = process.env.CHROME || "C:/Program Files/Google/Chrome/Application/chrome.exe";
@@ -125,7 +126,7 @@ const clean = async (page, problems, label) => {
   const secret = ed25519.utils.randomPrivateKey();
   const pubkey = base58.encode(ed25519.getPublicKey(secret));
   const expected = walletFromSignature(ed25519.sign(new TextEncoder().encode(derivationMessage(pubkey)), secret), pubkey);
-  const planted = { key: `soltao.stake.pending.${expected.transitAddress}`, value: JSON.stringify({ plan: "deliver", hotkey: null, coldkey: expected.address, reserveRao: "0", amountLd: "100000000", sig: null, at: Date.now() - 120_000 }) };
+  const planted = { key: `soltao.stake.pending.${expected.transitAddress}`, value: JSON.stringify(sealRoute({ plan: "deliver", hotkey: null, coldkey: expected.address, reserveRao: "0", amountLd: "100000000", sig: null, at: Date.now() - 120_000 }, expected.transitKey)) };
   const { page, problems } = await openWith({ pubkey, secret, before: planted });
 
   expect("not-live banner is shown while the fee wallet is unset", !(await hidden(page, "#not-live")));
@@ -231,7 +232,9 @@ const clean = async (page, problems, label) => {
   const lz = parseFloat(await text(page, "#r-lzfee"));
   expect("live LayerZero quote, gas drop included", lz > 0.005 && lz < 0.05, `${lz} SOL`);
   const total = parseFloat(await text(page, "#r-total"));
-  expect("total adds soltao's flat fee", Math.abs(total - lz - Number(CONFIG.fee.lamports) / 1e9) < 1e-9, `${total} SOL`);
+  const prio = parseFloat(await text(page, "#r-prio"));
+  expect("a Solana priority fee is quoted and shown", prio > 0 && prio <= Number(CONFIG.priorityFee.maxMicroLamports * BigInt(CONFIG.computeUnits)) / 1e15 + 1e-9, `${prio} SOL`);
+  expect("total adds the priority fee and soltao's flat fee", Math.abs(total - lz - prio - Number(CONFIG.fee.lamports) / 1e9) < 2e-6, `${total} SOL`);
   expect("review names the plan and the stake", /^Stake about 0\.0\d+ TAO on root/.test(await text(page, "#r-plan")), await text(page, "#r-plan"));
   expect("review shows the transit account", /^0x[0-9a-f]{40}$/.test(await text(page, "#r-via")));
   expect("review estimates Bittensor gas in TAO", /^about 0\.00\d+ TAO$/.test(await text(page, "#r-gas")), await text(page, "#r-gas"));
@@ -299,7 +302,8 @@ const clean = async (page, problems, label) => {
   if (sent) {
     const tx = VersionedTransaction.deserialize(Uint8Array.from(sent));
     const keys = tx.message.staticAccountKeys.map((k) => k.toBase58());
-    expect(`it carries the OFT send and the fee to ${FEE_WALLET}`, keys.includes(CONFIG.taoOftProgram) && keys.includes(FEE_WALLET) && tx.message.compiledInstructions.length === 3, `${tx.serialize().length} bytes`);
+    const budget = tx.message.compiledInstructions.filter((ix) => keys[ix.programIdIndex] === "ComputeBudget111111111111111111111111111111").map((ix) => Buffer.from(ix.data)[0]);
+    expect(`it carries the unit limit, the priority fee, the OFT send and the fee to ${FEE_WALLET}`, keys.includes(CONFIG.taoOftProgram) && keys.includes(FEE_WALLET) && tx.message.compiledInstructions.length === 4 && budget.includes(2) && budget.includes(3), `${tx.serialize().length} bytes`);
     const pending = await page.evaluate(() => window.__pendingAtPrompt);
     const route = pending.length === 1 ? JSON.parse(pending[0]) : null;
     expect("the route was remembered before the wallet opened", route?.plan === "deliver" && route?.amountLd === "100000000", pending.join(" | "));

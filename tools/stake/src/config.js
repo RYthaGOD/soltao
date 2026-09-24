@@ -18,6 +18,10 @@ export const CONFIG = {
   dustLd: 1000n,
   // The OFT send measured 506k compute units in simulation; LayerZero's ULN alone ~379k.
   computeUnits: 650_000,
+  // Solana priority fee, in micro-lamports per compute unit: the 75th percentile of recent fees paid
+  // on the TAO program's own writable accounts, clamped. At the cap, 650k units cost 0.00013 SOL; at
+  // the floor, 0.00000325 SOL. Without it a busy slot can drop the transaction until it expires.
+  priorityFee: { minMicroLamports: 5_000n, maxMicroLamports: 200_000n },
 
   // wTAO on Bittensor EVM: the OFT's other end. Deliveries arrive as this ERC-20.
   wtao: "0x134f59E8B8637FD70ae12f263492B1dc73A25D1e",
