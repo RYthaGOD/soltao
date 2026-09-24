@@ -310,6 +310,22 @@ This is **not** git-push-triggered. Steps, in order, every time:
       every sign-in); arrival detection is balance-based, so another deposit to the same wallet in
       that window could be mistaken for it.
 
+13. **Stake moves from the coldkey: unstake and re-stake (Milestone 4), 24 Sep 2026, gated off in
+    production with the return.** The holdings view in step 2 gives each position "Unstake" and free
+    TAO "Stake" (to step 3's checked subnet and validator), for the derived coldkey only, where
+    `RETURN_OPEN`. `src/stake_moves.js` records the position and free balance, signs the move offline
+    (`prepareStakeMove()` in `substrate.js`: `removeStakeLimit`/`addStakeLimit` with a 2% limit from
+    the swap runtime API's Alpha price on subnets, plain `removeStake`/`addStake` on root), saves it
+    sealed (label "stake-move"), submits, settles it (`src/settle.js`, shared with the return's
+    funding transfer), and judges the outcome from the position and free balance, because an included
+    extrinsic can still fail to dispatch when the price limit is not met. The forward route's refusal
+    message now points at this retry and at the return. Tests: `test/stake_moves.test.mjs` (mocked),
+    `test/substrate_quote_live.test.mjs` (all four calls sign and decode on the live runtime; subnet
+    1 Alpha price 6,818,232 rao, matching the EVM precompile), `test/page.test.mjs` run F (the Stake
+    action's gating, quote and limits; not confirmed). Unstake is not exercised in the browser: a fresh
+    test wallet has no position, and faking one means answering a SCALE runtime call. No real-funds
+    move yet.
+
 ## Link previews and SEO
 
 `index.html` and `stake/index.html` each carry their own `og:`/`twitter:` block; they are hand-

@@ -195,3 +195,5 @@
 /* holdings: what the Bittensor wallet on screen holds, read from the chain on request */
 .holdings { display: grid; gap: 8px; margin-top: 10px; justify-items: start; }
 .holdings #holdings-wrap { width: 100%; display: grid; gap: 8px; }
+.move-panel { width: 100%; display: grid; gap: 8px; padding: 14px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--panel-2); }
+.move-panel h3 { margin: 0; font-size: 14px; }

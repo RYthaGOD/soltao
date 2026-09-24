@@ -99,6 +99,19 @@ Remaining before the toggle can be enabled (updated 24 Sep 2026):
 
 ## Milestone 4: unstake and return
 
+Status (24 Sep 2026): built as two resumable steps, behind the same production gate as the return
+(`CONFIG.returnLive`). "Show what this Bittensor wallet holds" lists every position from the chain;
+each one offers "Unstake" (a full or partial amount, `removeStakeLimit` 2% under the pool price on a
+subnet, plain `removeStake` on root), which leaves free TAO that "Bridge to Solana" then brings home.
+Free TAO offers "Stake" to step 3's checked subnet and validator (`addStakeLimit` 2% over), which is
+also the in-page retry for a subnet stake the chain refused on price. Each move is signed and sealed
+before it is sent and settled on resume (`src/stake_moves.js`, `src/settle.js`), and its outcome is
+judged from the position and free balance, since an included extrinsic can still fail to dispatch.
+Verified: mocked chain (lands once, price refusal uses the nonce but moves nothing, page closed
+after submit, expired transaction); live runtime (all four calls sign and decode to the intended
+call and arguments). Not yet done with real funds. Open: a one-click "unstake and return" that chains
+the two steps.
+
 Goal: fulfill the full promise for staked balances.
 
 Acceptance:

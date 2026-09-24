@@ -2,7 +2,7 @@
 //   node test/substrate_quote_live.test.mjs
 import { cryptoWaitReady, signatureVerify } from "@polkadot/util-crypto";
 import { verify as srVerify } from "@scure/sr25519";
-import { quoteTransfer, prepareTransfer, accountNonce, coldkeySigner, coldkeyPair, getApi, disconnectApi, stakePositions } from "../src/substrate.js";
+import { quoteTransfer, prepareTransfer, accountNonce, coldkeySigner, coldkeyPair, getApi, disconnectApi, stakePositions, prepareStakeMove, alphaPriceRao } from "../src/substrate.js";
 import { publicKeyFromMnemonic } from "../src/derive.js";
 
 const mnemonic = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
@@ -20,6 +20,25 @@ try {
   if (!positions.length || !positions.every((p) => p.stake > 0n && Number.isInteger(p.netuid) && /^5/.test(p.hotkey))) throw new Error(`unexpected positions: ${JSON.stringify(positions, (_, v) => typeof v === "bigint" ? String(v) : v)}`);
   if ((await stakePositions(quote.address)).length !== 0) throw new Error("the empty test coldkey reported stake");
   console.log(`PASS  holdings read ${positions.length} stake positions for a known coldkey, none for an empty one`);
+
+  // Stake moves sign against the live runtime and decode back to exactly the intended call.
+  const HOT = "5HCFWvRqzSHWRPecN7q8J6c7aKQnrCZTMHstPv39xL1wgDHh";
+  const apiForDecode = await getApi();
+  const price1 = await alphaPriceRao(1);
+  if (price1 <= 0n || (await alphaPriceRao(0)) !== 1_000_000_000n) throw new Error("unexpected Alpha price read");
+  const moves = [
+    [{ kind: "unstake", hotkey: HOT, netuid: 1, amount: 123n, limitRao: 980n }, "subtensorModule.removeStakeLimit", [HOT, "1", "123", "980", "false"]],
+    [{ kind: "stake", hotkey: HOT, netuid: 1, amount: 456n, limitRao: 1020n }, "subtensorModule.addStakeLimit", [HOT, "1", "456", "1020", "false"]],
+    [{ kind: "unstake", hotkey: HOT, netuid: 0, amount: 789n, limitRao: 0n }, "subtensorModule.removeStake", [HOT, "0", "789"]],
+    [{ kind: "stake", hotkey: HOT, netuid: 0, amount: 1011n, limitRao: 0n }, "subtensorModule.addStake", [HOT, "0", "1011"]],
+  ];
+  for (const [move, want, args] of moves) {
+    const signed = await prepareStakeMove(mnemonic, move);
+    const call = apiForDecode.createType("Extrinsic", signed.signed).method;
+    const got = `${call.section}.${call.method}`, gotArgs = call.args.map((a) => a.toString());
+    if (got !== want || JSON.stringify(gotArgs) !== JSON.stringify(args)) throw new Error(`${move.kind} on ${move.netuid} built ${got}(${gotArgs}) not ${want}(${args})`);
+  }
+  console.log(`PASS  stake moves sign and decode as removeStakeLimit / addStakeLimit on subnets and plain on root (subnet 1 Alpha price ${price1} rao); not submitted`);
 
   // Resumable funding signs offline first, so its identity can be saved before it is submitted.
   let signedMsg = null;

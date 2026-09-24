@@ -432,7 +432,21 @@ if (want("F")) {
   await clickEl(page, "#holdings-btn");
   await waitText(page, "#holdings-note", /^Read \d\d:\d\d UTC|Could not/, 90_000);
   const holdings = await page.$$eval("#holdings-body tr", (trs) => trs.map((tr) => [...tr.children].map((td) => td.textContent.trim()).join(" | ")));
-  expect("holdings show the wallet's free TAO and its stake positions, read from the chain", holdings[0] === "Free | — | 2 TAO" && /No stake positions\./.test(await text(page, "#holdings-note")), `${holdings.join(" / ")} · ${await text(page, "#holdings-note")}`);
+  expect("holdings show the wallet's free TAO and its stake positions, read from the chain", holdings[0] === "Free | — | 2 TAO | Stake" && /No stake positions\./.test(await text(page, "#holdings-note")), `${holdings.join(" / ")} · ${await text(page, "#holdings-note")}`);
+  // Stake moves from the holdings view (not confirmed: nothing is signed or sent).
+  expect("free TAO offers a Stake action on a local host", (await page.$$eval("#holdings-body tr:first-child button", (b) => b.map((x) => x.textContent))).join() === "Stake");
+  await page.$eval("#holdings-body tr:first-child button", (b) => b.click());
+  expect("staking asks for a checked subnet and validator from step 3 first", /Choose the subnet and a checked validator in step 3 first/.test(await text(page, "#move-quote")) && (await page.$eval("#move-go", (b) => b.disabled)), await text(page, "#move-quote"));
+  await setFieldE(page, "#netuid-in", "1");
+  await setFieldE(page, "#hotkey-in", SUBNET1_OWNER_HOTKEY);
+  await waitText(page, "#hotkey-note", /Validator on subnet 1|Not on subnet|Could not reach/, 90_000);
+  await page.$eval("#holdings-body tr:first-child button", (b) => b.click());
+  await waitText(page, "#move-quote", /Buys about|Could not/, 60_000);
+  expect("…then quotes the Alpha it buys at today's price, with the 2% ceiling", /^Buys about [\d.,]+ Alpha at today's pool price \([\d.]+ TAO each\)\. If the price is more than 2% higher when it lands, nothing is staked\.$/.test(await text(page, "#move-quote")), await text(page, "#move-quote"));
+  expect("…from the free TAO, keeping 0.01 TAO for fees", (await text(page, "#move-title")).startsWith("Stake free TAO on subnet 1 to 5HCFWv") && (await page.$eval("#move-amount", (el) => el.value)) === "1.99", await page.$eval("#move-amount", (el) => el.value));
+  await setFieldE(page, "#move-amount", "3");
+  expect("…and refuses more than that", /More than the 1\.99 available/.test(await text(page, "#move-quote")) && (await page.$eval("#move-go", (b) => b.disabled)), await text(page, "#move-quote"));
+  await clickEl(page, "#move-cancel");
   await setFieldE(page, "#amount", "5");
   await waitText(page, "#amount-note", /More than/);
   expect("an amount above the free TAO is refused", /More than the 2 TAO free in your Bittensor wallet/.test(await text(page, "#amount-note")), await text(page, "#amount-note"));

@@ -1,6 +1,6 @@
 // Resumable free-TAO return: derived Bittensor coldkey -> derived EVM transit -> canonical Solana TAO.
-// This module is intentionally not imported by app.js yet. The production direction toggle stays disabled
-// until this route has passed a small real-funds round trip.
+// Shipped in stake/return.js and run by app.js when the return direction is open (RETURN_OPEN), which
+// production keeps shut until this route has passed a small real-funds round trip.
 //
 // Every mutation (the coldkey funding transfer, the wrap, the OFT send) goes through the same three
 // steps: sign it without sending, hand its identity and signed bytes to `onCheckpoint` (which must
@@ -21,6 +21,7 @@ import { broadcast, getBalance, getGasPrice, signTx, txStatus, waitMined } from 
 import { encode, getWtao, mirrorColdkey } from "./bittensor.js";
 import { accountNonce, coldkeySigner, prepareTransfer, quoteTransfer, submitSigned } from "./substrate.js";
 import { RETURN_GAS_LIMIT, WEI_PER_RAO, encodeOftSend, planReturnFunding, quoteReturn } from "./oft_return.js";
+import { settleSigned } from "./settle.js";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const ceilDiv = (value, divisor) => (BigInt(value) + BigInt(divisor) - 1n) / BigInt(divisor);
@@ -83,18 +84,7 @@ export async function finishFreeReturn({
 
   // ── reconcile whatever the last run may have left in flight ──────────────
   // A funding transfer is included once the coldkey's on-chain nonce has moved past it.
-  const settleFund = async (rec) => {
-    const nonce = BigInt(rec.nonce);
-    if ((await ops.coldkeyNonce(rec.address)) > nonce) return "included";
-    const sub = await ops.submitFund(rec.signed); // identical bytes: at most one can ever be included
-    if (sub.state === "rejected") return (await ops.coldkeyNonce(rec.address)) > nonce ? "included" : "dead";
-    const start = Date.now();
-    while ((await ops.coldkeyNonce(rec.address)) <= nonce) {
-      if (Date.now() - start >= waitMs) throw new Error("the funding transfer is still pending on Bittensor: come back and sign again to finish");
-      await sleep(pollMs);
-    }
-    return "included";
-  };
+  const settleFund = (rec) => settleSigned({ coldkeyNonce: ops.coldkeyNonce, submit: ops.submitFund }, rec, { waitMs, pollMs, what: "funding transfer" });
   // An EVM transaction is settled once mined, or dead once its nonce was used by something else.
   const settleEvm = async (rec) => {
     let s = await ops.evmStatus(rec);

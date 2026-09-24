@@ -112,14 +112,46 @@ export async function stakePositions(address) {
 // that nonce was used. Mortal for ~64 blocks, so a lost transfer provably expires rather than lingering.
 const MORTAL_BLOCKS = 64;
 
-/** A signed funding transfer that has not been sent: { id, signed, nonce, address }. */
-export async function prepareTransfer(mnemonic, toAddress, amountRao, { onSign = null } = {}) {
+/** Any coldkey call, signed offline and not sent: { id, signed, nonce, address }. `build(api)` makes the call. */
+export async function prepareCall(mnemonic, build, { onSign = null } = {}) {
   const api = await getApi();
   const { address, signer } = coldkeySigner(mnemonic, { onSign });
   const nonce = (await api.rpc.system.accountNextIndex(address)).toBigInt();
-  const extrinsic = api.tx.balances.transferAllowDeath(destination(toAddress), BigInt(amountRao));
+  const extrinsic = build(api);
   await extrinsic.signAsync(address, { signer, nonce, era: MORTAL_BLOCKS });
   return { id: extrinsic.hash.toHex(), signed: extrinsic.toHex(), nonce: String(nonce), address };
+}
+
+/** A signed funding transfer that has not been sent: { id, signed, nonce, address }. */
+export const prepareTransfer = (mnemonic, toAddress, amountRao, opts) =>
+  prepareCall(mnemonic, (api) => api.tx.balances.transferAllowDeath(destination(toAddress), BigInt(amountRao)), opts);
+
+/**
+ * A stake move from the coldkey, signed and not sent. Root (netuid 0) has no pool, so it is a plain
+ * addStake/removeStake. A subnet swaps through its Alpha pool, so it is the *Limit form, never a partial
+ * fill: `limitRao` is the worst price accepted in rao of TAO per Alpha (a ceiling when buying, a floor
+ * when selling). Argument order is the live runtime's (test/polkadot.test.mjs, 24 Sep 2026).
+ */
+export function prepareStakeMove(mnemonic, { kind, hotkey, netuid, amount, limitRao }) {
+  const n = Number(netuid), amt = BigInt(amount);
+  return prepareCall(mnemonic, (api) => {
+    const m = api.tx.subtensorModule;
+    if (kind === "stake") return n === 0 ? m.addStake(hotkey, 0, amt) : m.addStakeLimit(hotkey, n, amt, BigInt(limitRao), false);
+    if (kind === "unstake") return n === 0 ? m.removeStake(hotkey, 0, amt) : m.removeStakeLimit(hotkey, n, amt, BigInt(limitRao), false);
+    throw new Error(`unknown stake move ${kind}`);
+  });
+}
+
+/** A subnet's Alpha price in rao of TAO per Alpha, from the chain's swap runtime API. Root is 1 TAO. */
+export async function alphaPriceRao(netuid) {
+  if (Number(netuid) === 0) return 1_000_000_000n;
+  const api = await getApi();
+  return BigInt((await api.call.swapRuntimeApi.currentAlphaPrice(Number(netuid))).toString());
+}
+
+/** The stake one coldkey holds under one hotkey on one netuid (rao on root, Alpha units elsewhere). */
+export async function stakeOf(coldkey, hotkey, netuid) {
+  return (await stakePositions(coldkey)).filter((p) => p.hotkey === hotkey && p.netuid === Number(netuid)).reduce((a, p) => a + p.stake, 0n);
 }
 
 /** Submits signed bytes. "Already imported" means it is in the pool: pending, not an error. */

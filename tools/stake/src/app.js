@@ -180,7 +180,7 @@ async function sign() {
 function setColdkey(publicKey, { mustAck = false } = {}) {
   const before = state.coldkeyAddress;
   state.coldkey = publicKey; state.coldkeyAddress = publicKey ? ss58Encode(publicKey) : null; state.mustAck = mustAck;
-  if (state.coldkeyAddress !== before) { holdingsSeq++; $("holdings-wrap").hidden = true; $("holdings-btn").disabled = false; }
+  if (state.coldkeyAddress !== before) { holdingsSeq++; $("holdings-wrap").hidden = true; $("holdings-btn").disabled = false; move = null; $("move-panel").hidden = true; }
   $("ck-result").hidden = !publicKey || !state.signed;
   if (publicKey) {
     $("coldkey-out").textContent = state.coldkeyAddress;
@@ -570,7 +570,7 @@ const arrivingLd = (amountRao) => BigInt(amountRao) - (BigInt(amountRao) % CONFI
 async function refreshReturn() {
   if (state.direction !== "reverse" || !state.signed) return;
   $("tao-free").replaceChildren(Object.assign(document.createElement("span"), { className: "skel" }));
-  $("tao-staked").textContent = "unstaking comes in a later release";
+  $("tao-staked").textContent = "see step 2 to unstake";
   try {
     const lib = await loadReturnLib();
     state.ret.free = await lib.freeBalance(state.signed.wallet.address);
@@ -607,15 +607,112 @@ async function showHoldings() {
       for (const [t, cls] of [[where], [hotkey], [amount, "num"]]) tr.append(Object.assign(document.createElement("td"), { textContent: t, className: cls || "" }));
       return tr;
     };
+    const action = (label, fn) => {
+      const td = document.createElement("td");
+      if (canMove()) { const b = Object.assign(document.createElement("button"), { type: "button", textContent: label }); b.addEventListener("click", fn); td.append(b); }
+      return td;
+    };
+    const freeRow = row("Free", "—", tao(free));
+    freeRow.append(action("Stake", () => openMove({ kind: "stake", free })));
     $("holdings-body").replaceChildren(
-      row("Free", "—", tao(free)),
-      ...positions.map((p) => row(p.netuid === 0 ? "Staked on root" : `Staked on subnet ${p.netuid}`, short(p.hotkey, 6), stakeAmount(p.stake, p.netuid))),
+      freeRow,
+      ...positions.map((p) => {
+        const tr = row(p.netuid === 0 ? "Staked on root" : `Staked on subnet ${p.netuid}`, short(p.hotkey, 6), stakeAmount(p.stake, p.netuid));
+        tr.append(action("Unstake", () => openMove({ kind: "unstake", hotkey: p.hotkey, netuid: p.netuid, max: p.stake })));
+        return tr;
+      }),
     );
+    resumeMove();
     note("holdings-note", `Read ${new Date().toISOString().slice(11, 16)} UTC. ${positions.length ? `${positions.length} stake position${positions.length === 1 ? "" : "s"}. Subnet stakes are in that subnet's Alpha, root stakes in TAO.` : "No stake positions."}`);
   } catch (e) {
     if (seq === holdingsSeq) note("holdings-note", `Could not read it from Bittensor: ${e.message}`, "bad");
   } finally {
     if (seq === holdingsSeq) $("holdings-btn").disabled = false;
+  }
+}
+
+// ── stake moves from the derived coldkey: unstake a position, or stake free TAO ───────────────────
+// Unstaked TAO is free, so "Bridge to Solana" can then bring it home; staking free TAO is how a subnet
+// stake the chain refused on price is retried at today's price. Gated like the return (RETURN_OPEN)
+// until a real-funds run, and only for the wallet the signature creates: a pasted coldkey cannot sign.
+const canMove = () => RETURN_OPEN && Boolean(state.signed) && state.mode === "derive" && state.coldkeyAddress === state.signed.wallet.address && !state.running;
+const moveKey = (transit) => `soltao.move.pending.${transit}`;
+function loadMove(w) { try { return openRecord(JSON.parse(localStorage.getItem(moveKey(w.transitAddress)) || "null"), w.transitKey, "stake-move"); } catch { return null; } }
+function saveMove(w, value) { try { localStorage.setItem(moveKey(w.transitAddress), JSON.stringify(sealRecord(value, w.transitKey, "stake-move"))); } catch { /* storage off */ } }
+function clearMove(w) { try { localStorage.removeItem(moveKey(w.transitAddress)); } catch { /* nothing stored */ } }
+
+let move = null, moveQuoteSeq = 0;
+function openMove(m) {
+  if (m.kind === "stake") {
+    // Staking reuses step 3's subnet and validator, which have already passed the on-chain checks.
+    if (!state.hotkey || !state.netuidValid || state.netuidChecking) {
+      $("move-panel").hidden = false; move = null;
+      $("move-title").textContent = "Stake free TAO";
+      note("move-quote", "Choose the subnet and a checked validator in step 3 first; this stakes to that choice.", "warn");
+      $("move-go").disabled = true; return;
+    }
+    const reserve = CONFIG.defaultReserveRao; // left free to pay for later moves
+    m = { ...m, hotkey: ss58Encode(state.hotkey), netuid: Number(state.netuid), max: m.free > reserve ? m.free - reserve : 0n };
+  }
+  move = m;
+  const where = m.netuid === 0 ? "root" : `subnet ${m.netuid}`;
+  $("move-title").textContent = m.kind === "stake" ? `Stake free TAO on ${where} to ${short(m.hotkey, 6)}` : `Unstake from ${where} (${short(m.hotkey, 6)})`;
+  $("move-amount-label").textContent = m.kind === "stake" ? "TAO to stake" : `${m.netuid === 0 ? "TAO" : "Alpha"} to unstake`;
+  $("move-amount").value = fmtUnits(m.max, 9, 9).replace(/,/g, "");
+  $("move-go").textContent = "Confirm"; $("move-go").disabled = false; note("move-note", "");
+  $("move-panel").hidden = false;
+  quoteMove();
+}
+async function quoteMove() {
+  if (!move) return;
+  const amt = parseTao($("move-amount").value), seq = ++moveQuoteSeq;
+  if (amt === null || amt <= 0n) { note("move-quote", "Enter an amount like 0.5", "bad"); $("move-go").disabled = true; return; }
+  if (amt > move.max) { note("move-quote", `More than the ${fmtUnits(move.max, 9)} available${move.kind === "stake" ? ` (${tao(CONFIG.defaultReserveRao)} stays free for fees)` : ""}`, "bad"); $("move-go").disabled = true; return; }
+  $("move-go").disabled = false;
+  if (move.netuid === 0) { note("move-quote", move.kind === "stake" ? `Stakes ${tao(amt)} on root.` : `Unstakes ${tao(amt)} from root into free TAO.`); return; }
+  try {
+    const lib = await loadReturnLib(), price = await lib.alphaPriceRao(move.netuid);
+    if (seq !== moveQuoteSeq) return;
+    const pct = Number(CONFIG.subnetPriceToleranceBps) / 100;
+    note("move-quote", move.kind === "stake"
+      ? `Buys about ${fmtUnits((amt * RAO) / price, 9)} Alpha at today's pool price (${fmtUnits(price, 9)} TAO each). If the price is more than ${pct}% higher when it lands, nothing is staked.`
+      : `Sells for about ${tao((amt * price) / RAO)} at today's pool price (${fmtUnits(price, 9)} TAO per Alpha). If the price is more than ${pct}% lower when it lands, nothing is unstaked.`);
+  } catch (e) { if (seq === moveQuoteSeq) note("move-quote", `Could not read the subnet's price: ${e.message}`, "bad"); }
+}
+function resumeMove() {
+  const saved = state.signed && loadMove(state.signed.wallet);
+  if (!saved || !canMove()) return;
+  move = { kind: saved.kind, hotkey: saved.hotkey, netuid: Number(saved.netuid), max: BigInt(saved.amount), resume: saved };
+  $("move-title").textContent = `An earlier ${saved.kind} did not finish`;
+  $("move-amount").value = fmtUnits(BigInt(saved.amount), 9, 9).replace(/,/g, "");
+  note("move-quote", "Finishing checks the transaction that was already signed and sent; it never signs a second one while that one could still land.", "warn");
+  $("move-go").textContent = "Finish it"; $("move-go").disabled = false; $("move-panel").hidden = false;
+}
+async function runMove() {
+  if (!move || state.running || !canMove()) return;
+  const w = state.signed.wallet, m = move;
+  const saved = m.resume ?? null;
+  const amount = saved ? BigInt(saved.amount) : parseTao($("move-amount").value);
+  if (amount === null || amount <= 0n) return;
+  state.running = true; $("move-go").disabled = true; $("move-cancel").disabled = true; gate();
+  const meta = { kind: m.kind, hotkey: m.hotkey, netuid: String(m.netuid), amount: String(amount) };
+  try {
+    const lib = await loadReturnLib();
+    const res = await lib.runStakeMove({
+      mnemonic: w.mnemonic, kind: m.kind, hotkey: m.hotkey, netuid: m.netuid, amount,
+      progress: saved?.progress ?? {},
+      onStep: (_k, s, msg) => note("move-note", msg, s === "bad" ? "warn" : s === "ok" ? "ok" : null),
+      onCheckpoint: (progress) => saveMove(w, { ...meta, progress }),
+    });
+    clearMove(w);
+    if (res.done) note("move-note", m.kind === "unstake" ? `Done: ${stakeAmount(res.moved, m.netuid)} unstaked into free TAO. "Bridge to Solana" can bring it home.` : `Done: now ${stakeAmount(res.stakeAfter, m.netuid)} staked on ${m.netuid === 0 ? "root" : `subnet ${m.netuid}`}.`, "ok");
+    move = null;
+  } catch (e) {
+    note("move-note", `${e.message || e}. Anything already sent is saved, so opening the holdings again continues it.`, "bad");
+  } finally {
+    state.running = false; $("move-cancel").disabled = false; gate();
+    if (move === null) showHoldings().then(() => { $("move-panel").hidden = false; });
+    if (state.direction === "reverse") refreshReturn();
   }
 }
 
@@ -862,7 +959,7 @@ async function runRoute(route, { expectLd = null, fresh = false } = {}) {
     const free = freeBefore !== null && freeAfter !== null && freeAfter > freeBefore ? freeAfter - freeBefore : null;
     track("sweep", "ok", [summary.stakedRao > 0n && `staked ${stakeAmount(summary.stakedRao, netuid)}`, free !== null && `${tao(free)} free`].filter(Boolean).join(" · ") || "done");
     note("track-note", summary.stakedRao > 0n ? `Done. The ${bittensorStakeAsset(netuid)} stake is owned by your coldkey; unstake it any time from any Bittensor wallet.`
-      : summary.stakeRefused ? `Bittensor refused the stake${netuid === 0n ? "" : ` (the validator changed, or subnet ${netuid}'s price moved past the ${Number(CONFIG.subnetPriceToleranceBps) / 100}% limit)`}, so your TAO arrived unstaked. It is free TAO in your wallet: stake it from any Bittensor wallet.` : "Done. It is free TAO in your Bittensor wallet.", summary.stakeRefused ? "warn" : "ok");
+      : summary.stakeRefused ? `Bittensor refused the stake${netuid === 0n ? "" : ` (the validator changed, or subnet ${netuid}'s price moved past the ${Number(CONFIG.subnetPriceToleranceBps) / 100}% limit)`}, so your TAO arrived unstaked. It is free TAO in your wallet: stake it again at today's price, or bring it back to Solana, from "Show what this Bittensor wallet holds" in step 2, or from any Bittensor wallet.` : "Done. It is free TAO in your Bittensor wallet.", summary.stakeRefused ? "warn" : "ok");
       
     $("f-dest").textContent = short(route.coldkey, 6);
     $("f-staked-label").textContent = netuid === 0n ? "Staked TAO" : `Staked Alpha, subnet ${netuid}`;
@@ -938,6 +1035,10 @@ function init() {
   $("hotkey-in").addEventListener("input", onHotkey);
   $("pick-btn").addEventListener("click", openPicker);
   $("holdings-btn").addEventListener("click", showHoldings);
+  $("move-amount").addEventListener("input", quoteMove);
+  $("move-max").addEventListener("click", () => { if (move) { $("move-amount").value = fmtUnits(move.max, 9, 9).replace(/,/g, ""); quoteMove(); } });
+  $("move-go").addEventListener("click", runMove);
+  $("move-cancel").addEventListener("click", () => { if (!state.running) { move = null; $("move-panel").hidden = true; } });
   $("sign").addEventListener("click", send);
   getGasPrice().then((p) => { state.gasPrice = p; gate(); }).catch(() => {});
   addEventListener("beforeunload", (e) => { if (state.running) { e.preventDefault(); e.returnValue = ""; } });
