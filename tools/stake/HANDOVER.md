@@ -390,6 +390,14 @@ This is **not** git-push-triggered. Steps, in order, every time:
     (c) `evm.test.mjs` sees the public RPC answer "already known" for a fresh, unfunded transaction
     from a random key, so "already known" is not proof a transaction is in the pool.
 
+17. **First real-funds return to Solana: landed (24 Sep 2026).** After item 16's fix, "Finish it" swept
+    the stuck 0.01214 TAO to the coldkey, then Craig returned 0.0025 TAO from the live page: wrap
+    `0x9037e199…` and LayerZero send `0x92dcf3cb…` (native fee 0.002859118 TAO) at 10:29:12 UTC, to
+    Solana wallet `3hfdqAw3…nAE3` (recipient decoded from the calldata, dstEid 30168). Delivered by
+    Solana tx `2aC7Uv8A…` at 10:32:27 UTC, about 3 minutes 15 seconds later: the TAO account went from
+    0.030002593 to 0.032502593, exactly the amount. The existing token account was used, so the
+    first-time rent path is still unobserved. Still to do with real funds: unstake / stake moves.
+
 ## Link previews and SEO
 
 `index.html` and `stake/index.html` each carry their own `og:`/`twitter:` block; they are hand-
