@@ -106,12 +106,22 @@ export const txHash = (raw) => bytesToHex(keccak_256(hexToBytes(raw)));
  * before it can possibly land. A resume then reconciles that exact transaction instead of creating
  * a second one. `nonce` defaults to the account's next nonce including the mempool.
  */
-export async function signTx(privateKey, { to, value = 0n, data = "0x", gasLimit, gasPrice, nonce }) {
+export async function signTx(privateKey, { to, value = 0n, data = "0x", gasLimit, gasPrice, nonce }, { receiptOf = (h) => rpc("eth_getTransactionReceipt", [h]), nonceOf = (a) => getNonce(a, "pending") } = {}) {
   const from = evmAddress(privateKey);
-  const n = nonce ?? (await getNonce(from, "pending"));
+  const n = nonce ?? (await nonceOf(from));
   const price = gasPrice ?? (await getGasPrice());
-  const raw = signLegacyTx({ nonce: n, gasPrice: price, gasLimit: BigInt(gasLimit), to, value, data }, privateKey);
-  return { raw, hash: txHash(raw), nonce: n, from };
+  // A sweep empties the transit account, Bittensor then reaps it, and its nonce starts again at 0.
+  // Signing is deterministic and the gas price is usually the same 5 gwei, so a later route can sign
+  // byte-for-byte the transaction an earlier one already ran: the node calls it "already known" and
+  // the old receipt reads as success while nothing moves (seen live 24 Sep 2026: "Finish it" did
+  // nothing). A receipt for a nonce not yet used can only be such a copy, so change the gas limit by
+  // one unit until the hash is new. Only a caller that did not pin the nonce is checked.
+  for (let bump = 0n; ; bump++) {
+    const raw = signLegacyTx({ nonce: n, gasPrice: price, gasLimit: BigInt(gasLimit) + bump, to, value, data }, privateKey);
+    const hash = txHash(raw);
+    if (nonce !== undefined || !(await receiptOf(hash).catch(() => null))) return { raw, hash, nonce: n, from };
+    if (bump >= 16n) throw new Error("could not make a transaction distinct from ones this account already ran");
+  }
 }
 
 /** Broadcasts signed bytes. Re-broadcasting the same bytes is harmless: "already known" is success. */

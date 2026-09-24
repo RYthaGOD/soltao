@@ -3,7 +3,7 @@
 // parse the result.
 
 import { ethers } from "ethers";
-import { signLegacyTx, rlp, rpc, txHash } from "../src/evm.js";
+import { signLegacyTx, signTx, rlp, rpc, txHash } from "../src/evm.js";
 
 let failures = 0;
 const expect = (name, ok, detail = "") => { console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? "  — " + detail : ""}`); if (!ok) failures++; };
@@ -35,6 +35,20 @@ for (const [i, tx] of cases.entries()) {
 for (const [i, tx] of cases.entries()) {
   const ours = signLegacyTx(tx, bytes(key.privateKey));
   expect(`tx ${i + 1} hash is known before broadcast and matches ethers`, txHash(ours) === ethers.Transaction.from(ours).hash);
+}
+
+// A reaped transit account restarts at nonce 0, so the next route can sign byte-for-byte a transaction
+// an earlier route already ran, whose old receipt would then read as success (live, 24 Sep 2026).
+{
+  const pk = bytes(key.privateKey), tx = { to: "0x0000000000000000000000000000000000000800", data: "0xc1a39559", gasLimit: 45_000n, gasPrice: 5_000_000_000n };
+  const old = txHash(signLegacyTx({ ...tx, nonce: 1n }, pk));
+  const seen = new Set([old]), asked = [];
+  const receiptOf = async (h) => { asked.push(h); return seen.has(h) ? { status: "0x1" } : null; };
+  const fresh = await signTx(pk, tx, { receiptOf, nonceOf: async () => 1n });
+  const parsed = ethers.Transaction.from(fresh.raw);
+  expect("a transaction identical to one already mined is re-signed with a new hash", fresh.hash !== old && parsed.gasLimit === 45_001n && parsed.nonce === 1 && asked.length === 2, `${parsed.gasLimit}`);
+  const plain = await signTx(pk, tx, { receiptOf: async () => null, nonceOf: async () => 1n });
+  expect("…and an unseen one is signed as asked", plain.hash === old && ethers.Transaction.from(plain.raw).gasLimit === 45_000n);
 }
 
 // The real RPC must parse it: a zero-balance sender is refused for funds, never for format. A
