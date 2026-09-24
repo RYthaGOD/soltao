@@ -371,6 +371,25 @@ This is **not** git-push-triggered. Steps, in order, every time:
       63,114 rao per block (0.45 TAO a day). Validator take stays in the picker: it is per validator,
       not per subnet.
 
+16. **"Finish it" did nothing: a reaped transit account replayed its own old transaction (24 Sep
+    2026, first real-funds use with the return live, deployed as `6b55d72`).** Craig ran two "Just
+    deliver it" routes. The first (0.002 TAO) unwrapped (nonce 0) and swept with `transferAll(coldkey,
+    false)` (nonce 1, `0xec3c44…`), which emptied the transit account; Bittensor reaped it and its EVM
+    nonce went back to 0. The second (0.01124 TAO) unwrapped at nonce 0 again, then its sweep at nonce 1
+    was byte-for-byte the first route's sweep (same key, same coldkey, same 45,000 gas, same flat 5 gwei,
+    deterministic signing). The node called it "already known", `waitMined` found the OLD receipt, the
+    page reported success, and 0.01214 TAO stayed on transit; every "Finish it" repeated this. Fix:
+    `signTx()` (`evm.js`) now looks up a receipt for the hash it just signed; a receipt for a nonce not
+    yet used can only be such a copy, so it re-signs with the gas limit one higher (up to 16 tries).
+    Covers the forward route and the return (both sign through `signTx`). Test: `evm.test.mjs`.
+    Still open: (a) the sweep's second argument is presumably keep-alive; sending `true` would leave
+    the existential deposit and stop the reaping, but its meaning was not verified, so it is unchanged;
+    (b) after a reap, anyone could re-broadcast an old transaction of this account at a reused nonce.
+    Old sweeps pay the user's own coldkey and old unwraps only unwrap the user's own wTAO, so the
+    realistic harm is small, but an old addStake could stake transit TAO to an earlier route's hotkey;
+    (c) `evm.test.mjs` sees the public RPC answer "already known" for a fresh, unfunded transaction
+    from a random key, so "already known" is not proof a transaction is in the pool.
+
 ## Link previews and SEO
 
 `index.html` and `stake/index.html` each carry their own `og:`/`twitter:` block; they are hand-
