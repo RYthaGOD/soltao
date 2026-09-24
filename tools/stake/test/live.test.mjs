@@ -46,13 +46,17 @@ const waitText = (page, sel, re, timeout = 60_000) => page.waitForFunction((s, r
 const setField = (page, sel, value) => page.$eval(sel, (el, v) => { el.value = v; el.dispatchEvent(new Event("input", { bubbles: true })); }, value);
 
 try {
-  // ── homepage ──
+  // ── soltao.xyz opens the stake page; the board lives at /board/ ──
   {
-    const { page, problems, status } = await open("/");
+    const res = await fetch(`${SITE}/?live-check=1`, { redirect: "manual" });
+    expect("/ redirects to the stake page", res.status === 302 && new URL(res.headers.get("location"), SITE).pathname === "/stake/", `${res.status} ${res.headers.get("location")}`);
+  }
+  {
+    const { page, problems, status } = await open("/board/");
     await new Promise((r) => setTimeout(r, 3000));
-    expect("homepage loads", status === 200, `HTTP ${status}`);
-    expect("homepage: no page or console errors", problems.length === 0, problems.join(" | "));
-    expect("homepage: no CSP violations", (await page.evaluate(() => window.__csp)).length === 0, (await page.evaluate(() => window.__csp)).join(" | "));
+    expect("the board loads at /board/", status === 200, `HTTP ${status}`);
+    expect("board: no page or console errors", problems.length === 0, problems.join(" | "));
+    expect("board: no CSP violations", (await page.evaluate(() => window.__csp)).length === 0, (await page.evaluate(() => window.__csp)).join(" | "));
     await page.close();
   }
 

@@ -446,6 +446,20 @@ This is **not** git-push-triggered. Steps, in order, every time:
       account from the live page, confirming Chutes credits it, with Craig's approval. Then flip the
       flag, build, deploy.
 
+19. **Staking is the front page; plainer wording (24 Sep 2026, not deployed).** After the product roast
+    ("the product is hidden behind a warning"): `soltao.xyz/` now answers 302 → `/stake/` (nginx
+    `location = /`; `_redirects` for Cloudflare/Netlify; the root `index.html` is a meta-refresh fallback
+    for GitHub Pages), and the board moved to `/board/` (`board/index.html`, assets via `../`, `app.js`
+    fetches `pairs.json` relative to itself, `tools/fallback.js` and the Dockerfile follow it, canonical
+    and `og:url` now `/board/`). The stake page itself did not move, so its relative asset paths and the
+    SIWS message (`uri: https://soltao.xyz/stake/`, unchanged) are untouched: **every user's derived
+    wallet is the same as before.** Copy: each step says one short thing; the long explanations are kept
+    word for word behind `<details class="info">` toggles (an "i" icon, native HTML, no script), and
+    the trust section is collapsed. Every element id is unchanged. Checked: the real nginx config serves
+    `/` 302 (query kept), `/board` 301, `/board/`, `/stake/`, `/pairs.json` 200; headless loads of
+    `/`, `/stake/` (desktop and phone) and `/board/` show no errors, and the board loads `pairs.json`.
+    `test/live.test.mjs` now checks the redirect and the board at `/board/`.
+
 ## Link previews and SEO
 
 `index.html` and `stake/index.html` each carry their own `og:`/`twitter:` block; they are hand-

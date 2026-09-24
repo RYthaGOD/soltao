@@ -314,7 +314,7 @@ async function onNetuid() {
   state.netuid = 0n;
   if (!v) {
     $("netuid-in").removeAttribute("aria-invalid");
-    note("netuid-note", "Default is 0 (Root network). Other subnets will mint Alpha tokens.");
+    note("netuid-note", "0 is Root, the default.");
     recheckHotkey();
     return gate();
   }
@@ -469,7 +469,7 @@ const shareLink = (netuid, hotkey) => Object.assign(document.createElement("a"),
 async function onHotkey() {
   const v = $("hotkey-in").value.trim(); const seq = ++hotkeySeq;
   state.hotkey = null;
-  if (!v) { $("hotkey-in").removeAttribute("aria-invalid"); noteHtml("hotkey-note", [text("Pick one yourself; this page does not choose for you. Validators and their take are listed on "), link("https://taostats.io/validators", "taostats ↗"), text(".")]); return gate(); }
+  if (!v) { $("hotkey-in").removeAttribute("aria-invalid"); note("hotkey-note", "Pick one from the list, or paste its address."); return gate(); }
   let pk;
   try { pk = ss58Decode(v); } catch (e) { $("hotkey-in").setAttribute("aria-invalid", "true"); note("hotkey-note", e.message, "bad"); return gate(); }
   if (state.coldkey && toHex(pk) === toHex(state.coldkey)) { $("hotkey-in").setAttribute("aria-invalid", "true"); note("hotkey-note", "That is your coldkey. Paste the validator's hotkey.", "bad"); return gate(); }

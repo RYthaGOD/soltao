@@ -177,7 +177,7 @@ function stamp(ts) {
 /* ── data ──────────────────────────────────────────────────────────────────── */
 
 async function loadRegistry() {
-  const res = await fetch('pairs.json', { cache: 'no-cache' });
+  const res = await fetch(new URL('pairs.json', import.meta.url), { cache: 'no-cache' });
   if (!res.ok) throw new Error('registry ' + res.status);
   return res.json();
 }

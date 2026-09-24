@@ -201,3 +201,23 @@
 .dir-controls input, .dir-controls select { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line-2); border-radius: 8px; padding: 7px 10px; min-width: 0; }
 .dir-controls input { flex: 1 1 200px; }
 .dir-controls input:focus, .dir-controls select:focus { border-color: var(--green-mid); outline: none; }
+
+/* ── info toggles: the short line stays visible, the explanation opens in place ── */
+.stake-trust { margin: 0; color: var(--ink-3); font-size: 13.5px; letter-spacing: 0.01em; }
+.info { max-width: 72ch; margin: 2px 0 6px; }
+.info > summary { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; list-style: none; color: var(--ink-3); font-size: 13px; padding: 4px 0; min-height: 28px; border-radius: 6px; }
+.info > summary::-webkit-details-marker { display: none; }
+.info > summary:hover, .info[open] > summary { color: var(--ink-2); }
+.info > summary:focus-visible { outline: 2px solid var(--green-mid); outline-offset: 2px; }
+.info-i { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line-3); font: italic 600 11px/1 Georgia, "Times New Roman", serif; color: var(--green-txt); flex: none; }
+.info[open] .info-i { background: var(--green-dim); border-color: var(--green-mid); }
+.info-body { margin: 6px 0 4px; padding: 10px 14px; border-left: 2px solid var(--line-3); color: var(--ink-2); font-size: 13.5px; line-height: 1.6; display: grid; gap: 8px; }
+.info-body p { margin: 0; }
+.info-body a { color: var(--green-txt); }
+.info-body .stake-who { border: 0; padding: 0; }
+.info-block > summary { font-size: 14px; }
+.info-block .info-body { border-left: 0; padding: 12px 0 0; }
+.info-row { display: flex; flex-wrap: wrap; gap: 0 22px; align-items: flex-start; }
+.info-row .info { margin: 0; }
+.info-row .info[open] { flex-basis: 100%; }
+.direction-toggle { margin-top: 20px; }

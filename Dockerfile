@@ -12,6 +12,7 @@ COPY deploy/nginx.conf.template /etc/nginx/templates/default.conf.template
 WORKDIR /usr/share/nginx/html
 RUN rm -f ./*
 COPY index.html styles.css app.js pairs.json ./
+COPY board/index.html ./board/
 COPY favicon.svg logo.png og.png og.html robots.txt sitemap.xml ./
 COPY stake/index.html stake/stake.css stake/stake.js stake/stake.js.LEGAL.txt stake/return.js stake/return.js.LEGAL.txt ./stake/
 
