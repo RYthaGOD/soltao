@@ -27,6 +27,7 @@ const state = {
   plan: "stake", netuid: 0n, netuidValid: true, netuidChecking: false, hotkey: null, amountLd: 0n, reserveRao: CONFIG.defaultReserveRao,
   gasPrice: null, nativeFee: null, priorityMicro: null, quoteSeq: 0,
   running: false, unfinished: null, transitRead: false, direction: "forward",
+  chutesPrefill: null, // a Chutes payment address from a ?chutes= link
   ret: { free: null, quote: null }, // the return direction: coldkey free TAO (rao), the current quote
 };
 
@@ -181,7 +182,7 @@ async function sign() {
 function setColdkey(publicKey, { mustAck = false } = {}) {
   const before = state.coldkeyAddress;
   state.coldkey = publicKey; state.coldkeyAddress = publicKey ? ss58Encode(publicKey) : null; state.mustAck = mustAck;
-  if (state.coldkeyAddress !== before) { holdingsSeq++; $("holdings-wrap").hidden = true; $("holdings-btn").disabled = false; move = null; $("move-panel").hidden = true; }
+  if (state.coldkeyAddress !== before) { holdingsSeq++; $("holdings-wrap").hidden = true; $("holdings-btn").disabled = false; move = null; $("move-panel").hidden = true; pay = null; $("pay-panel").hidden = true; }
   $("ck-result").hidden = !publicKey || !state.signed;
   if (publicKey) {
     $("coldkey-out").textContent = state.coldkeyAddress;
@@ -669,7 +670,13 @@ async function showHoldings() {
       return td;
     };
     const freeRow = row("Free", "—", tao(free));
-    freeRow.append(action("Stake", () => openMove({ kind: "stake", free })));
+    const freeActions = action("Stake", () => openMove({ kind: "stake", free }));
+    if (canPay()) {
+      const b = Object.assign(document.createElement("button"), { type: "button", textContent: "Top up Chutes" });
+      b.addEventListener("click", () => openPay(free));
+      freeActions.append(" ", b);
+    }
+    freeRow.append(freeActions);
     $("holdings-body").replaceChildren(
       freeRow,
       ...positions.map((p) => {
@@ -679,6 +686,7 @@ async function showHoldings() {
       }),
     );
     resumeMove();
+    resumePay();
     note("holdings-note", `Read ${new Date().toISOString().slice(11, 16)} UTC. ${positions.length ? `${positions.length} stake position${positions.length === 1 ? "" : "s"}. Subnet stakes are in that subnet's Alpha, root stakes in TAO.` : "No stake positions."}`);
   } catch (e) {
     if (seq === holdingsSeq) note("holdings-note", `Could not read it from Bittensor: ${e.message}`, "bad");
@@ -711,6 +719,7 @@ function openMove(m) {
     m = { ...m, hotkey: ss58Encode(state.hotkey), netuid: Number(state.netuid), max: m.free > reserve ? m.free - reserve : 0n };
   }
   move = m;
+  $("pay-panel").hidden = true; pay = null;
   const where = m.netuid === 0 ? "root" : `subnet ${m.netuid}`;
   $("move-title").textContent = m.kind === "stake" ? `Stake free TAO on ${where} to ${short(m.hotkey, 6)}` : `Unstake from ${where} (${short(m.hotkey, 6)})`;
   $("move-amount-label").textContent = m.kind === "stake" ? "TAO to stake" : `${m.netuid === 0 ? "TAO" : "Alpha"} to unstake`;
@@ -788,6 +797,99 @@ async function runMove() {
     if (state.direction === "reverse" && chain === null) refreshReturn();
   }
   if (chain !== null) await returnAfterUnstake(chain);
+}
+
+// ── top up Chutes: free TAO from the derived coldkey to a pasted Chutes payment address ───────────
+// The only place the page pays an address that is not the user's own, so it is its own action with its
+// own acknowledgement, never part of a route. Signed, sealed and settled like a stake move
+// (src/payments.js), so a closed tab resumes the same transfer instead of paying twice.
+const canPay = () => CHUTES_OPEN && canMove();
+const payKey = (transit) => `soltao.pay.pending.${transit}`;
+function loadPay(w) { try { return openRecord(JSON.parse(localStorage.getItem(payKey(w.transitAddress)) || "null"), w.transitKey, "chutes-pay"); } catch { return null; } }
+function savePay(w, value) { try { localStorage.setItem(payKey(w.transitAddress), JSON.stringify(sealRecord(value, w.transitKey, "chutes-pay"))); } catch { /* storage off */ } }
+function clearPay(w) { try { localStorage.removeItem(payKey(w.transitAddress)); } catch { /* nothing stored */ } }
+
+let pay = null, payQuoteSeq = 0, payTimer = null;
+function payeeProblem(to) {
+  if (!to) return "Paste your Chutes payment address.";
+  try { ss58Decode(to); } catch (e) { return `${e.message}.`; }
+  if (to === state.signed.wallet.address) return "That is this wallet's own address, not your Chutes one.";
+  return null;
+}
+function openPay(free) {
+  const reserve = CONFIG.defaultReserveRao; // left free to pay for later moves
+  pay = { max: free > reserve ? free - reserve : 0n };
+  $("pay-to").value = $("pay-to").value || state.chutesPrefill || "";
+  $("pay-amount").value = "";
+  $("pay-ack").checked = false;
+  $("pay-go").textContent = "Send to Chutes"; note("pay-note", "");
+  $("move-panel").hidden = true; move = null;
+  $("pay-panel").hidden = false;
+  quotePay();
+}
+function quotePay() {
+  if (!pay || pay.resume) return;
+  clearTimeout(payTimer);
+  pay.quoted = false; gatePay();
+  payTimer = setTimeout(quotePayNow, 400); // the quote reads the chain; let typing settle first
+}
+function gatePay() {
+  if (!pay) return;
+  $("pay-go").disabled = state.running || !(pay.resume || (pay.quoted && $("pay-ack").checked));
+}
+async function quotePayNow() {
+  if (!pay || pay.resume) return;
+  const seq = ++payQuoteSeq, lib = await loadReturnLib();
+  if (!pay || seq !== payQuoteSeq) return;
+  const to = $("pay-to").value.trim(), amt = parseTao($("pay-amount").value);
+  const problem = payeeProblem(to);
+  $("pay-to").setAttribute("aria-invalid", String(Boolean(problem && to)));
+  if (problem) { note("pay-quote", problem, to ? "bad" : null); return; }
+  if (amt === null || amt <= 0n) { note("pay-quote", "Enter an amount like 0.5"); return; }
+  if (amt < lib.CHUTES_MIN_RAO) { note("pay-quote", `Send at least ${tao(lib.CHUTES_MIN_RAO)}: Chutes ignores smaller payments.`, "bad"); return; }
+  if (amt > pay.max) { note("pay-quote", `More than the ${tao(pay.max)} available (${tao(CONFIG.defaultReserveRao)} stays free for fees).`, "bad"); return; }
+  try {
+    const q = await lib.quoteTransfer(state.signed.wallet.mnemonic, to, amt);
+    if (seq !== payQuoteSeq) return;
+    if (q.remainingRao < 0n) { note("pay-quote", `That plus the ${tao(q.feeRao)} network fee is more than this wallet holds.`, "bad"); return; }
+    pay.quoted = true; gatePay();
+    note("pay-quote", `Sends ${tao(amt)} to ${short(to, 6)}. Bittensor network fee about ${tao(q.feeRao)}; ${tao(q.remainingRao)} stays free here. Chutes adds it to your balance in dollars at the TAO price when it lands, usually within a minute.`);
+  } catch (e) { if (seq === payQuoteSeq) note("pay-quote", `Could not read the fee from Bittensor: ${e.message}`, "bad"); }
+}
+function resumePay() {
+  const saved = state.signed && loadPay(state.signed.wallet);
+  if (!saved || !canPay()) return;
+  pay = { resume: saved, max: BigInt(saved.amount) };
+  $("pay-to").value = saved.to; $("pay-amount").value = fmtUnits(BigInt(saved.amount), 9, 9).replace(/,/g, "");
+  note("pay-quote", "An earlier top-up did not finish. Finishing checks the transfer that was already signed and sent; it never signs a second one while that one could still land.", "warn");
+  $("pay-go").textContent = "Finish it"; $("pay-go").disabled = false; $("pay-panel").hidden = false;
+}
+async function runPay() {
+  if (!pay || state.running || !canPay()) return;
+  const w = state.signed.wallet, saved = pay.resume ?? null;
+  const to = saved ? saved.to : $("pay-to").value.trim();
+  const amount = saved ? BigInt(saved.amount) : parseTao($("pay-amount").value);
+  if (!saved && (payeeProblem(to) || amount === null || !$("pay-ack").checked)) return;
+  state.running = true; $("pay-go").disabled = true; $("pay-cancel").disabled = true; gate();
+  const meta = { to, amount: String(amount) };
+  try {
+    const lib = await loadReturnLib();
+    const res = await lib.runPayment({
+      mnemonic: w.mnemonic, to, amount, progress: saved?.progress ?? {},
+      onStep: (_k, s, msg) => note("pay-note", msg, s === "bad" ? "warn" : s === "ok" ? "ok" : null),
+      onCheckpoint: (progress) => savePay(w, { ...meta, progress }),
+    });
+    clearPay(w);
+    if (res.done) note("pay-note", `Sent ${tao(res.sent)} to your Chutes payment address. Chutes credits it in dollars once it sees the transfer; check your balance there.`, "ok");
+    pay = null;
+  } catch (e) {
+    note("pay-note", `${e.message || e}. Anything already sent is saved, so opening the holdings again continues it.`, "bad");
+  } finally {
+    state.running = false; $("pay-cancel").disabled = false; gate();
+    if (pay === null) showHoldings().then(() => { $("pay-panel").hidden = false; });
+    else if (loadPay(w)) resumePay(); // signed before it failed: only "Finish it" from here
+    else quotePay();
+  }
 }
 
 // What a chained return leaves free on the coldkey, so a later unstake or stake can pay its own fee.
@@ -1114,6 +1216,8 @@ const CANONICAL = "soltao.xyz";
 const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])$/;
 // The return direction stays shut on soltao.xyz until CONFIG.returnLive; local hosts open it for testing.
 const RETURN_OPEN = CONFIG.returnLive === true || LOCAL.test(location.hostname);
+// "Top up Chutes" stays shut on soltao.xyz until CONFIG.chutesLive; local hosts open it for testing.
+const CHUTES_OPEN = CONFIG.chutesLive === true || LOCAL.test(location.hostname);
 function onCanonicalHost() {
   if (location.hostname === CANONICAL || LOCAL.test(location.hostname)) return true;
   location.replace(`https://${CANONICAL}/stake/${location.search}${location.hash}`);
@@ -1174,6 +1278,12 @@ function init() {
   $("move-max").addEventListener("click", () => { if (move) { $("move-amount").value = fmtUnits(move.max, 9, 9).replace(/,/g, ""); quoteMove(); } });
   $("move-go").addEventListener("click", runMove);
   $("move-cancel").addEventListener("click", () => { if (!state.running) { move = null; $("move-panel").hidden = true; } });
+  $("pay-to").addEventListener("input", quotePay);
+  $("pay-amount").addEventListener("input", quotePay);
+  $("pay-ack").addEventListener("change", gatePay);
+  $("pay-max").addEventListener("click", () => { if (pay && !pay.resume) { $("pay-amount").value = fmtUnits(pay.max, 9, 9).replace(/,/g, ""); quotePay(); } });
+  $("pay-go").addEventListener("click", runPay);
+  $("pay-cancel").addEventListener("click", () => { if (!state.running) { pay = null; $("pay-panel").hidden = true; } });
   $("sign").addEventListener("click", send);
   getGasPrice().then((p) => { state.gasPrice = p; gate(); }).catch(() => {});
   addEventListener("beforeunload", (e) => { if (state.running) { e.preventDefault(); e.returnValue = ""; } });
@@ -1191,6 +1301,10 @@ function prefillFromLink() {
   const netuid = (q.get("netuid") || "").trim(), hotkey = (q.get("hotkey") || "").trim();
   if (/^\d{1,5}$/.test(netuid)) { $("netuid-in").value = netuid; onNetuid(); }
   if (/^5[1-9A-HJ-NP-Za-km-z]{47}$/.test(hotkey)) { $("hotkey-in").value = hotkey; if (!netuid || netuid === "0") onHotkey(); }
+  // ?chutes=5F… (a Chutes payment address) pre-fills "Top up Chutes" once the user opens it; it is
+  // still shown, checked and acknowledged there like a pasted one.
+  const chutes = (q.get("chutes") || "").trim();
+  if (/^5[1-9A-HJ-NP-Za-km-z]{47}$/.test(chutes)) state.chutesPrefill = chutes;
   // With a subnet in the link, onNetuid re-checks the hotkey once the subnet is confirmed.
 }
 

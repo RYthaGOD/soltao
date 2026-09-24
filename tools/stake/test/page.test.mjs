@@ -464,7 +464,7 @@ if (want("F")) {
   await clickEl(page, "#holdings-btn");
   await waitText(page, "#holdings-note", /^Read \d\d:\d\d UTC|Could not/, 90_000);
   const holdings = await page.$$eval("#holdings-body tr", (trs) => trs.map((tr) => [...tr.children].map((td) => td.textContent.trim()).join(" | ")));
-  expect("holdings show the wallet's free TAO and its stake positions, read from the chain", holdings[0] === "Free | — | 2 TAO | Stake" && holdings.length === 3 && holdings.slice(1).every((h) => /^Staked on subnet 1 \| 5\w+…\w+ \| [\d,.]+ Alpha \| Unstake$/.test(h)) && /2 stake positions\. Subnet stakes are in that subnet's Alpha/.test(await text(page, "#holdings-note")), `${holdings.join(" / ")} · ${await text(page, "#holdings-note")}`);
+  expect("holdings show the wallet's free TAO and its stake positions, read from the chain", holdings[0] === "Free | — | 2 TAO | Stake Top up Chutes" && holdings.length === 3 && holdings.slice(1).every((h) => /^Staked on subnet 1 \| 5\w+…\w+ \| [\d,.]+ Alpha \| Unstake$/.test(h)) && /2 stake positions\. Subnet stakes are in that subnet's Alpha/.test(await text(page, "#holdings-note")), `${holdings.join(" / ")} · ${await text(page, "#holdings-note")}`);
   // Unstake, then return: offered on an unstake, and priced (sale and bridge fee) before anything is signed.
   await page.$eval("#holdings-body tr:nth-child(3) button", (b) => b.click());
   await waitText(page, "#move-quote", /Sells for about|Could not/, 60_000);
@@ -475,7 +475,7 @@ if (want("F")) {
   expect("…which, when chosen, adds the live bridge fee and what stays free", /Then that TAO goes to your Solana wallet as canonical TAO, less the LayerZero fee \(about [\d.]+ TAO today\) and a little Bittensor gas; 0\.001 TAO stays free for later fees\./.test(await text(page, "#move-quote")), await text(page, "#move-quote"));
   await clickEl(page, "#move-cancel");
   // Stake moves from the holdings view (not confirmed: nothing is signed or sent).
-  expect("free TAO offers a Stake action on a local host", (await page.$$eval("#holdings-body tr:first-child button", (b) => b.map((x) => x.textContent))).join() === "Stake");
+  expect("free TAO offers Stake and Top up Chutes on a local host", (await page.$$eval("#holdings-body tr:first-child button", (b) => b.map((x) => x.textContent))).join() === "Stake,Top up Chutes");
   await page.$eval("#holdings-body tr:first-child button", (b) => b.click());
   expect("staking asks for a checked subnet and validator from step 3 first", /Choose the subnet and a checked validator in step 3 first/.test(await text(page, "#move-quote")) && (await page.$eval("#move-go", (b) => b.disabled)), await text(page, "#move-quote"));
   await setFieldE(page, "#netuid-in", "1");
@@ -488,6 +488,26 @@ if (want("F")) {
   await setFieldE(page, "#move-amount", "3");
   expect("…and refuses more than that", /More than the 1\.99 available/.test(await text(page, "#move-quote")) && (await page.$eval("#move-go", (b) => b.disabled)), await text(page, "#move-quote"));
   await clickEl(page, "#move-cancel");
+  // Top up Chutes (not confirmed: nothing is signed or sent).
+  await page.$eval("#holdings-body tr:first-child button:nth-of-type(2)", (b) => b.click());
+  expect("Top up Chutes opens its own panel, closed until quoted and acknowledged", !(await page.$eval("#pay-panel", (el) => el.hidden)) && (await page.$eval("#move-panel", (el) => el.hidden)) && (await page.$eval("#pay-go", (b) => b.disabled)));
+  await setFieldE(page, "#pay-to", await text(page, "#coldkey-out"));
+  await waitText(page, "#pay-quote", /own address/, 10_000);
+  expect("…refuses the wallet's own address", /own address/.test(await text(page, "#pay-quote")), await text(page, "#pay-quote"));
+  await setFieldE(page, "#pay-to", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQZ");
+  await setFieldE(page, "#pay-amount", "0.005");
+  await waitText(page, "#pay-quote", /at least/, 10_000);
+  expect("…refuses less than Chutes' 0.01 TAO dust floor", /Send at least 0\.01 TAO: Chutes ignores smaller payments/.test(await text(page, "#pay-quote")), await text(page, "#pay-quote"));
+  await setFieldE(page, "#pay-amount", "3");
+  await waitText(page, "#pay-quote", /More than/, 10_000);
+  expect("…and more than the free TAO, keeping 0.01 TAO for fees", /More than the 1\.99 TAO available/.test(await text(page, "#pay-quote")) && (await page.$eval("#pay-go", (b) => b.disabled)), await text(page, "#pay-quote"));
+  await setFieldE(page, "#pay-amount", "0.5");
+  await waitText(page, "#pay-quote", /^Sends|Could not/, 60_000);
+  expect("…quotes the transfer and its network fee from the chain", /^Sends 0\.5 TAO to 5Grwva…\w+\. Bittensor network fee about [\d.]+ TAO; [\d.]+ TAO stays free here\./.test(await text(page, "#pay-quote")), await text(page, "#pay-quote"));
+  expect("…and stays closed until the address is acknowledged", await page.$eval("#pay-go", (b) => b.disabled));
+  await clickEl(page, "#pay-ack");
+  expect("…then opens", !(await page.$eval("#pay-go", (b) => b.disabled)));
+  await clickEl(page, "#pay-cancel");
   await setFieldE(page, "#amount", "5");
   await waitText(page, "#amount-note", /More than/);
   expect("an amount above the free TAO is refused", /More than the 2 TAO free in your Bittensor wallet/.test(await text(page, "#amount-note")), await text(page, "#amount-note"));

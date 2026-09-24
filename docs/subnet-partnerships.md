@@ -63,7 +63,13 @@ product.
 4. **We already route real funds.** soltao has carried real-funds root stakes and a real-funds
    return to Solana (see `tools/stake/HANDOVER.md`).
 
-### What to build before reaching out (a proposal, not built yet)
+### Built: "Top up Chutes" on `/stake/` (switched off on the live site until one real test top-up)
+
+Beside the free TAO in the holdings view, with the user's Chutes payment address pasted or taken
+from a `soltao.xyz/stake/?chutes=5…` link. See item 18 in `tools/stake/HANDOVER.md`. The notes
+below are the design it follows.
+
+### Original design notes
 
 - A **"Top up Chutes" destination** on `/stake/`. The user pastes their Chutes payment address,
   shown on their Chutes account page. The route lands TAO in the user's own derived coldkey as it

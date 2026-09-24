@@ -85,6 +85,9 @@ main "Solana TAO Board" page which stays no-wallet-connect).
   or `CONFIG.returnLive`, which is false), so production cannot reach them.
 - `tools/stake/src/stake_moves.js` + `src/settle.js` — unstake / re-stake from the coldkey (item 13)
   and the shared settling of a signed coldkey extrinsic.
+- `tools/stake/src/payments.js` — "Top up Chutes" (item 18): free TAO from the coldkey to a pasted
+  Chutes payment address, signed, sealed (label "chutes-pay") and settled like a stake move. Gated by
+  `CONFIG.chutesLive` (false) on soltao.xyz; open on local hosts.
 - `tools/stake/src/prices.js` — display-only USD prices from Dexscreener for the review.
 - `tools/stake/src/fit.js` — how much of an unstake's freed TAO a chained return can send (item 15).
 - `tools/stake/usage.mjs` — `npm run usage`: completed routes counted on-chain from the fee wallet.
@@ -397,6 +400,31 @@ This is **not** git-push-triggered. Steps, in order, every time:
     Solana tx `2aC7Uv8A…` at 10:32:27 UTC, about 3 minutes 15 seconds later: the TAO account went from
     0.030002593 to 0.032502593, exactly the amount. The existing token account was used, so the
     first-time rent path is still unobserved. Still to do with real funds: unstake / stake moves.
+
+18. **Top up Chutes (subnet 64) from the holdings view, 24 Sep 2026, built, not deployed, gated off
+    in production (`CONFIG.chutesLive: false`).** Partnership groundwork (`docs/subnet-partnerships.md`).
+    Free TAO in the derived coldkey gets a "Top up Chutes" action beside "Stake": paste the account's
+    Chutes payment address (or arrive with `?chutes=5…`, which only pre-fills it), enter an amount,
+    tick an acknowledgement, send. It is a plain `balances.transferAllowDeath` from the coldkey
+    (`runPayment()` in `src/payments.js`, through `prepareTransfer`/`settleSigned`), never part of the
+    route, so the route's own rule (it pays only the user's coldkey) is unchanged.
+    - *What Chutes does with it* (read in `chutesai/chutes-api` at `3b5609f`, 3 Sep 2026): its payment
+      watcher credits a `Balances.Transfer` to a user's payment address at the TAO price of that block
+      and ignores anything under 0.01 TAO as dust (`DUST_THRESHOLD_RAO`), so the page refuses less.
+      Its autostaker then stakes the TAO into SN64 and burns the Alpha. Chutes' own setup text: "The
+      payment address accepts both TAO and subnet alpha tokens to top up your balance."
+    - *Checks:* SS58 with checksum, not the wallet's own address, at least 0.01 TAO, at most the free
+      balance less the 0.01 TAO reserve, and the live network fee must fit. The page cannot know an
+      address is Chutes'; it says so, and the send button stays shut until that is acknowledged.
+    - *Tests:* `test/payments.test.mjs` (in `npm test`; resumes never pay twice, pending transfers are
+      finished not re-signed, dust/over-balance/own-address refused before signing, a failed dispatch
+      is reported as not made). `test/page.test.mjs` run F now covers the panel up to an enabled
+      send (not confirmed). **Not run yet:** the page test, because the session that built this had
+      no network route to the Solana or Bittensor RPCs; a headless load of the built page showed no
+      errors. Run `npm run test:page` before deploying.
+    - *Before `chutesLive: true`:* one small real-funds top-up (≥0.01 TAO, say 0.02) to a real Chutes
+      account from the live page, confirming Chutes credits it, with Craig's approval. Then flip the
+      flag, build, deploy.
 
 ## Link previews and SEO
 

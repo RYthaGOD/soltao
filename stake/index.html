@@ -27,7 +27,7 @@
 <link rel="apple-touch-icon" href="../logo.png">
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="stake.css">
-<script src="stake.js?v=d0ef8726" defer></script>
+<script src="stake.js?v=57956d0f" defer></script>
 </head>
 <body>
 <a class="skip" href="#steps">Skip to the steps</a>
@@ -230,6 +230,31 @@
               <button type="button" class="btn btn-primary" id="move-go">Confirm</button>
               <button type="button" class="btn btn-ghost" id="move-cancel">Cancel</button>
               <span class="step-note" id="move-note" role="status"></span>
+            </div>
+          </div>
+          <div class="move-panel" id="pay-panel" hidden>
+            <h3>Top up Chutes (subnet 64) with free TAO</h3>
+            <p class="step-note">Chutes gives every account its own Bittensor payment address and adds TAO sent to it to your Chutes balance, in dollars at the TAO price when it lands. Find the address in your Chutes account, or under <code>[payment]</code> in <code>~/.chutes/config.ini</code>. soltao cannot check that an address belongs to Chutes: TAO sent to a wrong address is gone.</p>
+            <label class="field">
+              <span>Your Chutes payment address</span>
+              <input type="text" id="pay-to" autocomplete="off" spellcheck="false" placeholder="5…">
+            </label>
+            <label class="field field-sm">
+              <span>TAO to send</span>
+              <span class="field-row">
+                <input type="text" id="pay-amount" inputmode="decimal" autocomplete="off">
+                <button type="button" class="btn btn-ghost" id="pay-max">all</button>
+              </span>
+            </label>
+            <p class="step-note" id="pay-quote" role="status"></p>
+            <label class="ack">
+              <input type="checkbox" id="pay-ack">
+              <span>I copied this address from my own Chutes account. TAO sent to it cannot be taken back.</span>
+            </label>
+            <div class="step-row">
+              <button type="button" class="btn btn-primary" id="pay-go" disabled>Send to Chutes</button>
+              <button type="button" class="btn btn-ghost" id="pay-cancel">Cancel</button>
+              <span class="step-note" id="pay-note" role="status"></span>
             </div>
           </div>
         </div>
