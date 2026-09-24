@@ -2,6 +2,7 @@
 // transaction pool. Counts moves the chain APPLIED, since the danger is a second one landing.
 
 import { runStakeMove, limitPrice } from "../src/stake_moves.js";
+import { fitReturnAmount } from "../src/fit.js";
 
 let failures = 0;
 const expect = (name, ok, detail = "") => { console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? "  — " + detail : ""}`); if (!ok) failures++; };
@@ -57,6 +58,7 @@ expect("unstake floor and stake ceiling sit 2% either side of the price", limitP
   const { s, run } = chain();
   const r = await run({ kind: "unstake", netuid: 1, amount: 200_000_000n });
   expect("a subnet unstake lands once and frees TAO", r.done && s.applied === 1 && s.stake === 300_000_000n && s.free > 2_000_000_000n - FEE, `stake ${s.stake}, free ${s.free}`);
+  expect("it reports the free TAO it gained, net of its fee, for a chained return", r.freed === s.free - 2_000_000_000n && r.freed > 0n, `freed ${r.freed}`);
 }
 {
   const { s, run } = chain();
@@ -90,6 +92,25 @@ expect("unstake floor and stake ceiling sit 2% either side of the price", limitP
   let m1 = ""; try { await run({ kind: "unstake", netuid: 1, amount: 900_000_000n }, {}); } catch (e) { m1 = e.message; }
   let m2 = ""; try { await run({ kind: "stake", netuid: 1, amount: 9_000_000_000n }, {}); } catch (e) { m2 = e.message; }
   expect("more than the position, or more than the free TAO, is refused before signing", /more than this position/.test(m1) && /more free TAO/.test(m2), `${m1} | ${m2}`);
+}
+
+// ── unstake, then return: how much of the freed TAO fits after the return's own costs ──
+{
+  const floor = (x) => x - (x % 1000n);
+  // Costs of a return of `amt` from `free`: the amount, a 3,000,000-rao bridge fee and gas, and a
+  // 125,000-rao funding fee, like a real quote in shape.
+  const model = (free, calls) => async (amt) => { calls.push(amt); return free - amt - 3_000_000n - 125_000n; };
+  const base = { keep: 1_000_000n, min: 1_000n, floor };
+  let calls = [];
+  const all = await fitReturnAmount({ ...base, freed: 500_000_000n, free: 500_000_000n, leftAfter: model(500_000_000n, calls) });
+  expect("everything freed, less the return's costs, leaving the kept balance", all === 495_875_000n && calls.length === 2, `${all} after ${calls.length} quotes`);
+  calls = [];
+  const some = await fitReturnAmount({ ...base, freed: 200_000_000n, free: 900_000_000n, leftAfter: model(900_000_000n, calls) });
+  expect("only what the unstake freed goes when the wallet already had free TAO to cover the fees", some === 200_000_000n && calls.length === 1, `${some}`);
+  const none = await fitReturnAmount({ ...base, freed: 3_500_000n, free: 3_500_000n, leftAfter: model(3_500_000n, []) });
+  expect("nothing is returned when the fees would take it all", none === 0n, `${none}`);
+  const stuck = await fitReturnAmount({ ...base, freed: 500_000_000n, free: 500_000_000n, leftAfter: async () => 0n });
+  expect("a quote that never leaves the kept balance returns nothing rather than guessing", stuck === 0n, `${stuck}`);
 }
 
 console.log(failures ? `\n${failures} failed` : "\nall passed");

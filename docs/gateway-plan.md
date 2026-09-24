@@ -60,7 +60,7 @@ Acceptance:
 
 ## Milestone 3: bridge-back foundation
 
-Status: return engine implemented behind the disabled production UI. It has independently checked OFT calldata, explicit rao/wei/Solana-local conversions, a live mainnet fee quote, a coldkey signer identity check, live runtime-metadata guards, resumable funding/wrap/send checkpoints, and a zero-cost replay through the real canonical wTAO and LayerZero contracts. It is not connected to the page yet.
+Status: return engine implemented behind the disabled production UI. It has independently checked OFT calldata, explicit rao/wei/Solana-local conversions, a live mainnet fee quote, a coldkey signer identity check, live runtime-metadata guards, resumable funding/wrap/send checkpoints, and a zero-cost replay through the real canonical wTAO and LayerZero contracts. It is wired into the page, which opens it on local hosts only until `CONFIG.returnLive`.
 
 Goal: build return-to-Solana for free TAO first, then add unstake.
 
@@ -109,8 +109,11 @@ before it is sent and settled on resume (`src/stake_moves.js`, `src/settle.js`),
 judged from the position and free balance, since an included extrinsic can still fail to dispatch.
 Verified: mocked chain (lands once, price refusal uses the nonce but moves nothing, page closed
 after submit, expired transaction); live runtime (all four calls sign and decode to the intended
-call and arguments). Not yet done with real funds. Open: a one-click "unstake and return" that chains
-the two steps.
+call and arguments). Not yet done with real funds. Chained on 24 Sep 2026: an Unstake can be confirmed
+together with "then bring the TAO this frees back to my Solana wallet", priced with the live bridge fee
+before anything is signed; after the unstake lands, the page returns what it freed, less the return's
+own costs, keeping 0.001 TAO free (tools/stake/HANDOVER.md, bug history item 15). A return whose
+LayerZero send reverted can now be sent again, on request.
 
 Goal: fulfill the full promise for staked balances.
 
@@ -124,7 +127,7 @@ Acceptance:
 
 ## Milestone 5: gateway experience
 
-Status: started 24 Sep 2026 (built, not yet deployed). The validator picker is done: the chosen
+Status: built and deployed 24 Sep 2026. The validator picker is done: the chosen
 subnet's validator-permit holders from the metagraph, with uid, take and last-epoch dividend share,
 one stated sort rule, no names (not on-chain) and no stake column (unit unconfirmed). Shareable
 `?netuid=&hotkey=` links are done. A first portfolio view is done: free TAO and every stake position
@@ -133,7 +136,9 @@ of the coldkey on screen, from the chain's StakeInfo runtime API (Solana TAO is 
 runtime API (one call, ~50 KB, ~1 s) with its registered name and symbol, the pool's spot price and
 its TAO, a search, and two orders stated on the page (subnet number, or TAO in the pool with root
 left out); names are labelled as owner-registered, not endorsed. Per-position actions are done
-(Milestone 4, gated). Emissions and take per subnet are not shown yet.
+(Milestone 4, gated). Emissions: "TAO added per day", the TAO the chain put into each pool in the last
+block times 7,200, with its own stated sort. Take is per validator, not per subnet, so it lives in the
+validator picker.
 
 Data sources for the subnet directory and validator picker were researched on
 24 Sep 2026 — see `research/subnet-validator-data-research.md` for what taostats can and cannot

@@ -18,6 +18,7 @@ import { derivationMessage, walletFromSignature } from "../src/derive.js";
 import { CONFIG } from "../src/config.js";
 import { sealRoute } from "../src/pending.js";
 import { selector } from "../src/bittensor.js";
+import { ss58Decode } from "../src/derive.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const CHROME = process.env.CHROME || "C:/Program Files/Google/Chrome/Application/chrome.exe";
@@ -391,13 +392,17 @@ if (want("E")) {
   const dirRule = await text(page, "#dir-rule"), total = Number((dirRule.match(/of (\d+) subnets/) || [])[1]);
   const first = await page.$$eval("#dir-body tr", (trs) => trs.slice(0, 2).map((tr) => [...tr.children].map((td) => td.textContent.trim())));
   expect("the directory lists every subnet from the chain, root first, with name, price and pool", total > 100 && first[0][0] === "0" && first[0][2] === "1 (root)" && first[1][0] === "1" && first[1][1].length > 0 && parseFloat(first[1][2]) > 0 && parseFloat(first[1][3].replace(/,/g, "")) > 0, `${total} · ${first.map((r) => r.join(" | ")).join(" / ")}`);
-  expect("…and says its order, that names are not endorsements, and when it read them", /in subnet-number order\. Names are what each owner registered on-chain; a name is not an endorsement\. Read \d\d:\d\d UTC\./.test(dirRule), dirRule);
+  expect("…and says its order, that names are not endorsements, and when it read them", /in subnet-number order\. "TAO added per day" is the TAO the chain put into that pool in the last block, times 7,200 blocks \(12 seconds each\); it moves from block to block\. Names are what each owner registered on-chain; a name is not an endorsement\. Read \d\d:\d\d UTC\./.test(dirRule), dirRule);
   await setFieldE(page, "#dir-search", "7");
   expect("search by number finds that subnet", (await page.$$eval("#dir-body tr", (trs) => trs.map((tr) => tr.firstChild.textContent))).includes("7"));
   await setFieldE(page, "#dir-search", "");
   await page.select("#dir-sort", "pool");
   const pools = await page.$$eval("#dir-body tr", (trs) => trs.map((tr) => [tr.children[0].textContent, parseFloat(tr.children[3].textContent.replace(/,/g, ""))]));
   expect("sorting by TAO in the pool orders it so, leaves root out, and says so", pools.every((p, i) => i === 0 || pools[i - 1][1] >= p[1]) && !pools.some((p) => p[0] === "0") && /sorted by TAO in each subnet's pool, most first \(root has no pool and is left out\)/.test(await text(page, "#dir-rule")), `${pools.slice(0, 3).map((p) => p.join(":")).join(" ")}`);
+  await page.select("#dir-sort", "emission");
+  const daily = await page.$$eval("#dir-body tr", (trs) => trs.map((tr) => [tr.children[0].textContent, parseFloat(tr.children[4].textContent.replace(/,/g, ""))]));
+  expect("sorting by TAO added per day orders it so, leaves root out, and says so", daily.length > 100 && daily[0][1] > 0 && daily.every((p, i) => i === 0 || daily[i - 1][1] >= p[1]) && !daily.some((p) => p[0] === "0") && /sorted by TAO the chain adds to each subnet's pool per day, most first \(root is left out\)/.test(await text(page, "#dir-rule")), `${daily.slice(0, 3).map((p) => p.join(":")).join(" ")}`);
+  await page.select("#dir-sort", "pool");
   const pickNet = pools[0][0];
   await page.$$eval("#dir-body tr", (trs) => trs[0].querySelector("button").click());
   expect("choosing a subnet fills the field and runs the usual check", (await page.$eval("#netuid-in", (el) => el.value)) === pickNet, await page.$eval("#netuid-in", (el) => el.value));
@@ -420,9 +425,18 @@ if (want("F")) {
   // AccountInfo { nonce, consumers, providers, sufficients: u32; data { free, reserved, frozen: u64; flags: u128 } }
   const account = "0x" + le(0, 4) + le(0, 4) + le(1, 4) + le(0, 4) + le(2_000_000_000n, 8) + le(0, 8) + le(0, 8) + le(1n << 127n, 16);
   let accountReads = 0;
+  // Stake positions: the chain's real answer for subnet 1's owner (two positions on subnet 1, read now),
+  // served for the test wallet, so the Unstake action and its chained return can be quoted.
+  const STAKE_INFO = "StakeInfoRuntimeApi_get_stake_info_for_coldkey";
+  const ownerKey = "0x" + Buffer.from(ss58Decode(SUBNET1_OWNER_HOTKEY)).toString("hex");
+  const stakeInfo = (await (await fetch(CONFIG.bittensorEvmRpc, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "state_call", params: [STAKE_INFO, ownerKey] }) })).json()).result;
   const intercept = (req) => {
     if (req.method() !== "POST" || !req.url().startsWith(CONFIG.bittensorEvmRpc)) return false;
     const body = JSON.parse(req.postData() || "{}");
+    if (!Array.isArray(body) && body.method === "state_call" && body.params?.[0] === STAKE_INFO && stakeInfo) {
+      req.respond({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify({ jsonrpc: "2.0", id: body.id, result: stakeInfo }) });
+      return true;
+    }
     // polkadot reads storage through state_queryStorageAt: [{ block, changes: [[key, value]] }].
     if (Array.isArray(body) || body.method !== "state_queryStorageAt") return false;
     const keys = body.params?.[0] || [];
@@ -450,7 +464,16 @@ if (want("F")) {
   await clickEl(page, "#holdings-btn");
   await waitText(page, "#holdings-note", /^Read \d\d:\d\d UTC|Could not/, 90_000);
   const holdings = await page.$$eval("#holdings-body tr", (trs) => trs.map((tr) => [...tr.children].map((td) => td.textContent.trim()).join(" | ")));
-  expect("holdings show the wallet's free TAO and its stake positions, read from the chain", holdings[0] === "Free | — | 2 TAO | Stake" && /No stake positions\./.test(await text(page, "#holdings-note")), `${holdings.join(" / ")} · ${await text(page, "#holdings-note")}`);
+  expect("holdings show the wallet's free TAO and its stake positions, read from the chain", holdings[0] === "Free | — | 2 TAO | Stake" && holdings.length === 3 && holdings.slice(1).every((h) => /^Staked on subnet 1 \| 5\w+…\w+ \| [\d,.]+ Alpha \| Unstake$/.test(h)) && /2 stake positions\. Subnet stakes are in that subnet's Alpha/.test(await text(page, "#holdings-note")), `${holdings.join(" / ")} · ${await text(page, "#holdings-note")}`);
+  // Unstake, then return: offered on an unstake, and priced (sale and bridge fee) before anything is signed.
+  await page.$eval("#holdings-body tr:nth-child(3) button", (b) => b.click());
+  await waitText(page, "#move-quote", /Sells for about|Could not/, 60_000);
+  expect("a position offers Unstake, quoted at today's price with the 2% floor", /^Sells for about [\d.,]+ TAO at today's pool price \([\d.]+ TAO per Alpha\)\. If the price is more than 2% lower when it lands, nothing is unstaked\.$/.test(await text(page, "#move-quote")) && (await text(page, "#move-title")).startsWith("Unstake from subnet 1"), await text(page, "#move-quote"));
+  expect("…with the choice to bring the TAO back to Solana, off by default", !(await page.$eval("#move-then-wrap", (el) => el.hidden)) && !(await page.$eval("#move-then", (el) => el.checked)));
+  await clickEl(page, "#move-then");
+  await waitText(page, "#move-quote", /LayerZero fee|Could not/, 60_000);
+  expect("…which, when chosen, adds the live bridge fee and what stays free", /Then that TAO goes to your Solana wallet as canonical TAO, less the LayerZero fee \(about [\d.]+ TAO today\) and a little Bittensor gas; 0\.001 TAO stays free for later fees\./.test(await text(page, "#move-quote")), await text(page, "#move-quote"));
+  await clickEl(page, "#move-cancel");
   // Stake moves from the holdings view (not confirmed: nothing is signed or sent).
   expect("free TAO offers a Stake action on a local host", (await page.$$eval("#holdings-body tr:first-child button", (b) => b.map((x) => x.textContent))).join() === "Stake");
   await page.$eval("#holdings-body tr:first-child button", (b) => b.click());

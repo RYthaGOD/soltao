@@ -78,6 +78,7 @@ main "Solana TAO Board" page which stays no-wallet-connect).
 - `tools/stake/src/stake_moves.js` + `src/settle.js` — unstake / re-stake from the coldkey (item 13)
   and the shared settling of a signed coldkey extrinsic.
 - `tools/stake/src/prices.js` — display-only USD prices from Dexscreener for the review.
+- `tools/stake/src/fit.js` — how much of an unstake's freed TAO a chained return can send (item 15).
 - `tools/stake/usage.mjs` — `npm run usage`: completed routes counted on-chain from the fee wallet.
 - `tools/stake/src/route.js` — the 4-step Bittensor route logic (unwrap/stake/handover/sweep) for
   the forward direction, now netuid-aware (stakes and hands over on whichever subnet the user
@@ -309,10 +310,9 @@ This is **not** git-push-triggered. Steps, in order, every time:
       with sealed checkpoints saved before each broadcast, and tracks arrival by the Solana wallet's
       own TAO balance (baseline saved with the checkpoints). `test/page.test.mjs` run F covers it up
       to review on a local host, with the coldkey's account read answered as 2 TAO free.
-    - Open before `returnLive`: one small real-funds return with Craig's approval; unstaking
-      (Milestone 4); a way to abandon a return whose send reverted (today the page reports it on
-      every sign-in); arrival detection is balance-based, so another deposit to the same wallet in
-      that window could be mistaken for it.
+    - Open before `returnLive`: one small real-funds return with Craig's approval. Arrival detection
+      is balance-based, so another deposit to the same wallet in that window could be mistaken for
+      it. (Unstaking is item 13; a reverted send now offers "Send it again", item 15.)
 
 13. **Stake moves from the coldkey: unstake and re-stake (Milestone 4), 24 Sep 2026, gated off in
     production with the return.** The holdings view in step 2 gives each position "Unstake" and free
@@ -326,9 +326,9 @@ This is **not** git-push-triggered. Steps, in order, every time:
     message now points at this retry and at the return. Tests: `test/stake_moves.test.mjs` (mocked),
     `test/substrate_quote_live.test.mjs` (all four calls sign and decode on the live runtime; subnet
     1 Alpha price 6,818,232 rao, matching the EVM precompile), `test/page.test.mjs` run F (the Stake
-    action's gating, quote and limits; not confirmed). Unstake is not exercised in the browser: a fresh
-    test wallet has no position, and faking one means answering a SCALE runtime call. No real-funds
-    move yet.
+    action's gating, quote and limits; not confirmed). Since item 15, run F also answers the StakeInfo
+    runtime call with the chain's real reply for subnet 1's owner, so Unstake is quoted in the browser
+    too (still never confirmed). No real-funds move yet.
 
 14. **Subnet directory (Milestone 5), 24 Sep 2026.** "Browse subnets" beside the subnet field lists
     all subnets from `subnetInfoRuntimeApi.getAllDynamicInfo` (`subnetDirectory()` in `substrate.js`,
@@ -339,6 +339,29 @@ This is **not** git-push-triggered. Steps, in order, every time:
     by TAO in the pool (root left out: it has no pool), with the rule and read time stated on the
     page and names labelled as not endorsements. "Use" fills the subnet field and runs the usual
     check. Not live-gated: it only reads. Note it loads `return.js` (~800 KB) when opened.
+
+15. **Polish before the real-funds runs, 24 Sep 2026.**
+    - *Unstake, then return.* An Unstake in the holdings view offers "Then bring the TAO this frees
+      back to my Solana wallet" (off by default, hidden while an earlier return is unfinished). When
+      ticked, the quote adds the live LayerZero fee before anything is signed. After the unstake lands,
+      `returnAfterUnstake()` in `app.js` re-reads the free balance and sends what the unstake freed
+      (`freed` from `runStakeMove`, net of its fee), shrunk by `fitReturnAmount()` (`src/fit.js`) until
+      the return's own costs leave 0.001 TAO free for later fees; then it switches to the return
+      direction and runs the normal, checkpointed return, with the tracker's "Unstake" row marked done.
+      The choice is saved with the stake-move record, so a resumed unstake still chains. If the unstake
+      is refused on price, nothing is returned. Tests: `stake_moves.test.mjs` (freed amount; four
+      fitting cases), `page.test.mjs` run F (offered, off by default, priced; not confirmed).
+    - *A reverted send.* It used to stop the return on every sign-in with no way forward.
+      `finishFreeReturn({ retryReverted: true })` now marks it dead and carries on from chain state,
+      which re-quotes and reuses the wTAO still on transit (no second wrap). The page shows "Send it
+      again" with a link to the refused transaction; it never retries by itself, since a lasting cause
+      would spend gas each time. Test: `return_route.test.mjs` (retry sends once, no new wrap; a later
+      resume sends nothing).
+    - *Directory emissions.* A "TAO added per day" column and sort: `taoInEmission` from
+      `getAllDynamicInfo` (the TAO the chain put into that pool in the last block) times 7,200 blocks,
+      labelled as that on the page. Read 24 Sep 2026: all pools together 0.161 TAO per block; subnet 1
+      63,114 rao per block (0.45 TAO a day). Validator take stays in the picker: it is per validator,
+      not per subnet.
 
 ## Link previews and SEO
 
@@ -396,7 +419,7 @@ user 5, first-time experience 4, core loop 2, moat 3, technical execution 8, nam
 | Subnet stakers must find a valid hotkey on taostats themselves | Done: "List subnet N's validators" reads the permit holders from the metagraph (`subnetValidators()`, ~13 requests, ~7 s on subnet 1), shows uid, take and last-epoch dividend share, states its one sort rule on the page, and choosing a row only fills the field, which is then checked as usual. No stake column: its unit was never confirmed. No names: not on-chain |
 | The board, the stake route and the SOLTAO coin share one name; the stake page header says "Unofficial community reference" | Done: a line under the headline says who runs it, that keys never leave the browser, that the page's code is the trust point, and that the flat SOL fee is its only charge. Header now "Self-custody stake route" |
 | Amounts are TAO and SOL only, never money | Done: the review adds "In dollars, roughly": the TAO amount and the SOL fees in USD from Dexscreener's deepest USD pool (already in the CSP), with the read time. Display only (`src/prices.js`), cached 60 s, hidden if the feed fails; nothing the route does uses it |
-| No core loop: nothing to come back to (scored 2/10) | Started: "Show what this Bittensor wallet holds" in step 2 lists free TAO and every stake position (subnet, validator, amount) from the chain's StakeInfo runtime API, for the derived or a pasted coldkey. Read on request through `stake/return.js`. Next: actions per position (unstake and return, Milestone 4) |
+| No core loop: nothing to come back to (scored 2/10) | Started: "Show what this Bittensor wallet holds" in step 2 lists free TAO and every stake position (subnet, validator, amount) from the chain's StakeInfo runtime API, for the derived or a pasted coldkey. Read on request through `stake/return.js`. Done since (gated with the return): Unstake and Stake per position, and "unstake, then return" in one confirm (items 13 and 15) |
 | No shareable state | Done: `?netuid=` and `?hotkey=` prefill step 3 and run the normal checks; a checked validator offers "link to this choice" |
 
 Sins flagged: phantom users, bridge to nowhere, jargon overload, and MEV bait (fixed in item 11).

@@ -19,7 +19,7 @@ function chain({ nativeWei = 0n, wtaoWei = 0n, coldkeyFreeRao = 2_000_000_000n, 
   const s = {
     nativeWei, wtaoWei, coldkeyFreeRao, coldkeyNonce: 0n, evmNonce: 0n,
     pool: new Map(), receipts: new Map(), signed: new Map(), applied: [], log: [], quotes: 0, n: 0,
-    autoMine: true, crashAfter: null, loseReplyOf: null, expired: new Set(),
+    autoMine: true, crashAfter: null, loseReplyOf: null, expired: new Set(), sendReverts,
   };
   const mine = () => {
     const txs = [...s.pool.values()].sort((a, b) => (a.nonce < b.nonce ? -1 : 1));
@@ -31,7 +31,7 @@ function chain({ nativeWei = 0n, wtaoWei = 0n, coldkeyFreeRao = 2_000_000_000n, 
       } else {
         if (tx.nonce !== s.evmNonce) continue;
         s.evmNonce++;
-        if (tx.kind === "send" && sendReverts) { s.nativeWei -= RETURN_GAS_LIMIT.send * PRICE; s.receipts.set(tx.hash, "0x0"); continue; }
+        if (tx.kind === "send" && s.sendReverts) { s.nativeWei -= RETURN_GAS_LIMIT.send * PRICE; s.receipts.set(tx.hash, "0x0"); continue; }
         if (tx.kind === "wrap") { s.nativeWei -= tx.amountWei + RETURN_GAS_LIMIT.wrap * PRICE; s.wtaoWei += tx.amountWei; }
         else { s.nativeWei -= tx.nativeFeeWei + RETURN_GAS_LIMIT.send * PRICE; s.wtaoWei -= tx.amountWei; }
         s.receipts.set(tx.hash, "0x1"); s.applied.push(tx.kind);
@@ -91,9 +91,9 @@ function chain({ nativeWei = 0n, wtaoWei = 0n, coldkeyFreeRao = 2_000_000_000n, 
     },
   };
   let last = {};
-  const run = (progress = last) => finishFreeReturn({
+  const run = (progress = last, extra = {}) => finishFreeReturn({
     mnemonic: "words", transitKey: new Uint8Array(32), solanaRecipient: `0x${"42".repeat(32)}`,
-    amountRao: AMOUNT_RAO, expectedColdkey: "5DerivedColdkey", progress, ops, pollMs: 0, waitMs: 0,
+    amountRao: AMOUNT_RAO, expectedColdkey: "5DerivedColdkey", progress, ops, pollMs: 0, waitMs: 0, ...extra,
     onCheckpoint: (value) => { last = JSON.parse(JSON.stringify(value)); s.log.push(`checkpoint:${value.stage}`); },
   });
   const interrupted = async () => { try { await run({}); return null; } catch (e) { return e.message; } };
@@ -163,6 +163,12 @@ function chain({ nativeWei = 0n, wtaoWei = 0n, coldkeyFreeRao = 2_000_000_000n, 
   let first = ""; try { await run({}); } catch (e) { first = e.message; }
   let second = ""; try { await run(); } catch (e) { second = e.message; }
   expect("a reverted send stops the route, and a resume does not send again", /reverted/.test(first) && /reverted/.test(second) && s.log.filter((x) => x === "broadcast:send").length === 1, `${first} | ${second}`);
+  // Asked to send again: the wTAO is still on transit, so it re-quotes and sends once, with no new wrap.
+  s.sendReverts = false;
+  const result = await run(undefined, { retryReverted: true });
+  expect("a retry after a revert sends once more, reusing the wrapped TAO", result.stage === "sent" && count(s, "wrap") === 1 && count(s, "send") === 1 && s.log.filter((x) => x === "broadcast:send").length === 2 && s.wtaoWei === 0n, s.applied.join(","));
+  const again = await run();
+  expect("after that retry, a resume reports the sent route without sending again", again.stage === "sent" && s.log.filter((x) => x === "broadcast:send").length === 2);
 }
 
 // ── carried over: quoting and funding rules ──

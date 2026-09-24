@@ -146,7 +146,8 @@ export function prepareStakeMove(mnemonic, { kind, hotkey, netuid, amount, limit
  * Every subnet, from the chain's own SubnetInfo runtime API (getAllDynamicInfo, one read-only call, ~50
  * KB): netuid, name and symbol (the owner's on-chain identity, as registered), the pool's reserves, and
  * the spot price those reserves imply (TAO in / Alpha in, rao per Alpha), which is how the pool prices
- * a swap. Root (netuid 0) has no pool.
+ * a swap, and the TAO the chain injected into the pool in the last block (taoInEmission, rao per
+ * block). Root (netuid 0) has no pool.
  */
 export async function subnetDirectory() {
   const api = await getApi();
@@ -169,6 +170,7 @@ export async function subnetDirectory() {
       symbol: text(d.tokenSymbol),
       description: identity ? text(identity.description) : "",
       taoInRao: taoIn,
+      taoPerBlockRao: d.taoInEmission === undefined ? null : BigInt(d.taoInEmission.toString()),
       priceRao: netuid === 0 ? 1_000_000_000n : alphaIn > 0n ? (taoIn * 1_000_000_000n) / alphaIn : null,
     };
   }).sort((a, b) => a.netuid - b.netuid);

@@ -71,7 +71,7 @@ async function waitForFunding(ops, address, minimumWei, { waitMs, pollMs }) {
  * `onCheckpoint(progress)` must persist it synchronously; it is called before every broadcast.
  */
 export async function finishFreeReturn({
-  mnemonic, transitKey, solanaRecipient, amountRao, expectedColdkey = null, progress = {},
+  mnemonic, transitKey, solanaRecipient, amountRao, expectedColdkey = null, progress = {}, retryReverted = false,
   onStep = () => {}, onCheckpoint = () => {}, waitMs = 2 * 60_000, pollMs = 4_000, ops = realOps,
 }) {
   const coldkey = ops.signerAddress(mnemonic);
@@ -97,9 +97,15 @@ export async function finishFreeReturn({
     return s;
   };
 
+  // A reverted send moved nothing: the wTAO is still on the transit account. It stops the route until
+  // the caller asks to send again (`retryReverted`), because a send that reverts for a lasting reason
+  // would otherwise spend gas on every resume. A retry re-quotes and reuses the wTAO already there.
   if (saved.send && saved.send.status !== "dead" && saved.send.status !== "mined") {
     const s = await settleEvm(saved.send);
-    if (s.state === "mined") {
+    if (s.state === "mined" && !s.ok && retryReverted) {
+      save({ send: { ...saved.send, status: "dead", reverted: true } });
+      onStep("bridge", "busy", "the last send reverted; sending again");
+    } else if (s.state === "mined") {
       if (!s.ok) throw Object.assign(new Error(`return transaction ${saved.send.hash} reverted`), { reverted: true, hash: saved.send.hash });
       save({ stage: "sent", send: { ...saved.send, status: "mined" }, sendHash: saved.send.hash });
       onStep("bridge", "ok", "sent to Solana through LayerZero");

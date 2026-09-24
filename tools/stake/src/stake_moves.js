@@ -50,7 +50,9 @@ export async function runStakeMove({
     // Free TAO rises on an unstake and falls by at least the amount on a stake; either alone could be
     // noise (emission, another wallet's transfer), together they are the move.
     const landed = saved.rec?.status === "included" && moved > 0n && (kind === "unstake" ? freeAfter > freeBefore : freeBefore - freeAfter >= BigInt(saved.amount));
-    const result = { done: landed, refused: !landed, moved: landed ? moved : 0n, stakeAfter, freeAfter };
+    // `freed`: free TAO gained by an unstake (after its fee), which is what a chained return may send.
+    const freed = landed && kind === "unstake" ? freeAfter - freeBefore : 0n;
+    const result = { done: landed, refused: !landed, moved: landed ? moved : 0n, freed, stakeAfter, freeAfter };
     save({ stage: landed ? "done" : "refused" });
     onStep(kind, landed ? "ok" : "bad", landed ? "done" : "Bittensor did not make this move (the price moved past the limit, or a rule refused it); nothing was spent but the transaction fee");
     return result;

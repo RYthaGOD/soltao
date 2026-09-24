@@ -27,7 +27,7 @@
 <link rel="apple-touch-icon" href="../logo.png">
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="stake.css">
-<script src="stake.js?v=d8f02947" defer></script>
+<script src="stake.js?v=1e178c2d" defer></script>
 </head>
 <body>
 <a class="skip" href="#steps">Skip to the steps</a>
@@ -222,6 +222,10 @@
               </span>
             </label>
             <p class="step-note" id="move-quote" role="status"></p>
+            <label class="ack" id="move-then-wrap" hidden>
+              <input type="checkbox" id="move-then">
+              <span>Then bring the TAO this frees back to my Solana wallet (one more step, run for you once the unstake lands)</span>
+            </label>
             <div class="step-row">
               <button type="button" class="btn btn-primary" id="move-go">Confirm</button>
               <button type="button" class="btn btn-ghost" id="move-cancel">Cancel</button>
@@ -283,12 +287,13 @@
             <select id="dir-sort" aria-label="Sort subnets">
               <option value="netuid">By subnet number</option>
               <option value="pool">By TAO in the pool, most first</option>
+              <option value="emission">By TAO added to the pool each day, most first</option>
             </select>
           </div>
           <p class="step-note" id="dir-rule" role="status"></p>
           <div class="pick-scroll">
             <table class="pick">
-              <thead><tr><th scope="col">Subnet</th><th scope="col">Name</th><th scope="col">Price, TAO per Alpha</th><th scope="col">TAO in pool</th><th scope="col"><span class="sr">Choose</span></th></tr></thead>
+              <thead><tr><th scope="col">Subnet</th><th scope="col">Name</th><th scope="col">Price, TAO per Alpha</th><th scope="col">TAO in pool</th><th scope="col">TAO added per day</th><th scope="col"><span class="sr">Choose</span></th></tr></thead>
               <tbody id="dir-body"></tbody>
             </table>
           </div>

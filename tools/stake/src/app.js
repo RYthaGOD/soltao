@@ -11,6 +11,7 @@ import { createClients, getTaoBalance, quoteNativeFee, quotePriorityFee, priorit
 import { findOnSubnet, getDelegate, getFreeBalance, getUidCount, subnetValidators } from "./bittensor.js";
 import { getGasPrice } from "./evm.js";
 import { usdPrices, fmtUsd } from "./prices.js";
+import { fitReturnAmount } from "./fit.js";
 import { sealRoute, readRoute, untrustedPlan, sealRecord, openRecord } from "./pending.js";
 import { finishRoute, transitState, minStakeAmount, stakeGasReserve, sweepFloor } from "./route.js";
 
@@ -363,6 +364,7 @@ async function onNetuid() {
 // on request): name and symbol as the owner registered them, the pool's spot price and its TAO. Two
 // orders, both named on the page; nothing is ranked beyond them. Choosing a row only fills the field.
 let directory = null; // { at, rows }
+const BLOCKS_PER_DAY = 7_200n; // one block every 12 seconds
 async function openDirectory() {
   $("dir-wrap").hidden = false; $("dir-btn").disabled = true;
   try {
@@ -380,11 +382,18 @@ async function openDirectory() {
 }
 function renderDirectory() {
   if (!directory) return;
-  const q = $("dir-search").value.trim().toLowerCase(), byPool = $("dir-sort").value === "pool";
+  const q = $("dir-search").value.trim().toLowerCase(), order = $("dir-sort").value;
   let rows = directory.rows.filter((r) => !q || String(r.netuid) === q || r.name.toLowerCase().includes(q) || r.symbol.toLowerCase().includes(q));
-  if (byPool) rows = [...rows].filter((r) => r.netuid !== 0).sort((a, b) => (b.taoInRao > a.taoInRao ? 1 : b.taoInRao < a.taoInRao ? -1 : a.netuid - b.netuid));
+  const most = (key) => (a, b) => ((b[key] ?? -1n) > (a[key] ?? -1n) ? 1 : (b[key] ?? -1n) < (a[key] ?? -1n) ? -1 : a.netuid - b.netuid);
+  if (order === "pool") rows = rows.filter((r) => r.netuid !== 0).sort(most("taoInRao"));
+  if (order === "emission") rows = rows.filter((r) => r.netuid !== 0).sort(most("taoPerBlockRao"));
   const at = new Date(directory.at).toISOString().slice(11, 16);
-  note("dir-rule", `${rows.length} of ${directory.rows.length} subnets, ${byPool ? "sorted by TAO in each subnet's pool, most first (root has no pool and is left out)" : "in subnet-number order"}. Names are what each owner registered on-chain; a name is not an endorsement. Read ${at} UTC.`);
+  const rule = {
+    netuid: "in subnet-number order",
+    pool: "sorted by TAO in each subnet's pool, most first (root has no pool and is left out)",
+    emission: "sorted by TAO the chain adds to each subnet's pool per day, most first (root is left out)",
+  }[order];
+  note("dir-rule", `${rows.length} of ${directory.rows.length} subnets, ${rule}. "TAO added per day" is the TAO the chain put into that pool in the last block, times 7,200 blocks (12 seconds each); it moves from block to block. Names are what each owner registered on-chain; a name is not an endorsement. Read ${at} UTC.`);
   const current = state.netuidValid ? Number(state.netuid) : null;
   $("dir-body").replaceChildren(...rows.map((r) => {
     const tr = document.createElement("tr");
@@ -398,7 +407,8 @@ function renderDirectory() {
     tr.append(
       td(String(r.netuid), "num"), td(`${r.name}${r.symbol ? ` ${r.symbol}` : ""}`),
       td(r.netuid === 0 ? "1 (root)" : r.priceRao === null ? "—" : fmtUnits(r.priceRao, 9), "num"),
-      td(r.netuid === 0 ? "no pool" : fmtUnits(r.taoInRao, 9, 0), "num"), cell,
+      td(r.netuid === 0 ? "no pool" : fmtUnits(r.taoInRao, 9, 0), "num"),
+      td(r.netuid === 0 || r.taoPerBlockRao === null ? "—" : fmtUnits(r.taoPerBlockRao * BLOCKS_PER_DAY, 9, 2), "num"), cell,
     );
     return tr;
   }));
@@ -706,6 +716,9 @@ function openMove(m) {
   $("move-amount-label").textContent = m.kind === "stake" ? "TAO to stake" : `${m.netuid === 0 ? "TAO" : "Alpha"} to unstake`;
   $("move-amount").value = fmtUnits(m.max, 9, 9).replace(/,/g, "");
   $("move-go").textContent = "Confirm"; $("move-go").disabled = false; note("move-note", "");
+  // Unstake-then-return: offered only when no earlier return is unfinished, which would come first.
+  $("move-then").checked = false;
+  $("move-then-wrap").hidden = m.kind !== "unstake" || Boolean(loadReturn(state.signed.wallet));
   $("move-panel").hidden = false;
   quoteMove();
 }
@@ -715,20 +728,28 @@ async function quoteMove() {
   if (amt === null || amt <= 0n) { note("move-quote", "Enter an amount like 0.5", "bad"); $("move-go").disabled = true; return; }
   if (amt > move.max) { note("move-quote", `More than the ${fmtUnits(move.max, 9)} available${move.kind === "stake" ? ` (${tao(CONFIG.defaultReserveRao)} stays free for fees)` : ""}`, "bad"); $("move-go").disabled = true; return; }
   $("move-go").disabled = false;
-  if (move.netuid === 0) { note("move-quote", move.kind === "stake" ? `Stakes ${tao(amt)} on root.` : `Unstakes ${tao(amt)} from root into free TAO.`); return; }
+  if (move.netuid === 0 && !(move.kind === "unstake" && $("move-then").checked)) { note("move-quote", move.kind === "stake" ? `Stakes ${tao(amt)} on root.` : `Unstakes ${tao(amt)} from root into free TAO.`); return; }
+  const then = move.kind === "unstake" && $("move-then").checked;
   try {
     const lib = await loadReturnLib(), price = await lib.alphaPriceRao(move.netuid);
+    const proceeds = (amt * price) / RAO;
+    // The bridge fee for a return of about that much, so the chained choice is priced before it is made.
+    const lz = then ? (await lib.quoteReturn({ amountRao: removeDust(proceeds), solanaRecipient: solanaRecipient() })).nativeFee / RAO : null;
     if (seq !== moveQuoteSeq) return;
     const pct = Number(CONFIG.subnetPriceToleranceBps) / 100;
-    note("move-quote", move.kind === "stake"
+    const sale = move.netuid === 0 ? `Unstakes ${tao(amt)} from root into free TAO.` : move.kind === "stake"
       ? `Buys about ${fmtUnits((amt * RAO) / price, 9)} Alpha at today's pool price (${fmtUnits(price, 9)} TAO each). If the price is more than ${pct}% higher when it lands, nothing is staked.`
-      : `Sells for about ${tao((amt * price) / RAO)} at today's pool price (${fmtUnits(price, 9)} TAO per Alpha). If the price is more than ${pct}% lower when it lands, nothing is unstaked.`);
-  } catch (e) { if (seq === moveQuoteSeq) note("move-quote", `Could not read the subnet's price: ${e.message}`, "bad"); }
+      : `Sells for about ${tao(proceeds)} at today's pool price (${fmtUnits(price, 9)} TAO per Alpha). If the price is more than ${pct}% lower when it lands, nothing is unstaked.`;
+    note("move-quote", then
+      ? `${sale} Then that TAO goes to your Solana wallet as canonical TAO, less the LayerZero fee (about ${tao(lz)} today) and a little Bittensor gas; ${tao(RETURN_KEEP_RAO)} stays free for later fees. Both figures are read again before it is sent.`
+      : sale);
+  } catch (e) { if (seq === moveQuoteSeq) note("move-quote", `Could not read ${move.netuid === 0 ? "the bridge fee" : "the subnet's price"}: ${e.message}`, "bad"); }
 }
 function resumeMove() {
   const saved = state.signed && loadMove(state.signed.wallet);
   if (!saved || !canMove()) return;
   move = { kind: saved.kind, hotkey: saved.hotkey, netuid: Number(saved.netuid), max: BigInt(saved.amount), resume: saved };
+  $("move-then").checked = Boolean(saved.thenReturn); $("move-then-wrap").hidden = !saved.thenReturn;
   $("move-title").textContent = `An earlier ${saved.kind} did not finish`;
   $("move-amount").value = fmtUnits(BigInt(saved.amount), 9, 9).replace(/,/g, "");
   note("move-quote", "Finishing checks the transaction that was already signed and sent; it never signs a second one while that one could still land.", "warn");
@@ -741,7 +762,9 @@ async function runMove() {
   const amount = saved ? BigInt(saved.amount) : parseTao($("move-amount").value);
   if (amount === null || amount <= 0n) return;
   state.running = true; $("move-go").disabled = true; $("move-cancel").disabled = true; gate();
-  const meta = { kind: m.kind, hotkey: m.hotkey, netuid: String(m.netuid), amount: String(amount) };
+  const thenReturn = m.kind === "unstake" && $("move-then").checked && !loadReturn(w);
+  const meta = { kind: m.kind, hotkey: m.hotkey, netuid: String(m.netuid), amount: String(amount), thenReturn };
+  let chain = null;
   try {
     const lib = await loadReturnLib();
     const res = await lib.runStakeMove({
@@ -751,14 +774,53 @@ async function runMove() {
       onCheckpoint: (progress) => saveMove(w, { ...meta, progress }),
     });
     clearMove(w);
-    if (res.done) note("move-note", m.kind === "unstake" ? `Done: ${stakeAmount(res.moved, m.netuid)} unstaked into free TAO. "Bridge to Solana" can bring it home.` : `Done: now ${stakeAmount(res.stakeAfter, m.netuid)} staked on ${m.netuid === 0 ? "root" : `subnet ${m.netuid}`}.`, "ok");
+    if (res.done) note("move-note", m.kind === "unstake"
+      ? `Done: ${stakeAmount(res.moved, m.netuid)} unstaked into free TAO.${thenReturn ? " Now bringing it to Solana: step 5, \"Where it is\", follows it." : ` "Bridge to Solana" can bring it home.`}`
+      : `Done: now ${stakeAmount(res.stakeAfter, m.netuid)} staked on ${m.netuid === 0 ? "root" : `subnet ${m.netuid}`}.`, "ok");
+    else if (thenReturn) note("move-note", "The unstake did not happen, so nothing is being returned.", "warn");
+    if (res.done && thenReturn && res.freed > 0n) chain = res.freed;
     move = null;
   } catch (e) {
     note("move-note", `${e.message || e}. Anything already sent is saved, so opening the holdings again continues it.`, "bad");
   } finally {
     state.running = false; $("move-cancel").disabled = false; gate();
-    if (move === null) showHoldings().then(() => { $("move-panel").hidden = false; });
-    if (state.direction === "reverse") refreshReturn();
+    if (move === null && chain === null) showHoldings().then(() => { $("move-panel").hidden = false; });
+    if (state.direction === "reverse" && chain === null) refreshReturn();
+  }
+  if (chain !== null) await returnAfterUnstake(chain);
+}
+
+// What a chained return leaves free on the coldkey, so a later unstake or stake can pay its own fee.
+const RETURN_KEEP_RAO = 1_000_000n; // 0.001 TAO
+
+/**
+ * The second half of "unstake, then return": sends the TAO the unstake freed, less whatever the return's
+ * own costs (bridge fee, gas held on transit, the funding transfer's fee) would overdraw, so the free
+ * balance never goes below RETURN_KEEP_RAO. Everything is re-read from the chain here, after the unstake.
+ */
+async function returnAfterUnstake(freedRao) {
+  const w = state.signed.wallet;
+  try {
+    if (loadReturn(w)) throw new Error("an earlier return from this browser has not finished; finish that one first from \"Bridge to Solana\"");
+    const lib = await loadReturnLib();
+    const free = await lib.freeBalance(w.address);
+    const amount = await fitReturnAmount({
+      freed: freedRao, free, keep: RETURN_KEEP_RAO, min: lib.MIN_RETURN_RAO, floor: removeDust,
+      leftAfter: async (amt) => {
+        const [q, price, t] = await Promise.all([
+          lib.quoteReturn({ amountRao: amt, solanaRecipient: solanaRecipient() }), getGasPrice(), transitState(w.transitKey, null),
+        ]);
+        const plan = lib.planReturnFunding({ amountRao: amt, nativeFeeWei: q.nativeFee, gasPriceWei: price, transitNativeWei: t.native, transitWtaoWei: t.wtao });
+        return plan.fundingRao > 0n ? (await lib.quoteTransfer(w.mnemonic, ss58Encode(t.self), plan.fundingRao)).remainingRao : free;
+      },
+    });
+    if (amount === 0n) throw new Error("what the unstake freed does not cover the bridge fee and gas, so it stays as free TAO on Bittensor");
+    setDirection("reverse");
+    $("amount").value = fmtUnits(amount, 9, 9).replace(/,/g, "");
+    $("step-status").scrollIntoView({ behavior: "smooth", block: "start" });
+    await runReturn({ amountRao: amount, afterUnstake: true });
+  } catch (e) {
+    note("move-note", `Unstaked, but the return did not start: ${e.message || e}. The TAO is free on Bittensor; "Bridge to Solana" can bring it home.`, "warn");
   }
 }
 
@@ -803,12 +865,16 @@ function requestReturnQuote() {
   }, 350);
 }
 
-async function runReturn() {
+/**
+ * Runs, or continues, the free-TAO return. `amountRao` overrides the amount field (the chained
+ * unstake-then-return); `retryReverted` sends again after the user saw the last send revert.
+ */
+async function runReturn({ amountRao: chosen = null, retryReverted = false, afterUnstake = false } = {}) {
   if (state.running || !RETURN_OPEN) return;
   const w = state.signed.wallet;
   const lib = await loadReturnLib();
   const saved = loadReturn(w);
-  const amountRao = saved ? BigInt(saved.amountRao) : state.amountLd;
+  const amountRao = saved ? BigInt(saved.amountRao) : chosen ?? state.amountLd;
   const recipient = saved ? saved.recipient : solanaRecipient();
   const baseline = saved ? BigInt(saved.baseline) : await getTaoBalance(clients.connection, state.user);
   const meta = { amountRao: String(amountRao), baseline: String(baseline), recipient, at: saved?.at ?? Date.now() };
@@ -816,12 +882,14 @@ async function runReturn() {
 
   state.running = true; $("sign").disabled = true; setStep("step-status", "active"); gate();
   for (const li of document.querySelectorAll("#track-rev li")) { li.dataset.s = ""; li.querySelector("span").textContent = "—"; }
-  document.querySelector('#track-rev li[data-k="unstake"]').hidden = true;
+  const unstakeLi = document.querySelector('#track-rev li[data-k="unstake"]');
+  unstakeLi.hidden = !afterUnstake;
+  if (afterUnstake) { unstakeLi.dataset.s = "ok"; unstakeLi.querySelector("span").textContent = "done"; }
   note("track-note", "");
   try {
     const res = await lib.finishFreeReturn({
       mnemonic: w.mnemonic, transitKey: w.transitKey, solanaRecipient: recipient, amountRao, expectedColdkey: w.address,
-      progress: saved?.progress ?? {}, onStep: trackRev,
+      progress: saved?.progress ?? {}, retryReverted, onStep: trackRev,
       onCheckpoint: (progress) => saveReturn(w, { ...meta, progress }),
     });
     if (res.pending) throw new Error("the LayerZero send is still pending on Bittensor");
@@ -844,7 +912,20 @@ async function runReturn() {
   } catch (e) {
     const busy = document.querySelector('#track-rev li[data-s="busy"]');
     if (busy) busy.dataset.s = "bad";
-    note("track-note", `${e.message || e}. Nothing is lost: every step is saved before it is sent, so signing in again on this page continues exactly where it stopped.`, "bad");
+    if (e.reverted) {
+      // The send reverted, so nothing crossed: the wTAO is still on the transit account. Sending again
+      // is the user's call, because a send that fails for a lasting reason would spend gas each time.
+      trackRev("send", "bad", "reverted on Bittensor; nothing was sent");
+      const again = Object.assign(document.createElement("button"), { type: "button", className: "btn btn-ghost btn-sm", textContent: "Send it again" });
+      again.addEventListener("click", () => { again.disabled = true; runReturn({ retryReverted: true }); });
+      noteHtml("track-note", [
+        text("Bittensor refused the LayerZero send, so nothing crossed and your TAO is still on your transit account as wTAO, "),
+        link(`https://evm.taostats.io/tx/${e.hash}`, "the refused transaction ↗"),
+        text(". Sending again re-quotes the bridge fee and reuses that wTAO. "), again,
+      ], "bad");
+    } else {
+      note("track-note", `${e.message || e}. Nothing is lost: every step is saved before it is sent, so signing in again on this page continues exactly where it stopped.`, "bad");
+    }
   } finally {
     state.running = false;
     if (state.user) refreshBalances();
@@ -1039,6 +1120,21 @@ function onCanonicalHost() {
   return false;
 }
 
+function setDirection(direction) {
+  state.direction = direction;
+  document.querySelector(`input[name="direction"][value="${direction}"]`).checked = true;
+  document.querySelectorAll(".dir-fwd").forEach(el => el.hidden = (state.direction !== "forward"));
+  document.querySelectorAll(".dir-rev").forEach(el => el.hidden = (state.direction !== "reverse"));
+  $("amount").value = "";
+  state.ret.quote = null;
+  if (state.direction === "reverse") {
+    // Only the wallet the signature creates can sign a return, so the paste option does not apply.
+    document.querySelector('input[name="ck-mode"][value="derive"]').checked = true; applyMode();
+    refreshReturn();
+  }
+  gate();
+}
+
 function init() {
   if (!onCanonicalHost()) return;
   if (!LIVE) $("not-live").hidden = false;
@@ -1048,18 +1144,7 @@ function init() {
   Array.from(document.querySelectorAll("input[name=direction]")).forEach(opt => {
     opt.addEventListener("change", (e) => {
       if (state.running) { e.preventDefault(); return; }
-      state.direction = e.target.value;
-      document.querySelectorAll(".dir-fwd").forEach(el => el.hidden = (state.direction !== "forward"));
-      document.querySelectorAll(".dir-rev").forEach(el => el.hidden = (state.direction !== "reverse"));
-      
-      $("amount").value = "";
-      state.ret.quote = null;
-      if (state.direction === "reverse") {
-        // Only the wallet the signature creates can sign a return, so the paste option does not apply.
-        document.querySelector('input[name="ck-mode"][value="derive"]').checked = true; applyMode();
-        refreshReturn();
-      }
-      gate();
+      setDirection(e.target.value);
     });
   });
   if (RETURN_OPEN) document.querySelector('input[name="direction"][value="reverse"]').disabled = false;
@@ -1085,6 +1170,7 @@ function init() {
   $("dir-sort").addEventListener("change", renderDirectory);
   $("holdings-btn").addEventListener("click", showHoldings);
   $("move-amount").addEventListener("input", quoteMove);
+  $("move-then").addEventListener("change", quoteMove);
   $("move-max").addEventListener("click", () => { if (move) { $("move-amount").value = fmtUnits(move.max, 9, 9).replace(/,/g, ""); quoteMove(); } });
   $("move-go").addEventListener("click", runMove);
   $("move-cancel").addEventListener("click", () => { if (!state.running) { move = null; $("move-panel").hidden = true; } });
