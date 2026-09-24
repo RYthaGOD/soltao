@@ -421,8 +421,18 @@ This is **not** git-push-triggered. Steps, in order, every time:
       `batch_all` of these calls (it only refuses nested batches, `NoNestingCallFilter`, subtensor
       `923fd1f`). Chutes' watcher reads every event in the block, so the transfer inside the batch is
       credited as before. **Confirm on the real-funds run**: Chutes credits it, and the extrinsic
-      shows the remark. No counting script yet: counting means searching the chain (an indexer such
-      as taostats, or a block scan) for that event hash.
+      shows the remark.
+    - *Counting them:* `npm run usage:chutes -- --from <block>` (`chutes_usage.mjs`, read-only). It
+      reads each block's raw `System.Events` in batched JSON-RPC calls (50 blocks a call), searches
+      the bytes for the tag hash, and decodes only matching blocks (`src/topups.js`: the Remarked
+      event, the Transfer from the same sender in the same extrinsic, ExtrinsicSuccess). Totals count
+      completed top-ups at or above 0.01 TAO, with payer wallets and Chutes accounts. Progress and
+      finds are kept in `tools/stake/.chutes-usage.json` (gitignored), so later runs read only new
+      blocks; the first run needs `--from`, the block the feature went live at. Defaults to
+      `https://archive.chain.opentensor.ai`, since old blocks' events need an archive node (the lite
+      node prunes them); `--rpc` overrides. Waits out 429s. Tests: `test/topups.test.mjs` (in
+      `npm test`). **Never run against a real node yet** (the building session had no network): the
+      first real run should be checked against the real-funds top-up's block.
     - *Checks:* SS58 with checksum, not the wallet's own address, at least 0.01 TAO, at most the free
       balance less the 0.01 TAO reserve, and the live network fee must fit. The page cannot know an
       address is Chutes'; it says so, and the send button stays shut until that is acknowledged.
