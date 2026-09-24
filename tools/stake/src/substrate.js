@@ -92,6 +92,19 @@ export async function freeBalance(address) {
   return (await api.query.system.account(address)).data.free.toBigInt();
 }
 
+/**
+ * Every stake position a coldkey holds, from the chain's own StakeInfo runtime API (one read-only
+ * call): { hotkey (SS58), netuid, stake } with stake in rao of TAO on root (netuid 0) and in the
+ * subnet's Alpha units elsewhere. Zero positions are dropped.
+ */
+export async function stakePositions(address) {
+  const api = await getApi();
+  const info = await api.call.stakeInfoRuntimeApi.getStakeInfoForColdkey(address);
+  return info.map((p) => ({ hotkey: p.hotkey.toString(), netuid: Number(p.netuid.toString()), stake: BigInt(p.stake.toString()) }))
+    .filter((p) => p.stake > 0n)
+    .sort((a, b) => a.netuid - b.netuid || (b.stake > a.stake ? 1 : -1));
+}
+
 // ── resumable transfers: sign, save, submit, reconcile ──────────────────────
 // signAndSend() waits on a subscription, which an HTTP provider cannot serve, and it only yields a
 // block hash. A resumable route instead signs offline (so the extrinsic hash and nonce are known and

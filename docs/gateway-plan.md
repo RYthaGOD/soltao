@@ -114,7 +114,9 @@ Acceptance:
 Status: started 24 Sep 2026 (built, not yet deployed). The validator picker is done: the chosen
 subnet's validator-permit holders from the metagraph, with uid, take and last-epoch dividend share,
 one stated sort rule, no names (not on-chain) and no stake column (unit unconfirmed). Shareable
-`?netuid=&hotkey=` links are done. Open: subnet directory, portfolio, return actions.
+`?netuid=&hotkey=` links are done. A first portfolio view is done: free TAO and every stake position
+of the coldkey on screen, from the chain's StakeInfo runtime API (Solana TAO is already shown in step
+1). Open: subnet directory, return actions per position.
 
 Data sources for the subnet directory and validator picker were researched on
 24 Sep 2026 — see `research/subnet-validator-data-research.md` for what taostats can and cannot

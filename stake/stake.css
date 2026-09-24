@@ -191,3 +191,7 @@
 .pick tr[aria-current="true"] td { background: var(--green-dim); color: var(--ink); }
 .pick button { font: inherit; color: var(--green-txt); background: none; border: 1px solid var(--green-mid); border-radius: 6px; padding: 3px 9px; cursor: pointer; }
 .pick button:hover, .pick button:focus-visible { background: var(--green-dim); outline: none; }
+
+/* holdings: what the Bittensor wallet on screen holds, read from the chain on request */
+.holdings { display: grid; gap: 8px; margin-top: 10px; justify-items: start; }
+.holdings #holdings-wrap { width: 100%; display: grid; gap: 8px; }

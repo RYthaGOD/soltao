@@ -429,6 +429,10 @@ if (want("F")) {
   const loaded = await page.evaluate(() => performance.getEntriesByType("resource").filter((e) => e.name.includes("return.js")).map((e) => new URL(e.name).pathname + new URL(e.name).search));
   expect("choosing the return loads its code once, by content hash", loaded.length === 1 && /^\/stake\/return\.js\?v=[0-9a-f]{8}$/.test(loaded[0]), loaded.join(","));
   expect("it reads the coldkey's free TAO", (await text(page, "#tao-free")) === "2 TAO" && accountReads > 0, `${await text(page, "#tao-free")} · ${accountReads} account reads`);
+  await clickEl(page, "#holdings-btn");
+  await waitText(page, "#holdings-note", /^Read \d\d:\d\d UTC|Could not/, 90_000);
+  const holdings = await page.$$eval("#holdings-body tr", (trs) => trs.map((tr) => [...tr.children].map((td) => td.textContent.trim()).join(" | ")));
+  expect("holdings show the wallet's free TAO and its stake positions, read from the chain", holdings[0] === "Free | — | 2 TAO" && /No stake positions\./.test(await text(page, "#holdings-note")), `${holdings.join(" / ")} · ${await text(page, "#holdings-note")}`);
   await setFieldE(page, "#amount", "5");
   await waitText(page, "#amount-note", /More than/);
   expect("an amount above the free TAO is refused", /More than the 2 TAO free in your Bittensor wallet/.test(await text(page, "#amount-note")), await text(page, "#amount-note"));

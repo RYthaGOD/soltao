@@ -5,6 +5,6 @@
 
 import { finishFreeReturn } from "./return_route.js";
 import { quoteReturn, planReturnFunding, MIN_RETURN_RAO, RETURN_GAS_LIMIT, WEI_PER_RAO } from "./oft_return.js";
-import { quoteTransfer, freeBalance, disconnectApi } from "./substrate.js";
+import { quoteTransfer, freeBalance, stakePositions, disconnectApi } from "./substrate.js";
 
-globalThis.__soltaoReturn = { finishFreeReturn, quoteReturn, planReturnFunding, quoteTransfer, freeBalance, disconnectApi, MIN_RETURN_RAO, RETURN_GAS_LIMIT, WEI_PER_RAO };
+globalThis.__soltaoReturn = { finishFreeReturn, quoteReturn, planReturnFunding, quoteTransfer, freeBalance, stakePositions, disconnectApi, MIN_RETURN_RAO, RETURN_GAS_LIMIT, WEI_PER_RAO };

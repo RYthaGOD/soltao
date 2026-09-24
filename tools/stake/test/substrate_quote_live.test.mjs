@@ -2,7 +2,7 @@
 //   node test/substrate_quote_live.test.mjs
 import { cryptoWaitReady, signatureVerify } from "@polkadot/util-crypto";
 import { verify as srVerify } from "@scure/sr25519";
-import { quoteTransfer, prepareTransfer, accountNonce, coldkeySigner, coldkeyPair, getApi, disconnectApi } from "../src/substrate.js";
+import { quoteTransfer, prepareTransfer, accountNonce, coldkeySigner, coldkeyPair, getApi, disconnectApi, stakePositions } from "../src/substrate.js";
 import { publicKeyFromMnemonic } from "../src/derive.js";
 
 const mnemonic = "bottom drive obey lake curtain smoke basket hold race lonely fit walk";
@@ -14,6 +14,12 @@ try {
   if (quote.address !== "5DfhGyQdFobKM8NsWvEeAKk5EQQgYe9AydgJ7rMB6E1EqRzV") throw new Error("unexpected derived signer");
   if (quote.feeRao <= 0n) throw new Error("runtime returned no transfer fee");
   console.log(`PASS  live coldkey transfer quote is ${quote.feeRao} rao; no transaction submitted`);
+
+  // Holdings: every stake position of a coldkey that has some (subnet 1's owner, read on 24 Sep 2026).
+  const positions = await stakePositions("5HCFWvRqzSHWRPecN7q8J6c7aKQnrCZTMHstPv39xL1wgDHh");
+  if (!positions.length || !positions.every((p) => p.stake > 0n && Number.isInteger(p.netuid) && /^5/.test(p.hotkey))) throw new Error(`unexpected positions: ${JSON.stringify(positions, (_, v) => typeof v === "bigint" ? String(v) : v)}`);
+  if ((await stakePositions(quote.address)).length !== 0) throw new Error("the empty test coldkey reported stake");
+  console.log(`PASS  holdings read ${positions.length} stake positions for a known coldkey, none for an empty one`);
 
   // Resumable funding signs offline first, so its identity can be saved before it is submitted.
   let signedMsg = null;

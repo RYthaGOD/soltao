@@ -27,7 +27,7 @@
 <link rel="apple-touch-icon" href="../logo.png">
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="stake.css">
-<script src="stake.js?v=1aeb4831" defer></script>
+<script src="stake.js?v=605f6fa1" defer></script>
 </head>
 <body>
 <a class="skip" href="#steps">Skip to the steps</a>
@@ -201,6 +201,18 @@
           <input type="checkbox" id="phrase-ack">
           <span>I saved the phrase somewhere safe, or I accept that only this Solana wallet, signing the same way, can recreate this Bittensor wallet.</span>
         </label>
+      </div>
+      <div class="holdings">
+        <button type="button" class="btn btn-ghost btn-sm" id="holdings-btn">Show what this Bittensor wallet holds</button>
+        <div id="holdings-wrap" hidden>
+          <p class="step-note" id="holdings-note" role="status"></p>
+          <div class="pick-scroll">
+            <table class="pick">
+              <thead><tr><th scope="col">Where</th><th scope="col">Validator hotkey</th><th scope="col">Amount</th></tr></thead>
+              <tbody id="holdings-body"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   </li>

@@ -178,7 +178,9 @@ async function sign() {
 }
 
 function setColdkey(publicKey, { mustAck = false } = {}) {
+  const before = state.coldkeyAddress;
   state.coldkey = publicKey; state.coldkeyAddress = publicKey ? ss58Encode(publicKey) : null; state.mustAck = mustAck;
+  if (state.coldkeyAddress !== before) { holdingsSeq++; $("holdings-wrap").hidden = true; $("holdings-btn").disabled = false; }
   $("ck-result").hidden = !publicKey || !state.signed;
   if (publicKey) {
     $("coldkey-out").textContent = state.coldkeyAddress;
@@ -586,6 +588,37 @@ async function refreshReturn() {
   gate();
 }
 
+// ── holdings: everything the Bittensor wallet on screen holds ─────────────────
+// Free TAO plus every stake position, from the chain's own StakeInfo runtime API. Read on request,
+// through the Bittensor-side bundle, so the forward page stays light. Works for a pasted coldkey too.
+let holdingsSeq = 0;
+async function showHoldings() {
+  const coldkey = state.coldkeyAddress;
+  if (!coldkey) return;
+  const seq = ++holdingsSeq;
+  $("holdings-btn").disabled = true; $("holdings-wrap").hidden = false; $("holdings-body").replaceChildren();
+  note("holdings-note", `reading ${short(coldkey, 6)} from Bittensor…`);
+  try {
+    const lib = await loadReturnLib();
+    const [free, positions] = await Promise.all([lib.freeBalance(coldkey), lib.stakePositions(coldkey)]);
+    if (seq !== holdingsSeq || coldkey !== state.coldkeyAddress) return;
+    const row = (where, hotkey, amount) => {
+      const tr = document.createElement("tr");
+      for (const [t, cls] of [[where], [hotkey], [amount, "num"]]) tr.append(Object.assign(document.createElement("td"), { textContent: t, className: cls || "" }));
+      return tr;
+    };
+    $("holdings-body").replaceChildren(
+      row("Free", "—", tao(free)),
+      ...positions.map((p) => row(p.netuid === 0 ? "Staked on root" : `Staked on subnet ${p.netuid}`, short(p.hotkey, 6), stakeAmount(p.stake, p.netuid))),
+    );
+    note("holdings-note", `Read ${new Date().toISOString().slice(11, 16)} UTC. ${positions.length ? `${positions.length} stake position${positions.length === 1 ? "" : "s"}. Subnet stakes are in that subnet's Alpha, root stakes in TAO.` : "No stake positions."}`);
+  } catch (e) {
+    if (seq === holdingsSeq) note("holdings-note", `Could not read it from Bittensor: ${e.message}`, "bad");
+  } finally {
+    if (seq === holdingsSeq) $("holdings-btn").disabled = false;
+  }
+}
+
 function trackRev(k, s, msg) {
   const key = { wrap: "deposit", bridge: "send" }[k] ?? k;
   const li = document.querySelector(`#track-rev li[data-k="${key}"]`); if (!li) return;
@@ -904,6 +937,7 @@ function init() {
   $("netuid-in").addEventListener("input", onNetuid);
   $("hotkey-in").addEventListener("input", onHotkey);
   $("pick-btn").addEventListener("click", openPicker);
+  $("holdings-btn").addEventListener("click", showHoldings);
   $("sign").addEventListener("click", send);
   getGasPrice().then((p) => { state.gasPrice = p; gate(); }).catch(() => {});
   addEventListener("beforeunload", (e) => { if (state.running) { e.preventDefault(); e.returnValue = ""; } });
