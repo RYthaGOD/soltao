@@ -354,6 +354,21 @@ const clean = async (page, problems, label) => {
   await page.close();
 }
 
+// ── Run E: a shared link names the subnet and validator ──
+{
+  const secret = ed25519.utils.randomPrivateKey();
+  const pubkey = base58.encode(ed25519.getPublicKey(secret));
+  const { page, problems } = await openWith({ pubkey, secret, base: `${plain.base}?netuid=1&hotkey=${SUBNET1_OWNER_HOTKEY}` });
+  await waitText(page, "#hotkey-note", /Validator on subnet 1|Not on subnet|Could not reach/);
+  expect("a shared link fills the subnet and validator and checks them on-chain", (await page.$eval("#netuid-in", (el) => el.value)) === "1" && /^Validator on subnet 1 · uid \d+/.test(await text(page, "#hotkey-note")), await text(page, "#hotkey-note"));
+  const share = await page.$eval("#hotkey-note a", (a) => a.getAttribute("href")).catch(() => null);
+  expect("a checked validator offers a link back to the same choice", share === `/stake/?netuid=1&hotkey=${SUBNET1_OWNER_HOTKEY}`, share);
+  const who = (await text(page, ".stake-who")).replace(/\s+/g, " ");
+  expect("the page says who runs it and what they can take, near the top", /never sent to them/.test(who) && /only charge is a flat SOL fee/.test(who), who);
+  await clean(page, problems, "run E");
+  await page.close();
+}
+
 await browser.close();
 plain.server.close(); live.server.close();
 console.log(failures ? `\n${failures} failed` : "\nall passed");

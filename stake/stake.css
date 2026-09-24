@@ -18,6 +18,7 @@
 @media (min-width: 760px) { .stake-hero { padding-block: 64px 12px; } }
 .stake-hero h1 { font-size: clamp(30px, 6vw, 52px); max-width: 20ch; letter-spacing: -0.038em; font-weight: 700; line-height: 1.05; }
 .stake-lede { margin: 0; color: var(--ink-2); max-width: 66ch; font-size: clamp(15px, 1.7vw, 16.5px); line-height: 1.65; }
+.stake-who { margin: 0; color: var(--ink-3); max-width: 66ch; font-size: 13.5px; line-height: 1.6; border-left: 2px solid var(--line-3); padding-left: 12px; }
 .stake-hops { margin-top: 8px; }
 @media (min-width: 760px) { .stake-hops { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 

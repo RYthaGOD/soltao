@@ -27,7 +27,7 @@
 <link rel="apple-touch-icon" href="../logo.png">
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="stake.css">
-<script src="stake.js?v=d9e1d07e" defer></script>
+<script src="stake.js?v=76a19454" defer></script>
 </head>
 <body>
 <a class="skip" href="#steps">Skip to the steps</a>
@@ -38,7 +38,7 @@
       <img class="brand-mark" src="../logo.png" width="36" height="36" alt="">
       <span class="brand-text">
         <span class="brand-name">Solana TAO Board</span>
-        <span class="brand-sub">Unofficial community reference</span>
+        <span class="brand-sub">Self-custody stake route</span>
       </span>
     </a>
     <div class="topbar-right">
@@ -73,6 +73,10 @@
     <span class="dir-fwd">One Solana transaction. Your TAO goes home over the LayerZero bridge it came in on, and this page stakes it to the validator you choose, owned by your own Bittensor wallet. There is no receipt token and no soltao contract: every key along the way comes from your signature, and nobody else holds one.</span>
     <span class="dir-rev" hidden>Unstake your TAO from Bittensor and bridge it back to Solana over LayerZero. Everything is signed securely by your derived Bittensor wallet, returning canonical TAO to your Solana wallet.</span>
   </p>
+  <p class="stake-who">Run by the maintainer of the Solana TAO Board, who also launched the SOLTAO coin (see the
+    disclosure below). Your keys are made and kept in this browser and never sent to them, and there is no
+    soltao contract holding funds. You do trust this page's code, which is open source. Its only charge is a
+    flat SOL fee, shown in step 4 before you sign.</p>
   <ol class="hops stake-hops dir-fwd" aria-label="The route">
     <li><b>Solana</b><span>canonical TAO · you sign once</span></li>
     <li><b>LayerZero</b><span>the OFT bridge TAO arrived on</span></li>

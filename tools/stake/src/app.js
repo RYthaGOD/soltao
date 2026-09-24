@@ -351,6 +351,8 @@ async function onNetuid() {
 }
 
 let hotkeySeq = 0;
+/** A link that reopens this page with the same subnet and validator filled in (see prefillFromLink). */
+const shareLink = (netuid, hotkey) => Object.assign(document.createElement("a"), { href: `/stake/?netuid=${netuid}&hotkey=${encodeURIComponent(hotkey)}`, textContent: "link to this choice" });
 async function onHotkey() {
   const v = $("hotkey-in").value.trim(); const seq = ++hotkeySeq;
   state.hotkey = null;
@@ -368,7 +370,7 @@ async function onHotkey() {
       if (seq !== hotkeySeq) return;
       if (!d.exists) { bad("Not a registered validator (delegate) hotkey. Check it on taostats."); return gate(); }
       state.hotkey = pk; $("hotkey-in").setAttribute("aria-invalid", "false");
-      note("hotkey-note", `Registered validator · take ${d.takePct.toFixed(2)}% of rewards`, "ok");
+      noteHtml("hotkey-note", [text(`Registered validator · take ${d.takePct.toFixed(2)}% of rewards · `), shareLink(0n, v)], "ok");
       return gate();
     }
     // getDelegate() takes no netuid: a delegate on one subnet can hold no slot on this one, and a
@@ -386,7 +388,7 @@ async function onHotkey() {
     }
     state.hotkey = pk; $("hotkey-in").setAttribute("aria-invalid", "false");
     const take = d.exists ? ` · take ${d.takePct.toFixed(2)}% of rewards` : "";
-    note("hotkey-note", `Validator on subnet ${netuid} · uid ${at.uid}${take} · ${(at.dividendShare * 100).toFixed(2)}% of the subnet's validator dividends last epoch`, "ok");
+    noteHtml("hotkey-note", [text(`Validator on subnet ${netuid} · uid ${at.uid}${take} · ${(at.dividendShare * 100).toFixed(2)}% of the subnet's validator dividends last epoch · `), shareLink(netuid, v)], "ok");
   } catch (e) {
     if (seq === hotkeySeq) note("hotkey-note", `Could not reach Bittensor to check it: ${e.message}`, "bad");
   }
@@ -679,7 +681,18 @@ function init() {
   // Keys live only in memory; drop them when the page goes away.
   addEventListener("pagehide", () => { state.signed = null; $("phrase").replaceChildren(); });
   addEventListener("pageshow", (e) => { if (e.persisted) location.reload(); }); // restored from the back/forward cache without its keys
+  prefillFromLink();
   gate();
+}
+
+// A shared link can name the subnet and validator: /stake/?netuid=1&hotkey=5F… fills step 3 and runs
+// the same on-chain checks as typing them. It only fills fields; nothing is chosen or sent for the user.
+function prefillFromLink() {
+  const q = new URLSearchParams(location.search);
+  const netuid = (q.get("netuid") || "").trim(), hotkey = (q.get("hotkey") || "").trim();
+  if (/^\d{1,5}$/.test(netuid)) { $("netuid-in").value = netuid; onNetuid(); }
+  if (/^5[1-9A-HJ-NP-Za-km-z]{47}$/.test(hotkey)) { $("hotkey-in").value = hotkey; if (!netuid || netuid === "0") onHotkey(); }
+  // With a subnet in the link, onNetuid re-checks the hotkey once the subnet is confirmed.
 }
 
 init();
