@@ -97,14 +97,58 @@ export async function rpcBatch(calls, url = CONFIG.bittensorEvmRpc) {
 export const getBalance = async (address) => BigInt(await rpc("eth_getBalance", [address, "latest"]));
 export const getGasPrice = async () => BigInt(await rpc("eth_gasPrice"));
 
-/** Sends one transaction from the transit key and waits for its receipt. Throws if it reverts. */
-export async function sendTx(privateKey, { to, value = 0n, data = "0x", gasLimit, gasPrice }, { pollMs = 3000, timeoutMs = 5 * 60_000, onBroadcast = () => {} } = {}) {
+export const getNonce = async (address, tag = "latest") => BigInt(await rpc("eth_getTransactionCount", [address, tag]));
+/** The hash a signed transaction will have, known before it is broadcast. */
+export const txHash = (raw) => bytesToHex(keccak_256(hexToBytes(raw)));
+
+/**
+ * Signs without sending, so a caller can save the transaction's identity (hash, nonce, signed bytes)
+ * before it can possibly land. A resume then reconciles that exact transaction instead of creating
+ * a second one. `nonce` defaults to the account's next nonce including the mempool.
+ */
+export async function signTx(privateKey, { to, value = 0n, data = "0x", gasLimit, gasPrice, nonce }) {
   const from = evmAddress(privateKey);
-  const nonce = BigInt(await rpc("eth_getTransactionCount", [from, "pending"]));
+  const n = nonce ?? (await getNonce(from, "pending"));
   const price = gasPrice ?? (await getGasPrice());
-  const raw = signLegacyTx({ nonce, gasPrice: price, gasLimit: BigInt(gasLimit), to, value, data }, privateKey);
-  const hash = await rpc("eth_sendRawTransaction", [raw]);
+  const raw = signLegacyTx({ nonce: n, gasPrice: price, gasLimit: BigInt(gasLimit), to, value, data }, privateKey);
+  return { raw, hash: txHash(raw), nonce: n, from };
+}
+
+/** Broadcasts signed bytes. Re-broadcasting the same bytes is harmless: "already known" is success. */
+export async function broadcast(raw) {
+  try {
+    return await rpc("eth_sendRawTransaction", [raw]);
+  } catch (e) {
+    if (/already known|known transaction|already imported|AlreadyKnown/i.test(e.message || "")) return txHash(raw);
+    throw e;
+  }
+}
+
+/**
+ * Where a previously signed transaction stands: "mined" (with its receipt), "pending" (not mined, its
+ * nonce still open, so re-broadcasting the same bytes is the safe move), or "dead" (its nonce was used
+ * by something else, so it can never land and new work is safe).
+ */
+export async function txStatus({ hash, nonce, from }) {
+  const receipt = await rpc("eth_getTransactionReceipt", [hash]);
+  if (receipt) return { state: "mined", ok: receipt.status === "0x1", gasUsed: BigInt(receipt.gasUsed) };
+  return (await getNonce(from, "latest")) > BigInt(nonce) ? { state: "dead" } : { state: "pending" };
+}
+
+/** Sends one transaction from the transit key and waits for its receipt. Throws if it reverts. */
+export async function sendTx(privateKey, { to, value = 0n, data = "0x", gasLimit, gasPrice }, { pollMs = 3000, timeoutMs = 5 * 60_000, onBroadcast = () => {}, onSigned = null } = {}) {
+  const signed = await signTx(privateKey, { to, value, data, gasLimit, gasPrice });
+  // onSigned runs before the bytes leave: a caller that saves them there can never lose a
+  // transaction whose broadcast succeeded but whose response was lost.
+  if (onSigned) onSigned(signed);
+  const hash = await broadcast(signed.raw);
+  const nonce = signed.nonce;
   onBroadcast({ hash, nonce });
+  return waitMined(hash, { pollMs, timeoutMs });
+}
+
+/** Polls for a receipt. Throws a `reverted` error if the chain refused it. */
+export async function waitMined(hash, { pollMs = 3000, timeoutMs = 5 * 60_000 } = {}) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     let receipt;

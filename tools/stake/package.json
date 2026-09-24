@@ -13,7 +13,8 @@
     "test:return:mainnet": "node test/return_mainnet.test.mjs",
     "serve": "node serve.mjs",
     "test:subnet:live": "node test/subnet_live.test.mjs",
-    "test:live": "node test/live.test.mjs"
+    "test:live": "node test/live.test.mjs",
+    "usage": "node usage.mjs"
   },
   "dependencies": {
     "@layerzerolabs/lz-v2-utilities": "3.0.168",

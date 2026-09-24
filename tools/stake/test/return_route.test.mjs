@@ -1,3 +1,8 @@
+// The resumable free-TAO return (src/return_route.js) against a simulated chain with a real mempool:
+// transactions can sit pending, be re-broadcast, expire, have their reply lost, or have their nonce
+// taken by something else. Every assertion counts mutations the chain actually APPLIED, not calls
+// made, because the danger being tested is a second transfer, wrap or send landing on top of the first.
+
 import { finishFreeReturn } from "../src/return_route.js";
 import { RETURN_GAS_LIMIT, WEI_PER_RAO } from "../src/oft_return.js";
 
@@ -5,13 +10,36 @@ const PRICE = 5_000_000_000n;
 const FEE = 2_859_118_000_000_000n;
 const AMOUNT_RAO = 1_000_000_000n;
 const AMOUNT_WEI = AMOUNT_RAO * WEI_PER_RAO;
+const XFER_FEE = 85_569n;
 let failures = 0;
 const expect = (name, ok, detail = "") => { console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? "  — " + detail : ""}`); if (!ok) failures++; };
+const count = (s, kind) => s.applied.filter((x) => x === kind).length;
 
-function simulator({ nativeWei = 0n, wtaoWei = 0n, coldkeyFreeRao = 2_000_000_000n, sendReceipt = null, failAfter = null, bridgeFees = [FEE] } = {}) {
-  const s = { nativeWei, wtaoWei, coldkeyFreeRao, calls: [], checkpoints: [], receipts: new Map(), nonce: 0n, quotes: 0 };
-  if (sendReceipt) s.receipts.set(sendReceipt.hash, sendReceipt.receipt);
-  const maybeFail = (stage) => { if (failAfter === stage) throw new Error(`interrupted after ${stage}`); };
+function chain({ nativeWei = 0n, wtaoWei = 0n, coldkeyFreeRao = 2_000_000_000n, bridgeFees = [FEE], sendReverts = false } = {}) {
+  const s = {
+    nativeWei, wtaoWei, coldkeyFreeRao, coldkeyNonce: 0n, evmNonce: 0n,
+    pool: new Map(), receipts: new Map(), signed: new Map(), applied: [], log: [], quotes: 0, n: 0,
+    autoMine: true, crashAfter: null, loseReplyOf: null, expired: new Set(),
+  };
+  const mine = () => {
+    const txs = [...s.pool.values()].sort((a, b) => (a.nonce < b.nonce ? -1 : 1));
+    for (const tx of txs) {
+      s.pool.delete(tx.key);
+      if (tx.chain === "substrate") {
+        if (tx.nonce !== s.coldkeyNonce) continue;
+        s.coldkeyNonce++; s.coldkeyFreeRao -= tx.amountRao + XFER_FEE; s.nativeWei += tx.amountRao * WEI_PER_RAO; s.applied.push("fund");
+      } else {
+        if (tx.nonce !== s.evmNonce) continue;
+        s.evmNonce++;
+        if (tx.kind === "send" && sendReverts) { s.nativeWei -= RETURN_GAS_LIMIT.send * PRICE; s.receipts.set(tx.hash, "0x0"); continue; }
+        if (tx.kind === "wrap") { s.nativeWei -= tx.amountWei + RETURN_GAS_LIMIT.wrap * PRICE; s.wtaoWei += tx.amountWei; }
+        else { s.nativeWei -= tx.nativeFeeWei + RETURN_GAS_LIMIT.send * PRICE; s.wtaoWei -= tx.amountWei; }
+        s.receipts.set(tx.hash, "0x1"); s.applied.push(tx.kind);
+      }
+    }
+  };
+  // The page "closes" right after a named broadcast: the transaction is in the pool, not mined.
+  const afterBroadcast = (kind) => { s.log.push(`broadcast:${kind}`); if (s.crashAfter === kind) { s.crashAfter = null; throw new Error(`page closed after ${kind} broadcast`); } };
   const ops = {
     signerAddress: () => "5DerivedColdkey",
     transitAddress: () => "0x1111111111111111111111111111111111111111",
@@ -19,100 +47,144 @@ function simulator({ nativeWei = 0n, wtaoWei = 0n, coldkeyFreeRao = 2_000_000_00
     state: async () => ({ nativeWei: s.nativeWei, wtaoWei: s.wtaoWei }),
     gasPrice: async () => PRICE,
     quoteBridge: async () => ({ nativeFee: bridgeFees[Math.min(s.quotes++, bridgeFees.length - 1)], lzTokenFee: 0n, amountWei: AMOUNT_WEI, amountRao: AMOUNT_RAO, solanaAmountLd: AMOUNT_RAO }),
-    quoteFunding: async (_m, to, amountRao) => ({ address: "5DerivedColdkey", freeRao: s.coldkeyFreeRao, feeRao: 85_569n, amountRao, remainingRao: s.coldkeyFreeRao - amountRao - 85_569n, to }),
-    fund: async (_m, to, amountRao) => {
-      s.calls.push(`fund:${amountRao}`); s.coldkeyFreeRao -= amountRao + 85_569n; s.nativeWei += amountRao * WEI_PER_RAO;
-      maybeFail("fund"); return "0xfund";
+    quoteFunding: async (_m, to, amountRao) => ({ address: "5DerivedColdkey", freeRao: s.coldkeyFreeRao, feeRao: XFER_FEE, amountRao, remainingRao: s.coldkeyFreeRao - amountRao - XFER_FEE, to }),
+    prepareFund: async (_m, _to, amountRao) => {
+      const pendingFunds = [...s.pool.values()].filter((t) => t.chain === "substrate").length;
+      const i = s.n++, rec = { id: `0xfund${i}`, signed: `signed-fund-${i}`, nonce: s.coldkeyNonce + BigInt(pendingFunds), address: "5DerivedColdkey" };
+      s.signed.set(rec.signed, { chain: "substrate", key: rec.signed, nonce: rec.nonce, amountRao: BigInt(amountRao) });
+      return { ...rec, nonce: String(rec.nonce) };
     },
-    wrap: async (_key, amountWei) => {
-      s.calls.push(`wrap:${amountWei}`); s.nativeWei -= amountWei + RETURN_GAS_LIMIT.wrap * PRICE; s.wtaoWei += amountWei;
-      maybeFail("wrap"); return { hash: "0xwrap" };
+    submitFund: async (signed) => {
+      const tx = s.signed.get(signed);
+      if (!tx || s.expired.has(signed) || tx.nonce < s.coldkeyNonce) return { state: "rejected", reason: "Transaction is outdated" };
+      s.pool.set(tx.key, tx); afterBroadcast("fund");
+      if (s.autoMine) mine();
+      return { state: "submitted" };
     },
-    send: async (_key, { amountWei, nativeFeeWei, onBroadcast }) => {
-      const hash = "0xsend"; onBroadcast({ hash, nonce: s.nonce++ });
-      s.calls.push(`send:${amountWei}`); s.nativeWei -= nativeFeeWei + RETURN_GAS_LIMIT.send * PRICE; s.wtaoWei -= amountWei;
-      s.receipts.set(hash, { status: "0x1", gasUsed: RETURN_GAS_LIMIT.send }); maybeFail("send"); return { hash };
+    coldkeyNonce: async () => s.coldkeyNonce,
+    signWrap: async (_k, amountWei) => {
+      const pend = [...s.pool.values()].filter((t) => t.chain === "evm").length;
+      const i = s.n++, tx = { chain: "evm", kind: "wrap", key: `raw-wrap-${i}`, hash: `0xwrap${i}`, nonce: s.evmNonce + BigInt(pend), amountWei };
+      s.signed.set(tx.key, tx); return { raw: tx.key, hash: tx.hash, nonce: tx.nonce, from: "0x1111" };
     },
-    receipt: async (hash) => s.receipts.get(hash) ?? null,
+    signSend: async (_k, { amountWei, nativeFeeWei }) => {
+      const pend = [...s.pool.values()].filter((t) => t.chain === "evm").length;
+      const i = s.n++, tx = { chain: "evm", kind: "send", key: `raw-send-${i}`, hash: `0xsend${i}`, nonce: s.evmNonce + BigInt(pend), amountWei, nativeFeeWei };
+      s.signed.set(tx.key, tx); return { raw: tx.key, hash: tx.hash, nonce: tx.nonce, from: "0x1111" };
+    },
+    broadcast: async (raw) => {
+      const tx = s.signed.get(raw);
+      if (tx.nonce < s.evmNonce) { if (s.receipts.has(tx.hash)) return tx.hash; throw new Error("nonce too low"); }
+      s.pool.set(tx.key, tx); afterBroadcast(tx.kind);
+      if (s.loseReplyOf === tx.kind) { s.loseReplyOf = null; throw new Error("connection reset after the RPC accepted it"); }
+      return tx.hash;
+    },
+    evmStatus: async ({ hash, nonce }) => {
+      if (s.receipts.has(hash)) return { state: "mined", ok: s.receipts.get(hash) === "0x1" };
+      return s.evmNonce > BigInt(nonce) ? { state: "dead" } : { state: "pending" };
+    },
+    waitMined: async (hash) => {
+      if (s.autoMine) mine();
+      if (!s.receipts.has(hash)) throw new Error(`transaction ${hash} not mined yet`);
+      if (s.receipts.get(hash) !== "0x1") throw Object.assign(new Error(`transaction ${hash} reverted`), { reverted: true, hash });
+      return { hash };
+    },
   };
-  const run = (progress = {}) => finishFreeReturn({
+  let last = {};
+  const run = (progress = last) => finishFreeReturn({
     mnemonic: "words", transitKey: new Uint8Array(32), solanaRecipient: `0x${"42".repeat(32)}`,
-    amountRao: AMOUNT_RAO, expectedColdkey: "5DerivedColdkey", progress, ops, pollMs: 0,
-    onCheckpoint: (value) => s.checkpoints.push(value),
+    amountRao: AMOUNT_RAO, expectedColdkey: "5DerivedColdkey", progress, ops, pollMs: 0, waitMs: 0,
+    onCheckpoint: (value) => { last = JSON.parse(JSON.stringify(value)); s.log.push(`checkpoint:${value.stage}`); },
   });
-  return { s, run };
+  const interrupted = async () => { try { await run({}); return null; } catch (e) { return e.message; } };
+  return { s, run, interrupted, mine, saved: () => last };
 }
 
-// A higher LayerZero re-quote is covered by a precise top-up before the OFT send.
+// ── the clean route ──
 {
-  const higherFee = FEE + 10_000_000_000_000_000n;
-  const { s, run } = simulator({ coldkeyFreeRao: 3_000_000_000n, bridgeFees: [FEE, higherFee] });
+  const { s, run } = chain();
+  const result = await run({});
+  expect("free return applies each mutation exactly once", count(s, "fund") === 1 && count(s, "wrap") === 1 && count(s, "send") === 1, s.applied.join(","));
+  expect("canonical amount is sent and no wTAO is left", result.stage === "sent" && result.amountRao === AMOUNT_RAO && s.wtaoWei === 0n);
+  const order = s.log.filter((x) => /^(checkpoint:(funding|wrapping|send-signed)|broadcast:)/.test(x)).join(",");
+  expect("every mutation is checkpointed before it is broadcast", order === "checkpoint:funding,broadcast:fund,checkpoint:wrapping,broadcast:wrap,checkpoint:send-signed,broadcast:send", order);
+}
+
+// ── the review findings: a page closed while a mutation is still pending ──
+{
+  const { s, run, interrupted } = chain();
+  s.autoMine = false; s.crashAfter = "fund";
+  const why = await interrupted();
+  expect("page closes with the funding transfer pending, not included", /closed after fund/.test(why) && count(s, "fund") === 0 && s.pool.size === 1, why);
+  s.autoMine = true;
   await run();
-  expect("a higher final bridge quote tops up instead of reverting after wrap",
-    s.calls.filter((x) => x.startsWith("fund:")).length === 2 && s.calls.at(-1).startsWith("send:"), s.calls.join(","));
+  expect("resume re-submits the same signed transfer and never funds twice", count(s, "fund") === 1 && count(s, "wrap") === 1 && count(s, "send") === 1, s.applied.join(","));
 }
-
-// The route refuses before the first mutation if the coldkey cannot cover amount plus fees.
 {
-  const { s, run } = simulator({ coldkeyFreeRao: 500_000_000n });
-  let message = ""; try { await run(); } catch (e) { message = e.message; }
-  expect("insufficient free TAO fails before any mutation", /not enough free TAO/.test(message) && s.calls.length === 0, message);
+  // The funding mines; the wrap is broadcast but the page closes before it is mined.
+  const { s, run, interrupted } = chain();
+  s.crashAfter = "wrap";
+  const why = await interrupted();
+  expect("page closes with the wrap in the pool", /closed after wrap/.test(why) && count(s, "wrap") === 0, `${why} · ${s.applied.join(",")}`);
+  await run();
+  expect("resume settles that wrap and never wraps twice", count(s, "fund") === 1 && count(s, "wrap") === 1 && count(s, "send") === 1, s.applied.join(","));
+}
+{
+  // The funding and wrap mine; the RPC accepts the send but its reply is lost, so it looks unsent.
+  const { s, run, interrupted } = chain();
+  s.loseReplyOf = "send";
+  const why = await interrupted();
+  expect("an accepted send with a lost reply leaves it in the pool", /connection reset/.test(why) && count(s, "send") === 0, `${why} · pool ${s.pool.size}`);
+  const result = await run();
+  expect("resume finds that exact send and never sends a second", count(s, "send") === 1 && result.stage === "sent", s.applied.join(","));
 }
 
-// Excess wTAO belongs to the user and is not swept into the requested return.
+// ── transactions that can never land ──
+{
+  const { s, run, interrupted, saved } = chain();
+  s.autoMine = false; s.crashAfter = "fund";
+  await interrupted();
+  s.expired.add(saved().fund.signed); s.pool.clear(); // mortal era passed: it can never be included
+  s.autoMine = true;
+  await run();
+  expect("an expired funding transfer is replaced once, not stacked", count(s, "fund") === 1 && count(s, "send") === 1 && s.log.filter((x) => x === "broadcast:fund").length === 2, s.applied.join(","));
+}
+{
+  const { s, run } = chain();
+  s.crashAfter = "wrap";
+  try { await run({}); } catch { /* page closed */ }
+  // The wrap's nonce is taken by another transaction from the transit key: it can never be mined.
+  s.pool.clear(); s.evmNonce++;
+  await run();
+  expect("a wrap whose nonce was used elsewhere is treated as dead and redone once", count(s, "wrap") === 1 && count(s, "send") === 1, s.applied.join(","));
+}
+{
+  const { s, run } = chain({ sendReverts: true });
+  let first = ""; try { await run({}); } catch (e) { first = e.message; }
+  let second = ""; try { await run(); } catch (e) { second = e.message; }
+  expect("a reverted send stops the route, and a resume does not send again", /reverted/.test(first) && /reverted/.test(second) && s.log.filter((x) => x === "broadcast:send").length === 1, `${first} | ${second}`);
+}
+
+// ── carried over: quoting and funding rules ──
+{
+  const { s, run } = chain({ coldkeyFreeRao: 3_000_000_000n, bridgeFees: [FEE, FEE + 10_000_000_000_000_000n] });
+  await run({});
+  expect("a higher final bridge quote tops up instead of reverting after wrap", count(s, "fund") === 2 && s.applied.at(-1) === "send", s.applied.join(","));
+}
+{
+  const { s, run } = chain({ coldkeyFreeRao: 500_000_000n });
+  let message = ""; try { await run({}); } catch (e) { message = e.message; }
+  expect("insufficient free TAO fails before any mutation", /not enough free TAO/.test(message) && s.applied.length === 0 && s.pool.size === 0, message);
+}
 {
   const extra = 200_000_000_000_000_000n;
-  const native = FEE + (RETURN_GAS_LIMIT.send * PRICE * 12n) / 10n;
-  const { s, run } = simulator({ nativeWei: native, wtaoWei: AMOUNT_WEI + extra });
-  await run();
-  expect("a partial return leaves unrelated wTAO on transit untouched", s.wtaoWei === extra && s.calls.length === 1 && s.calls[0].startsWith("send:"), `${s.wtaoWei} wei left`);
+  const { s, run } = chain({ nativeWei: FEE + (RETURN_GAS_LIMIT.send * PRICE * 12n) / 10n, wtaoWei: AMOUNT_WEI + extra });
+  await run({});
+  expect("a partial return leaves unrelated wTAO on transit untouched", s.wtaoWei === extra && s.applied.join(",") === "send", `${s.wtaoWei} wei left`);
 }
-
-// Clean route: fund once, wrap once, send once.
 {
-  const { s, run } = simulator();
-  const result = await run();
-  expect("free return completes all three mutations once", s.calls.filter((x) => x.startsWith("fund:")).length === 1 && s.calls.filter((x) => x.startsWith("wrap:")).length === 1 && s.calls.filter((x) => x.startsWith("send:")).length === 1);
-  expect("canonical amount is sent to the saved Solana recipient", result.stage === "sent" && result.amountRao === AMOUNT_RAO && s.wtaoWei === 0n);
-  expect("broadcast hash is checkpointed before completion", s.checkpoints.some((x) => x.stage === "send-broadcast" && x.sendHash === "0xsend"));
-}
-
-// Resume after funding: chain state prevents a duplicate coldkey transfer.
-{
-  const required = AMOUNT_WEI + FEE + ((RETURN_GAS_LIMIT.wrap + RETURN_GAS_LIMIT.send) * PRICE * 12n) / 10n;
-  const { s, run } = simulator({ nativeWei: required });
-  await run({ stage: "funded", fundingHash: "0xfund" });
-  expect("resume after funding does not fund twice", !s.calls.some((x) => x.startsWith("fund:")) && s.calls[0].startsWith("wrap:"), s.calls.join(","));
-}
-
-// Resume after wrapping: existing wTAO is reused and only fee/gas funding is considered.
-{
-  const native = FEE + (RETURN_GAS_LIMIT.send * PRICE * 12n) / 10n;
-  const { s, run } = simulator({ nativeWei: native, wtaoWei: AMOUNT_WEI });
-  await run({ stage: "wrapped", wrapHash: "0xwrap" });
-  expect("resume after wrap does not wrap or fund twice", s.calls.length === 1 && s.calls[0].startsWith("send:"), s.calls.join(","));
-}
-
-// Resume after broadcast: receipt proves completion and prevents a second OFT send.
-{
-  const { s, run } = simulator({ sendReceipt: { hash: "0xprior", receipt: { status: "0x1", gasUsed: 1n } } });
-  const result = await run({ stage: "send-broadcast", sendHash: "0xprior" });
-  expect("resume after broadcast reads the receipt and never sends twice", result.stage === "sent" && result.sendHash === "0xprior" && s.calls.length === 0);
-}
-
-// A pending broadcast remains pending; the route never guesses and broadcasts another send.
-{
-  const { s, run } = simulator();
-  const result = await run({ stage: "send-broadcast", sendHash: "0xpending" });
-  expect("pending broadcast blocks duplicate OFT sends", result.pending === true && s.calls.length === 0);
-}
-
-// Wrong derived signer is rejected before any quote or mutation.
-{
-  const { s, run } = simulator();
   let message = ""; try { await finishFreeReturn({ mnemonic: "words", transitKey: new Uint8Array(32), solanaRecipient: `0x${"42".repeat(32)}`, amountRao: AMOUNT_RAO, expectedColdkey: "5Wrong", ops: { signerAddress: () => "5DerivedColdkey" } }); } catch (e) { message = e.message; }
-  // Use the simulator route for the actual mutation count; mismatch must happen before it could run.
-  expect("a mismatched coldkey cannot start a return", /does not match/.test(message) && s.calls.length === 0, message);
+  expect("a mismatched coldkey cannot start a return", /does not match/.test(message), message);
 }
 
 console.log(failures ? `\n${failures} failed` : "\nall passed");

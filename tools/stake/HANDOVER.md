@@ -300,8 +300,11 @@ history item 11. Full report, private to Craig: https://claude.ai/artifact/3ZEok
 
 **Usage, read from chain.** The fee wallet's entire history (949 transactions) holds exactly one
 completed route, meaning a transaction that both pays soltao's fee and calls the canonical TAO OFT
-program: 23 Sep 2026, 00:23 UTC, Craig's own real-funds test. No outside user has completed a route.
-The fee wallet also carries ~900 unrelated transactions, so revenue cannot be read off it cleanly.
+program: 23 Sep 2026, 00:23 UTC, Craig's own real-funds test, which paid the old 0.0075 SOL fee.
+No outside user has completed a route. Re-count any time with `npm run usage` in `tools/stake`
+(read-only, seconds). Correction to the first roast report: the ~940 other transactions on the fee
+wallet all predate the stake page. Only 11 touch it since 21 Sep 2026, so revenue reads cleanly from
+the launch date and a dedicated fee wallet is optional, not needed for measurement.
 
 **Score: 55 / 110** ("needs significant work"). Value proposition 6 (x2), crypto necessity 9, target
 user 5, first-time experience 4, core loop 2, moat 3, technical execution 8, naming 4, monetization
@@ -311,7 +314,7 @@ user 5, first-time experience 4, core loop 2, moat 3, technical execution 8, nam
 
 | Issue | Plan |
 |---|---|
-| Nobody has used it, and nothing measured that | `tools/stake/usage.mjs` counts routes on-chain. A dedicated fee wallet is Craig's decision |
+| Nobody has used it, and nothing measured that | Done: `npm run usage` counts routes on-chain from the fee wallet, since launch |
 | It only opens one way: stake in, no return through soltao | Milestone 3: wire the built free-TAO return, then unstake and return (Milestone 4) |
 | Subnet stakers must find a valid hotkey on taostats themselves | Validator picker from the on-chain metagraph scan, sort rule stated on the page |
 | The board, the stake route and the SOLTAO coin share one name; the stake page header says "Unofficial community reference" | The stake page states who runs it and what they can and cannot touch |

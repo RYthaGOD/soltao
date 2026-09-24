@@ -64,6 +64,41 @@ export async function removeStake(mnemonic, hotkey, netuid, amountRao) {
   return submit(extrinsic, pair);
 }
 
+// ── resumable transfers: sign, save, submit, reconcile ──────────────────────
+// signAndSend() waits on a subscription, which an HTTP provider cannot serve, and it only yields a
+// block hash. A resumable route instead signs offline (so the extrinsic hash and nonce are known and
+// can be saved first), submits the exact bytes, and later reads the account nonce to learn whether
+// that nonce was used. Mortal for ~64 blocks, so a lost transfer provably expires rather than lingering.
+const MORTAL_BLOCKS = 64;
+
+/** A signed funding transfer that has not been sent: { id, signed, nonce, address }. */
+export async function prepareTransfer(mnemonic, toAddress, amountRao) {
+  const api = await getApi();
+  const pair = coldkeyPair(mnemonic);
+  const nonce = (await api.rpc.system.accountNextIndex(pair.address)).toBigInt();
+  const extrinsic = api.tx.balances.transferAllowDeath(destination(toAddress), BigInt(amountRao));
+  await extrinsic.signAsync(pair, { nonce, era: MORTAL_BLOCKS });
+  return { id: extrinsic.hash.toHex(), signed: extrinsic.toHex(), nonce: String(nonce), address: pair.address };
+}
+
+/** Submits signed bytes. "Already imported" means it is in the pool: pending, not an error. */
+export async function submitSigned(signedHex) {
+  const api = await getApi();
+  try {
+    return { state: "submitted", id: (await api.rpc.author.submitExtrinsic(signedHex)).toHex() };
+  } catch (e) {
+    const m = String(e?.message || e);
+    if (/already imported|AlreadyImported|Priority is too low|1013|1014/i.test(m)) return { state: "submitted" };
+    return { state: "rejected", reason: m }; // stale, expired, or invalid: this extrinsic can never land
+  }
+}
+
+/** The account's on-chain nonce: a saved transfer with a lower nonce has been included. */
+export async function accountNonce(address) {
+  const api = await getApi();
+  return (await api.query.system.account(address)).nonce.toBigInt();
+}
+
 export async function transfer(mnemonic, toAddress, amountRao) {
   const api = await getApi();
   const pair = coldkeyPair(mnemonic);

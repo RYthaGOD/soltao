@@ -3,7 +3,7 @@
 // parse the result.
 
 import { ethers } from "ethers";
-import { signLegacyTx, rlp, rpc } from "../src/evm.js";
+import { signLegacyTx, rlp, rpc, txHash } from "../src/evm.js";
 
 let failures = 0;
 const expect = (name, ok, detail = "") => { console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? "  — " + detail : ""}`); if (!ok) failures++; };
@@ -28,6 +28,13 @@ for (const [i, tx] of cases.entries()) {
   expect(`signed legacy tx ${i + 1} is byte-identical to ethers`, ours === theirs);
   const parsed = ethers.Transaction.from(ours);
   expect(`tx ${i + 1} recovers to the signer on chain 964`, parsed.from === key.address && parsed.chainId === 964n);
+}
+
+// A resumable route saves a transaction's hash before broadcasting it, so the hash computed from the
+// signed bytes must be the one the chain will use.
+for (const [i, tx] of cases.entries()) {
+  const ours = signLegacyTx(tx, bytes(key.privateKey));
+  expect(`tx ${i + 1} hash is known before broadcast and matches ethers`, txHash(ours) === ethers.Transaction.from(ours).hash);
 }
 
 // The real RPC must parse it: a zero-balance sender is refused for funds, never for format. A
