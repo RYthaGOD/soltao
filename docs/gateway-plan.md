@@ -114,7 +114,7 @@ Acceptance:
 - Portfolio shows Solana TAO, Bittensor free TAO, root stake, subnet Alpha positions, and return actions.
 - No hidden recommendations. If soltao ranks or filters, it explains the exact rule.
 
-Prerequisite, done in code on 24 Sep 2026 but **not yet deployed**: the hotkey check was
+Prerequisite, fixed and deployed on 24 Sep 2026 (`292b68b`): the hotkey check was
 subnet-blind. `onHotkey()` used `getDelegate(hotkey)`, which takes no netuid, so a hotkey holding no
 slot on the chosen subnet still passed as a "registered validator". The zero-cost mainnet replay
 (`test/mainnet.test.mjs` scenario 5) then showed the chain **accepts** such a stake: 0.1 TAO became

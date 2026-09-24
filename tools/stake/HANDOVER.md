@@ -4,12 +4,11 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-09-24. **Live in production at `soltao.xyz`, with one fix built and unreleased.**
-The live site is commit `0dc334b`, script hash `stake.js?v=b5d4275d`. `main` now also carries the
-subnet-aware hotkey check (bug history item 10), built as `stake.js?v=65f935e0`, fully tested, **not
-deployed**. It closes a silent-loss path on the live page, so it is the next thing to ship, with
-Craig's go-ahead per the standing deploy constraint. The redesign, subnet staking, the bridge-back
-scaffold, the Helius RPC switch with its CSP fix, and the link-preview metadata are all live.
+Last updated: 2026-09-24. **Live in production at `soltao.xyz`, nothing unreleased.** The deployed
+artifact is commit `292b68b`, script hash `stake.js?v=65f935e0`, which adds the subnet-aware hotkey
+check (bug history item 10). Deployed with Craig's go-ahead and verified on the real domain with
+`npm run test:live` (16/16). The redesign, subnet staking, the bridge-back scaffold, the Helius RPC
+switch with its CSP fix, and the link-preview metadata are all live.
 See "Current state" for what has real-funds proof versus what shipped on zero-cost mainnet-state
 verification plus Craig's own informed go-ahead.
 
@@ -130,6 +129,11 @@ This is **not** git-push-triggered. Steps, in order, every time:
    report a deploy as done off the command's exit code. Verify the thing you changed, not just
    that the page loads: a page-load smoke test would not have caught the CSP bug in item 7,
    because the violation only fires once the wallet flow makes its first request.
+6. Once the hash is live, run `npm run test:live` from `tools/stake`. It is read-only (no wallet,
+   nothing signed) and checks the real domain: served hash equals the local build, both RPC origins
+   pass the live CSP from inside the page, the subnet/hotkey checks behave on mainnet in the
+   deployed bundle, the return toggle is still disabled, and there are zero console or CSP errors on
+   `/` and `/stake/`. Extend it whenever a deploy changes something it does not yet cover.
 
 ## Bug history (chronological, all confirmed via live testing)
 
@@ -204,7 +208,7 @@ This is **not** git-push-triggered. Steps, in order, every time:
     a hotkey with a uid but no validator permit. Changing the netuid re-checks the hotkey. Root keeps
     the original delegate check, which has real-funds proof. Covered by `test/subnet.test.mjs`
     (mocked), `test/subnet_live.test.mjs` (read-only mainnet) and new cases in `test/page.test.mjs`.
-    **Fixed on `main`, not deployed.**
+    **Fixed and deployed** (`292b68b`, `stake.js?v=65f935e0`), verified live by `npm run test:live`.
 
     Same session: the replay harness could report a **fake revert** when the public RPC hiccuped
     mid-replay. The page's retry re-broadcast the same signed unwrap, the harness recorded it twice,
@@ -249,8 +253,9 @@ return), then deployed it.
 
 Round three (24 Sep): the link-preview/SEO metadata fix (bug history item 9), deployed and verified.
 
-**Current state:** local `main`, `origin/main`, and the live site are in sync at commit `0dc334b`,
-script hash `stake.js?v=b5d4275d`. Verified directly against the live domain, not inferred: script
+**State after round three** (superseded by the later-session note below, which deployed `292b68b`):
+local `main`, `origin/main`, and the live site were in sync at commit `0dc334b`, script hash
+`stake.js?v=b5d4275d`. Verified directly against the live domain, not inferred: script
 hash matches the local build, `og:title` on both pages returns the new copy, `og.png` is the
 regenerated 170,825-byte file, and the CSP on `/stake/` includes the Helius origin. The Helius
 endpoint was additionally exercised by running the page's own wallet-connect `fetch()` from inside
@@ -268,12 +273,15 @@ validator" for a subnet it does not validate on. Verified at close that every se
 and HEAD, and that the live hash is still `stake.js?v=b5d4275d` — so every commit after `0dc334b`
 is documentation and the live site is not behind.
 
-**Later session of 24 Sep 2026 (built, not deployed).** Acted on that finding: bug history item 10.
+**Later session of 24 Sep 2026 (built and deployed).** Acted on that finding: bug history item 10.
 The replay settled the open question (the chain accepts an off-subnet stake silently), the page now
 checks the chosen subnet's metagraph, and the harness's fake-revert flake is fixed. Results:
 `npm test` green, `npm run test:page` green including the new subnet cases, `test:subnet:live` green,
-`test:mainnet` green. Committed locally; not pushed and not deployed at the time of writing, so check
-`git log origin/main` and the live hash before assuming either.
+`test:mainnet` green. Pushed and deployed as `292b68b` / `stake.js?v=65f935e0` with Craig's explicit
+go-ahead; the hash was serving on the first poll. Post-deploy: every served file byte-identical to
+the repo, CSP on `/` and `/stake/` allows both RPC origins, new `npm run test:live` 16/16 on the real
+domain, and `npm test`, `test:return:live`, `test:return:mainnet` and `test:return:metadata` all
+green.
 
 **Note for whoever picks this up next:** at least one other agent/process was actively committing
 and deploying to this same repo across 23-24 Sep, without coordinating through this session. It
