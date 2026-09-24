@@ -33,5 +33,9 @@
 /stake/stake.js
   Cache-Control: public, max-age=31536000, immutable
 
+# Loaded by stake.js as return.js?v=<content hash>, only when the return direction is opened.
+/stake/return.js
+  Cache-Control: public, max-age=31536000, immutable
+
 /stake/
   Cache-Control: public, max-age=300, must-revalidate

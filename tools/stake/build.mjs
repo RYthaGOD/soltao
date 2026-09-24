@@ -6,9 +6,38 @@
 import { build } from "esbuild";
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { resolve as resolvePath } from "node:path";
 
 const out = "../../stake/stake.js";
 const html = "../../stake/index.html";
+const hashOf = (text) => createHash("sha256").update(text).digest("hex").slice(0, 8);
+const noEval = (file) => {
+  const code = readFileSync(file, "utf8");
+  const evalish = [/\beval\(/, /new Function\(/].filter((re) => re.test(code));
+  if (evalish.length) { console.error(`${file} uses eval-like constructs:`, evalish.map(String)); process.exit(1); }
+  return code;
+};
+
+// The return direction's code (polkadot's api, ~1 MB) ships as its own file, loaded only when someone
+// opens that direction. Built first, so the forward bundle can name it by content hash.
+const returnOut = "../../stake/return.js";
+await build({
+  entryPoints: ["src/return_entry.js"], bundle: true, format: "iife", platform: "browser", target: ["es2020", "safari15"],
+  minify: true, legalComments: "linked", define: { "process.env.NODE_ENV": '"production"', global: "globalThis" },
+  inject: ["./src/inject.js"],
+  alias: { http: "./src/stubs/node-builtin.js", path: "./src/stubs/node-builtin.js", stream: "stream-browserify" },
+  // polkadot's no-WebAssembly loader for the bare package only (its /packageInfo subpath must still
+  // resolve normally): the page CSP has no 'wasm-unsafe-eval', and nothing here needs WASM (sr25519
+  // signing is @scure/sr25519; hashing falls back to polkadot's pure-JS paths).
+  plugins: [{
+    name: "no-wasm",
+    setup(b) { b.onResolve({ filter: /^@polkadot\/wasm-crypto-init$/ }, () => ({ path: resolvePath("node_modules/@polkadot/wasm-crypto-init/none.js") })); },
+  }],
+  outfile: returnOut, logLevel: "warning",
+});
+const returnUrl = `return.js?v=${hashOf(noEval(returnOut))}`;
+console.log(`stake/return.js  ${(statSync(returnOut).size / 1024).toFixed(0)} KB  (loaded on demand as ${returnUrl})`);
+
 const result = await build({
   entryPoints: ["src/app.js"],
   bundle: true,
@@ -17,7 +46,7 @@ const result = await build({
   target: ["es2020", "safari15"],
   minify: true,
   legalComments: "linked",
-  define: { "process.env.NODE_ENV": '"production"', global: "globalThis" },
+  define: { "process.env.NODE_ENV": '"production"', global: "globalThis", __RETURN_BUNDLE__: JSON.stringify(returnUrl) },
   // Module-scoped stand-ins for Node's process and Buffer; see src/inject.js.
   inject: ["./src/inject.js"],
   // lz-utilities imports http and path for Node-only helpers; cipher-base subclasses stream.Transform

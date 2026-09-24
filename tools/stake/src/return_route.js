@@ -19,14 +19,14 @@ import { CONFIG } from "./config.js";
 import { evmAddress, ss58Encode } from "./derive.js";
 import { broadcast, getBalance, getGasPrice, signTx, txStatus, waitMined } from "./evm.js";
 import { encode, getWtao, mirrorColdkey } from "./bittensor.js";
-import { accountNonce, coldkeyPair, prepareTransfer, quoteTransfer, submitSigned } from "./substrate.js";
+import { accountNonce, coldkeySigner, prepareTransfer, quoteTransfer, submitSigned } from "./substrate.js";
 import { RETURN_GAS_LIMIT, WEI_PER_RAO, encodeOftSend, planReturnFunding, quoteReturn } from "./oft_return.js";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const ceilDiv = (value, divisor) => (BigInt(value) + BigInt(divisor) - 1n) / BigInt(divisor);
 
 const realOps = {
-  signerAddress: (mnemonic) => coldkeyPair(mnemonic).address,
+  signerAddress: (mnemonic) => coldkeySigner(mnemonic).address,
   transitAddress: evmAddress,
   mirrorAddress: async (address) => ss58Encode(await mirrorColdkey(address)),
   state: async (address) => {

@@ -55,6 +55,26 @@ export function readRoute(stored, transitKey, onScreen) {
 /** Stake found on the transit account can be handed over; an untrusted route stakes nothing new. */
 export const untrustedPlan = (found) => (found.stake > 0n ? "stake" : "deliver");
 
+// ── any other record the page must not trust unsealed (the return route's checkpoints) ──
+const canonical = (v) => (Array.isArray(v) ? `[${v.map(canonical).join(",")}]`
+  : v && typeof v === "object" ? `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${canonical(v[k])}`).join(",")}}`
+  : JSON.stringify(v));
+const labelKey = (transitKey, label) => hkdf(sha256, transitKey, utf8(`soltao.xyz/${label}/v1`), utf8("mac"), 32);
+
+/** `value` (plain JSON) with a MAC over its canonical form, keyed from the transit key and a label. */
+export function sealRecord(value, transitKey, label) {
+  return { value, mac: hex(hmac(sha256, labelKey(transitKey, label), utf8(canonical(value)))) };
+}
+
+/** The value if the record was sealed by this key under this label, otherwise null. */
+export function openRecord(stored, transitKey, label) {
+  if (!stored || typeof stored !== "object" || typeof stored.mac !== "string" || !("value" in stored)) return null;
+  const want = hex(hmac(sha256, labelKey(transitKey, label), utf8(canonical(stored.value))));
+  let diff = want.length ^ stored.mac.length;
+  for (let i = 0; i < want.length; i++) diff |= want.charCodeAt(i) ^ (stored.mac.charCodeAt(i) || 0);
+  return diff === 0 ? stored.value : null;
+}
+
 /** The stored route if its MAC verifies and its shape is sane, otherwise null. */
 export function openRoute(stored, transitKey) {
   if (!stored || typeof stored !== "object" || typeof stored.mac !== "string") return null;

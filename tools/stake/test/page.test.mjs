@@ -54,6 +54,9 @@ function serve({ feeWallet } = {}) {
 }
 const plain = serve({ feeWallet: null }), live = serve(CONFIG.fee.wallet ? {} : { feeWallet: FEE_WALLET });
 
+// RUNS=B,F runs only those browser runs. They all read live mainnet, and the public Bittensor RPC
+// rate-limits; run the heavy ones apart (with a quiet minute or five between) if a later run times out.
+const want = (run) => !process.env.RUNS || process.env.RUNS.split(",").includes(run);
 let failures = 0;
 const expect = (name, ok, detail = "") => { console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? "  — " + detail : ""}`); if (!ok) failures++; };
 
@@ -124,7 +127,7 @@ const clean = async (page, problems, label) => {
 };
 
 // ── Run A: a fresh wallet that signs the raw message, with an earlier route still in flight ──
-{
+if (want("A")) {
   const secret = ed25519.utils.randomPrivateKey();
   const pubkey = base58.encode(ed25519.getPublicKey(secret));
   const expected = walletFromSignature(ed25519.sign(new TextEncoder().encode(derivationMessage(pubkey)), secret), pubkey);
@@ -188,7 +191,7 @@ const clean = async (page, problems, label) => {
 // through plain signMessage() on 22 Sep 2026. Proves it derives the identical wallet as run A's
 // signMessage() path for a fresh key, since the stub reconstructs the message itself from the
 // fields the page sends, the way a real wallet's signIn() does, rather than trusting our own text.
-{
+if (want("A2")) {
   const secret = ed25519.utils.randomPrivateKey();
   const pubkey = base58.encode(ed25519.getPublicKey(secret));
   const expected = walletFromSignature(ed25519.sign(new TextEncoder().encode(derivationMessage(pubkey)), secret), pubkey);
@@ -207,7 +210,7 @@ const clean = async (page, problems, label) => {
 }
 
 // ── Run B: a real holder, a signature that is not raw ed25519, and live quotes ──
-{
+if (want("B")) {
   const { page, problems } = await openWith({ pubkey: HOLDER, secret: ed25519.utils.randomPrivateKey() });
   await page.click("#connect");
   await waitText(page, "#tao-balance", /TAO/);
@@ -283,7 +286,7 @@ const clean = async (page, problems, label) => {
 }
 
 // ── Run C: the send path, live settings, up to the wallet's prompt (declined) ──
-{
+if (want("C")) {
   const { page, problems } = await openWith({ pubkey: HOLDER, secret: ed25519.utils.randomPrivateKey(), base: live.base });
   expect("no not-live banner once the fee wallet is set", await hidden(page, "#not-live"));
   await page.click("#connect");
@@ -323,7 +326,7 @@ const clean = async (page, problems, label) => {
 // ── Run D: a route saved by the page before records were sealed, stake still on the transit account ──
 // The live page before 24 Sep 2026 saved routes unsealed. One interrupted after a subnet stake but
 // before the handover must still be found and handed over, but its saved destination is not trusted.
-{
+if (want("D")) {
   const secret = ed25519.utils.randomPrivateKey();
   const pubkey = base58.encode(ed25519.getPublicKey(secret));
   const expected = walletFromSignature(ed25519.sign(new TextEncoder().encode(derivationMessage(pubkey)), secret), pubkey);
@@ -358,7 +361,7 @@ const clean = async (page, problems, label) => {
 
 // ── Run E: a shared link names the subnet and validator, and the validator picker ──
 const setFieldE = async (page, sel, value) => { await page.$eval(sel, (el, v) => { el.value = v; el.dispatchEvent(new Event("input", { bubbles: true })); }, value); };
-{
+if (want("E")) {
   const secret = ed25519.utils.randomPrivateKey();
   const pubkey = base58.encode(ed25519.getPublicKey(secret));
   const { page, problems } = await openWith({ pubkey, secret, base: `${plain.base}?netuid=1&hotkey=${SUBNET1_OWNER_HOTKEY}` });
@@ -385,6 +388,60 @@ const setFieldE = async (page, sel, value) => { await page.$eval(sel, (el, v) =>
   const who = (await text(page, ".stake-who")).replace(/\s+/g, " ");
   expect("the page says who runs it and what they can take, near the top", /never sent to them/.test(who) && /only charge is a flat SOL fee/.test(who), who);
   await clean(page, problems, "run E");
+  await page.close();
+}
+
+// ── Run F: the return direction, opened here only because this is a local host ──
+// Chain reads are real except the coldkey's account, answered as holding 2 TAO free so the review can
+// be quoted (a fresh test wallet holds nothing). Nothing is signed or sent: the run stops at review.
+if (want("F")) {
+  const secret = ed25519.utils.randomPrivateKey();
+  const pubkey = base58.encode(ed25519.getPublicKey(secret));
+  const SYSTEM_ACCOUNT = "0x26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9";
+  const le = (v, bytes) => { let h = ""; for (let i = 0; i < bytes; i++) { h += Number((BigInt(v) >> BigInt(8 * i)) & 0xffn).toString(16).padStart(2, "0"); } return h; };
+  // AccountInfo { nonce, consumers, providers, sufficients: u32; data { free, reserved, frozen: u64; flags: u128 } }
+  const account = "0x" + le(0, 4) + le(0, 4) + le(1, 4) + le(0, 4) + le(2_000_000_000n, 8) + le(0, 8) + le(0, 8) + le(1n << 127n, 16);
+  let accountReads = 0;
+  const intercept = (req) => {
+    if (req.method() !== "POST" || !req.url().startsWith(CONFIG.bittensorEvmRpc)) return false;
+    const body = JSON.parse(req.postData() || "{}");
+    // polkadot reads storage through state_queryStorageAt: [{ block, changes: [[key, value]] }].
+    if (Array.isArray(body) || body.method !== "state_queryStorageAt") return false;
+    const keys = body.params?.[0] || [];
+    if (!keys.length || !keys.every((k) => String(k).startsWith(SYSTEM_ACCOUNT))) return false;
+    accountReads++;
+    const result = [{ block: "0x" + "00".repeat(32), changes: keys.map((k) => [k, account]) }];
+    req.respond({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify({ jsonrpc: "2.0", id: body.id, result }) });
+    return true;
+  };
+  const { page, problems } = await openWith({ pubkey, secret, intercept });
+  expect("the return direction opens on a local host", !(await page.$eval('input[name="direction"][value="reverse"]', (el) => el.disabled)));
+  const loadedEarly = await page.evaluate(() => performance.getEntriesByType("resource").some((e) => e.name.includes("return.js")));
+  expect("the forward page does not download the return code", !loadedEarly);
+  await page.click("#connect");
+  await waitText(page, "#tao-balance", /TAO/);
+  await page.click("#derive");
+  await waitText(page, "#coldkey-out", /^5/);
+  await page.waitForFunction(() => document.querySelector("#derive")?.textContent === "Signed", { timeout: 60_000 });
+  await clickEl(page, "#phrase-ack");
+  await clickEl(page, 'input[name="direction"][value="reverse"]');
+  await waitText(page, "#tao-free", /TAO|unavailable/, 90_000);
+  const loaded = await page.evaluate(() => performance.getEntriesByType("resource").filter((e) => e.name.includes("return.js")).map((e) => new URL(e.name).pathname + new URL(e.name).search));
+  expect("choosing the return loads its code once, by content hash", loaded.length === 1 && /^\/stake\/return\.js\?v=[0-9a-f]{8}$/.test(loaded[0]), loaded.join(","));
+  expect("it reads the coldkey's free TAO", (await text(page, "#tao-free")) === "2 TAO" && accountReads > 0, `${await text(page, "#tao-free")} · ${accountReads} account reads`);
+  await setFieldE(page, "#amount", "5");
+  await waitText(page, "#amount-note", /More than/);
+  expect("an amount above the free TAO is refused", /More than the 2 TAO free in your Bittensor wallet/.test(await text(page, "#amount-note")), await text(page, "#amount-note"));
+  await setFieldE(page, "#amount", "0.5");
+  await waitText(page, "#r-receive", /TAO|—/, 90_000);
+  await waitText(page, "#r-cost", /TAO/, 90_000);
+  expect("the review states what arrives on Solana", /^0\.5 canonical TAO$/.test(await text(page, "#r-receive")), await text(page, "#r-receive"));
+  const lz = parseFloat(await text(page, "#r-lzfee")), cost = parseFloat(await text(page, "#r-cost"));
+  expect("…the LayerZero fee, quoted live in TAO", lz > 0 && lz < 0.05, `${lz} TAO`);
+  expect("…and what leaves the Bittensor wallet: the amount plus fees and a gas reserve", cost > 0.5 && cost < 0.6, `${cost} TAO`);
+  expect("…to the connected Solana wallet", (await text(page, "#r-dest")).startsWith(pubkey));
+  expect("signing is open for the return once quoted", !(await page.$eval("#sign", (b) => b.disabled)), await text(page, "#sign-note"));
+  await clean(page, problems, "run F");
   await page.close();
 }
 

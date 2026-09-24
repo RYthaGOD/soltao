@@ -82,12 +82,20 @@ Evidence captured on 2026-09-23:
 - Recovery tests cover interruptions after coldkey funding, after wrapping, after OFT broadcast, and while the OFT transaction is pending; none duplicates a transfer, wrap, or send.
 - A read-only mainnet-state replay wrapped 1 TAO through the real wTAO contract and executed its real LayerZero send toward Solana. It measured 59,827 total gas for wrap and 246,363 for send, inside the configured 75,000 and 650,000 limits, with zero wTAO left behind.
 
-Remaining before the toggle can be enabled:
+Remaining before the toggle can be enabled (updated 24 Sep 2026):
 
-- Persist the route checkpoints from the browser and render the free-return review/tracker states.
-- Track the destination Solana token account and prove arrival, including first-time token-account behavior.
-- Keep the Polkadot signer in a separately loaded return bundle so the current forward page does not absorb its size.
-- Complete one deliberately small real-funds free-TAO return after explicit approval.
+- Done: the page persists sealed checkpoints before every broadcast and renders the free-return review
+  and tracker. It is open on local hosts only; `CONFIG.returnLive` stays false.
+- Done: arrival is tracked by the Solana wallet's TAO balance. First-time token accounts: the wTAO
+  contract's enforced options carry 2,039,280 lamports (one token account's rent) on every delivery,
+  and the Solana OFT's receive takes the Associated Token and System programs. Inferred, not yet
+  observed on a real delivery.
+- Done: polkadot ships in a separately loaded `stake/return.js` (~800 KB), with no WebAssembly, so the
+  CSP is unchanged and the forward page never downloads it.
+- Done: every funding, wrap and send is reconciled on resume (mined / pending / dead), per the Codex
+  review of 24 Sep 2026.
+- Open: complete one deliberately small real-funds free-TAO return after explicit approval, then set
+  `returnLive`.
 
 ## Milestone 4: unstake and return
 

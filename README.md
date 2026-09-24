@@ -260,10 +260,12 @@ script. The footer of /stake/ says the same.
 | `tools/stake/src/evm.js`, `bittensor.js` | Legacy EIP-155 signing, batched RPC, and the precompile reads it needs, including the subnet metagraph |
 | `tools/stake/src/config.js` | Every address, gas limit and the fee, with where each was measured |
 | `tools/stake/src/app.js` | The page controller |
-| `tools/stake/src/oft_return.js`, `return_route.js`, `substrate.js` | Bridge-back to Solana: built and tested, not reachable from the page yet |
+| `tools/stake/src/oft_return.js`, `return_route.js`, `substrate.js`, `return_entry.js` | Free TAO back to Solana. Built into its own `stake/return.js`, fetched only when that direction is opened. Open on local hosts only until `returnLive` is set after a real-funds return |
+| `tools/stake/src/pending.js` | Seals what the page saves in the browser (resume routes, return checkpoints) so edits are ignored |
+| `tools/stake/usage.mjs` | `npm run usage`: counts completed routes on-chain from the fee wallet |
 | `tools/stake/test/` | Derivation vectors, signing against ethers, the runner against a simulated chain, the Solana transaction simulated on mainnet, zero-cost mainnet replays, a headless-browser run under the production CSP, and a post-deploy check of the live domain |
 | `tools/stake/HANDOVER.md` | Current state, bug history and the deploy procedure. Read it first |
-| `stake/` | What is served: `index.html`, `stake.css`, `stake.js` (built) and its licence notices |
+| `stake/` | What is served: `index.html`, `stake.css`, `stake.js` and `return.js` (both built) and their licence notices |
 
 The first design used an ownerless router contract on Bittensor EVM. It is retired, not deployed,
 and kept only in the private `research/archive/`.
@@ -274,7 +276,8 @@ and kept only in the private `research/archive/`.
 cd tools/stake && npm install
 npm test                     # derivation, EVM signing, route runner, subnet lookup, return engine, build shim, Solana simulation
 npm run test:mainnet         # the real route.js against live Bittensor mainnet state, in eth_call only
-npm run test:page            # builds stake/stake.js, then drives it in Chrome under the production CSP
+npm run test:page            # builds both bundles, then drives the page in Chrome under the production CSP
+                             # (RUNS=B,F node test/page.test.mjs runs chosen runs; space heavy ones out)
 npm run test:subnet:live     # the subnet/hotkey lookup against mainnet, read-only
 npm run test:return:live     # bridge-back fee and transfer quotes, read-only
 npm run test:return:metadata # bridge-back call shapes against the live runtime metadata

@@ -105,6 +105,12 @@ try {
   // Bug history item 1: the bundle once leaked Node's `process`/`Buffer` onto window and broke Phantom.
   const leaks = await page.evaluate(() => ["process", "Buffer", "global"].filter((k) => k in window));
   expect("the bundle adds no Node globals to window", leaks.length === 0, leaks.join(", "));
+  expect("the forward page never downloads the return code", !(await page.evaluate(() => performance.getEntriesByType("resource").some((e) => e.name.includes("return.js")))));
+  const returnSrc = (await (await fetch(`${SITE}/stake/${served}`)).text()).match(/return\.js\?v=[0-9a-f]{8}/)?.[0];
+  if (returnSrc) {
+    const res = await fetch(`${SITE}/stake/${returnSrc}`, { method: "HEAD" });
+    expect("the return bundle the page names is served, cached for a year", res.status === 200 && /max-age=31536000/.test(res.headers.get("cache-control") || ""), `${returnSrc} · ${res.status} · ${res.headers.get("cache-control")}`);
+  }
   expect("return direction is still disabled", await page.evaluate(() => [...document.querySelectorAll('input[name="direction"]')].some((i) => i.value !== "forward" && i.disabled) || !document.querySelector('input[name="direction"]')));
   const csp = await page.evaluate(() => window.__csp);
   expect("/stake/: no CSP violations", csp.length === 0, csp.join(" | "));

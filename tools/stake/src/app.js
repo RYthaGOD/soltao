@@ -11,7 +11,7 @@ import { createClients, getTaoBalance, quoteNativeFee, quotePriorityFee, priorit
 import { findOnSubnet, getDelegate, getFreeBalance, getUidCount, subnetValidators } from "./bittensor.js";
 import { getGasPrice } from "./evm.js";
 import { usdPrices, fmtUsd } from "./prices.js";
-import { sealRoute, readRoute, untrustedPlan } from "./pending.js";
+import { sealRoute, readRoute, untrustedPlan, sealRecord, openRecord } from "./pending.js";
 import { finishRoute, transitState, minStakeAmount, stakeGasReserve, sweepFloor } from "./route.js";
 
 const $ = (id) => document.getElementById(id);
@@ -26,6 +26,7 @@ const state = {
   plan: "stake", netuid: 0n, netuidValid: true, netuidChecking: false, hotkey: null, amountLd: 0n, reserveRao: CONFIG.defaultReserveRao,
   gasPrice: null, nativeFee: null, priorityMicro: null, quoteSeq: 0,
   running: false, unfinished: null, transitRead: false, direction: "forward",
+  ret: { free: null, quote: null }, // the return direction: coldkey free TAO (rao), the current quote
 };
 
 // ── formatting ──────────────────────────────────────────────────────────────
@@ -249,6 +250,7 @@ async function checkTransit() {
   }
   renderUnfinished();
   gate();
+  if (state.direction === "reverse") refreshReturn();
 }
 
 function renderUnfinished() {
@@ -455,7 +457,12 @@ function readAmounts() {
   if ($("amount").value && amt === null) return "Enter an amount like 1.25";
   if (!state.amountLd) return "";
   
-  if (state.direction !== "forward") return "Bridge back is being rebuilt with full unstake and return checks.";
+  if (state.direction === "reverse") {
+    if (state.mode !== "derive") return "Bridging back needs the Bittensor wallet your signature creates.";
+    if (state.ret.free === null) return "Reading your free TAO on Bittensor…";
+    if (state.amountLd > state.ret.free) return `More than the ${tao(state.ret.free)} free in your Bittensor wallet`;
+    return "";
+  }
   if (state.amountLd > state.taoLd) return `More than your ${tao(state.taoLd)}`;
   if (state.plan === "stake") {
     if (state.netuidChecking) return "Checking the subnet on Bittensor…";
@@ -488,21 +495,32 @@ function gate() {
   $("stake-opts").hidden = state.plan !== "stake";
 
   const amountErr = keysReady ? readAmounts() : "";
-  const blocked = keysReady && Boolean(state.unfinished);
+  const reverse = state.direction === "reverse";
+  // A return may start over leftover gas money on the transit account (it is reused), but never over
+  // wTAO or stake an unfinished forward route still means to deliver.
+  const u = state.unfinished;
+  const blocked = keysReady && Boolean(u) && (!reverse || u.wtao > 0n || u.stake > 0n || (u.pending && !u.holds));
   setStep("step-plan", keysReady && !blocked ? "active" : "locked");
   note("amount-note", blocked ? "Finish the route in step 2 first." : amountErr, amountErr || blocked ? "bad" : null);
   const acked = $("review-ack-check").checked;
   const forwardReady = state.plan === "deliver" || Boolean(state.hotkey);
-  const reviewReady = state.direction === "forward" && keysReady && !blocked && state.amountLd > 0n && !amountErr && forwardReady;
-  const planReady = reviewReady && acked;
+  const ready = keysReady && !blocked && state.amountLd > 0n && !amountErr;
+  const reviewReady = ready && (reverse ? RETURN_OPEN : forwardReady);
+  const planReady = reviewReady && (reverse || acked);
   if (planReady) setStep("step-plan", "done");
   setStep("step-review", reviewReady ? "active" : "locked");
   renderReview(reviewReady);
-  if (reviewReady) requestQuote(); else { state.nativeFee = null; $("sign").disabled = true; }
+  if (reviewReady) (reverse ? requestReturnQuote : requestQuote)(); else { state.nativeFee = null; state.ret.quote = null; $("sign").disabled = true; }
 }
 
 function renderReview(ready) {
   const set = (id, v) => ($(id).textContent = ready ? v() : "—");
+  if (state.direction === "reverse") {
+    set("r-send", () => tao(state.amountLd));
+    set("r-dest", () => `${state.user} (your Solana wallet)`);
+    if (!ready) for (const id of ["r-gas", "r-lzfee", "r-cost", "r-receive"]) $(id).textContent = "—";
+    return;
+  }
   $("r-huge-dest").textContent = ready ? state.coldkeyAddress : "—";
   set("r-send", () => tao(state.amountLd));
   set("r-dest", () => state.coldkeyAddress);
@@ -524,6 +542,140 @@ function renderReview(ready) {
 }
 
 let quoteTimer;
+// ── the return direction: free TAO in the derived coldkey -> canonical TAO on Solana ─────────────
+// The engine is src/return_route.js, shipped in its own bundle (stake/return.js) and fetched only
+// here. Its checkpoints are saved sealed (src/pending.js) before every broadcast, so closing the page
+// never repeats a transfer, wrap or send. Arrival is read from the Solana wallet's own TAO balance.
+let returnLib = null;
+function loadReturnLib() {
+  if (!returnLib) returnLib = new Promise((resolve, reject) => {
+    const s = Object.assign(document.createElement("script"), { src: __RETURN_BUNDLE__ });
+    s.onload = () => (globalThis.__soltaoReturn ? resolve(globalThis.__soltaoReturn) : reject(new Error("the return code did not start")));
+    s.onerror = () => { returnLib = null; reject(new Error("could not load the return code")); };
+    document.head.append(s);
+  });
+  return returnLib;
+}
+const returnKey = (transit) => `soltao.return.pending.${transit}`;
+function loadReturn(w) { try { return openRecord(JSON.parse(localStorage.getItem(returnKey(w.transitAddress)) || "null"), w.transitKey, "return"); } catch { return null; } }
+function saveReturn(w, value) { try { localStorage.setItem(returnKey(w.transitAddress), JSON.stringify(sealRecord(value, w.transitKey, "return"))); } catch { /* storage off: it still finishes while the page is open */ } }
+function clearReturn(w) { try { localStorage.removeItem(returnKey(w.transitAddress)); } catch { /* nothing stored */ } }
+const solanaRecipient = () => toHex(new PublicKey(state.user).toBytes());
+// The OFT carries 6 decimals across, so what lands on Solana is the amount floored to 0.000001 TAO.
+const arrivingLd = (amountRao) => BigInt(amountRao) - (BigInt(amountRao) % CONFIG.dustLd);
+
+/** Loads the return code if needed and reads the derived coldkey's free TAO. */
+async function refreshReturn() {
+  if (state.direction !== "reverse" || !state.signed) return;
+  $("tao-free").replaceChildren(Object.assign(document.createElement("span"), { className: "skel" }));
+  $("tao-staked").textContent = "unstaking comes in a later release";
+  try {
+    const lib = await loadReturnLib();
+    state.ret.free = await lib.freeBalance(state.signed.wallet.address);
+    $("tao-free").textContent = tao(state.ret.free);
+    const saved = loadReturn(state.signed.wallet);
+    if (saved && !state.running) {
+      $("amount").value = fmtUnits(BigInt(saved.amountRao), 9, 9).replace(/,/g, "");
+      note("sign-note", "A return from this browser has not finished. Signing continues it from where it stopped, without repeating any step.", "warn");
+      $("sign").textContent = "Finish the return";
+    }
+  } catch (e) {
+    $("tao-free").textContent = "unavailable";
+    note("amount-note", `Could not read your Bittensor wallet: ${e.message}`, "bad");
+  }
+  gate();
+}
+
+function trackRev(k, s, msg) {
+  const key = { wrap: "deposit", bridge: "send" }[k] ?? k;
+  const li = document.querySelector(`#track-rev li[data-k="${key}"]`); if (!li) return;
+  li.dataset.s = s; li.querySelector("span").textContent = msg;
+}
+
+function requestReturnQuote() {
+  clearTimeout(quoteTimer);
+  $("r-lzfee").replaceChildren(Object.assign(document.createElement("span"), { className: "skel" }));
+  $("sign").disabled = true;
+  quoteTimer = setTimeout(async () => {
+    const seq = ++state.quoteSeq;
+    try {
+      const lib = await loadReturnLib();
+      const w = state.signed.wallet;
+      const [q, price, t] = await Promise.all([
+        lib.quoteReturn({ amountRao: state.amountLd, solanaRecipient: solanaRecipient() }),
+        getGasPrice(),
+        transitState(w.transitKey, null),
+      ]);
+      const plan = lib.planReturnFunding({ amountRao: state.amountLd, nativeFeeWei: q.nativeFee, gasPriceWei: price, transitNativeWei: t.native, transitWtaoWei: t.wtao });
+      const fq = plan.fundingRao > 0n ? await lib.quoteTransfer(w.mnemonic, ss58Encode(t.self), plan.fundingRao) : { feeRao: 0n, remainingRao: state.ret.free ?? 0n };
+      if (seq !== state.quoteSeq) return;
+      state.ret.quote = { q, plan, fq };
+      $("r-lzfee").textContent = tao(q.nativeFee / RAO);
+      $("r-gas").textContent = `up to ${tao(plan.gasReserveWei / RAO)} held for gas; what is not used stays yours`;
+      $("r-cost").textContent = tao(plan.fundingRao + fq.feeRao);
+      $("r-receive").textContent = `${fmtUnits(q.solanaAmountLd, 9)} canonical TAO`;
+      if (fq.remainingRao < 0n) {
+        note("sign-note", `Not enough free TAO: this return needs ${tao(plan.fundingRao + fq.feeRao)} including fees, and the wallet has ${tao(state.ret.free ?? 0n)}.`, "bad");
+        $("sign").disabled = true;
+        return;
+      }
+      if (!loadReturn(w)) note("sign-note", "");
+      $("sign").disabled = state.running;
+    } catch (e) {
+      if (seq === state.quoteSeq) { $("r-lzfee").textContent = "unavailable"; note("sign-note", `Could not quote the return: ${e.message}`, "bad"); }
+    }
+  }, 350);
+}
+
+async function runReturn() {
+  if (state.running || !RETURN_OPEN) return;
+  const w = state.signed.wallet;
+  const lib = await loadReturnLib();
+  const saved = loadReturn(w);
+  const amountRao = saved ? BigInt(saved.amountRao) : state.amountLd;
+  const recipient = saved ? saved.recipient : solanaRecipient();
+  const baseline = saved ? BigInt(saved.baseline) : await getTaoBalance(clients.connection, state.user);
+  const meta = { amountRao: String(amountRao), baseline: String(baseline), recipient, at: saved?.at ?? Date.now() };
+  saveReturn(w, { ...meta, progress: saved?.progress ?? {} });
+
+  state.running = true; $("sign").disabled = true; setStep("step-status", "active"); gate();
+  for (const li of document.querySelectorAll("#track-rev li")) { li.dataset.s = ""; li.querySelector("span").textContent = "—"; }
+  document.querySelector('#track-rev li[data-k="unstake"]').hidden = true;
+  note("track-note", "");
+  try {
+    const res = await lib.finishFreeReturn({
+      mnemonic: w.mnemonic, transitKey: w.transitKey, solanaRecipient: recipient, amountRao, expectedColdkey: w.address,
+      progress: saved?.progress ?? {}, onStep: trackRev,
+      onCheckpoint: (progress) => saveReturn(w, { ...meta, progress }),
+    });
+    if (res.pending) throw new Error("the LayerZero send is still pending on Bittensor");
+    $("track-links").replaceChildren(link(`https://layerzeroscan.com/tx/${res.sendHash}`, "LayerZero Scan ↗"), text("  ·  "), link(`https://solscan.io/account/${state.user}`, "your Solana wallet ↗"));
+    trackRev("send", "ok", "sent through LayerZero");
+    const want = baseline + arrivingLd(amountRao);
+    const start = Date.now();
+    for (;;) {
+      const bal = await getTaoBalance(clients.connection, state.user).catch(() => null);
+      if (bal !== null && bal >= want) break;
+      if (Date.now() - start > 30 * 60_000) throw new Error("the bridge has not delivered to Solana yet: it usually takes minutes, and LayerZero Scan shows where it is. Sign in again later and this page keeps watching");
+      trackRev("finish", "busy", `waiting for it on Solana · ${Math.round((Date.now() - start) / 1000)}s`);
+      await new Promise((r) => setTimeout(r, 8000));
+    }
+    trackRev("finish", "ok", `${tao(arrivingLd(amountRao))} arrived`);
+    clearReturn(w);
+    $("sign").textContent = "Sign and send";
+    note("track-note", `Done. ${tao(arrivingLd(amountRao))} is back in your Solana wallet as canonical TAO.`, "ok");
+    setStep("step-status", "done");
+  } catch (e) {
+    const busy = document.querySelector('#track-rev li[data-s="busy"]');
+    if (busy) busy.dataset.s = "bad";
+    note("track-note", `${e.message || e}. Nothing is lost: every step is saved before it is sent, so signing in again on this page continues exactly where it stopped.`, "bad");
+  } finally {
+    state.running = false;
+    if (state.user) refreshBalances();
+    refreshReturn();
+  }
+}
+
 /** Approximate dollars for the TAO being sent and the SOL it costs. Display only; a failed feed hides it. */
 async function showUsd(seq, totalLamports) {
   $("r-usd").textContent = "…";
@@ -575,6 +727,7 @@ function resetTrack(plan) {
 }
 
 async function send() {
+  if (state.direction === "reverse") return runReturn();
   if (!LIVE || state.running || state.unfinished) return;
   const w = state.signed.wallet;
   state.running = true; $("sign").disabled = true; note("sign-note", "building and simulating…");
@@ -702,6 +855,8 @@ async function runRoute(route, { expectLd = null, fresh = false } = {}) {
 // Local hosts stay, for development and the headless tests.
 const CANONICAL = "soltao.xyz";
 const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])$/;
+// The return direction stays shut on soltao.xyz until CONFIG.returnLive; local hosts open it for testing.
+const RETURN_OPEN = CONFIG.returnLive === true || LOCAL.test(location.hostname);
 function onCanonicalHost() {
   if (location.hostname === CANONICAL || LOCAL.test(location.hostname)) return true;
   location.replace(`https://${CANONICAL}/stake/${location.search}${location.hash}`);
@@ -722,9 +877,16 @@ function init() {
       document.querySelectorAll(".dir-rev").forEach(el => el.hidden = (state.direction !== "reverse"));
       
       $("amount").value = "";
+      state.ret.quote = null;
+      if (state.direction === "reverse") {
+        // Only the wallet the signature creates can sign a return, so the paste option does not apply.
+        document.querySelector('input[name="ck-mode"][value="derive"]').checked = true; applyMode();
+        refreshReturn();
+      }
       gate();
     });
   });
+  if (RETURN_OPEN) document.querySelector('input[name="direction"][value="reverse"]').disabled = false;
   $("derive").addEventListener("click", sign);
   $("coldkey-in").addEventListener("input", onPaste);
   document.querySelectorAll('input[name="ck-mode"]').forEach((r) => r.addEventListener("change", applyMode));

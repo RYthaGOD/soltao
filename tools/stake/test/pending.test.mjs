@@ -2,7 +2,7 @@
 // foreign one does not, so a changed destination is ignored rather than paid out to.
 
 import { randomBytes } from "node:crypto";
-import { sealRoute, openRoute, readRoute, untrustedPlan } from "../src/pending.js";
+import { sealRoute, openRoute, readRoute, untrustedPlan, sealRecord, openRecord } from "../src/pending.js";
 
 let failures = 0;
 const expect = (name, ok, detail = "") => { console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? "  — " + detail : ""}`); if (!ok) failures++; };
@@ -34,6 +34,13 @@ expect("an edited sealed route is treated the same way: never trusted to pay out
 expect("a malformed hotkey hint is dropped", readRoute({ ...route, hotkey: "not-hex" }, key, ON_SCREEN).route.hotkey === null);
 expect("an untrusted route hands over stake it finds, and stakes nothing new", untrustedPlan({ stake: 5n }) === "stake" && untrustedPlan({ stake: 0n }) === "deliver");
 expect("nothing stored reads as nothing", readRoute(null, key, ON_SCREEN) === null && readRoute({ junk: 1 }, key, ON_SCREEN) === null);
+
+// Generic sealed records (the return route's checkpoints).
+const rec = { amountRao: "1000000000", progress: { stage: "wrapping", wrap: { hash: "0xab", raw: "0xf8", nonce: "3" } } };
+const sealedRec = JSON.parse(JSON.stringify(sealRecord(rec, key, "return")));
+expect("a sealed record opens with the same key and label", JSON.stringify(openRecord(sealedRec, key, "return")) === JSON.stringify(rec));
+expect("…not under another label, so a forward route cannot pass as a return", openRecord(sealedRec, key, "pending-route") === null);
+expect("…and not once any nested field is edited", openRecord({ ...sealedRec, value: { ...rec, progress: { ...rec.progress, stage: "sent" } } }, key, "return") === null);
 
 console.log(failures ? `\n${failures} failed` : "\nall passed");
 process.exit(failures ? 1 : 0);

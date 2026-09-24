@@ -80,16 +80,23 @@ main "Solana TAO Board" page which stays no-wallet-connect).
   (`BgGFMbwUtKLifQYZogbDorEXTXYp3UKVAZSH41xQ72Na`). `solanaRpc` switched from a public shared
   endpoint to a dedicated Helius endpoint on 23 Sep 2026 — this is committed and public (visible in
   the shipped bundle to anyone), a deliberate tradeoff Craig accepted for reliability.
-- `tools/stake/src/oft_return.js` — **new, not wired to the page.** Builds/quotes the canonical
-  wTAO -> Solana OFT send for the bridge-back direction (rao/wei/6-decimal-dust conversions, funding
-  math, live fee quoting). Pure functions only; nothing here sends a transaction.
-- `tools/stake/src/return_route.js` — **new, not wired to the page.** The resumable free-TAO return
-  engine: coldkey funding -> wrap -> final fee re-quote/top-up -> canonical OFT send. It records the
-  EVM send hash immediately after broadcast and will only inspect that receipt on resume, preventing
-  a duplicate bridge send. The production toggle remains disabled.
-- `tools/stake/src/substrate.js` — **new, not wired to the page.** A `polkadot.js` coldkey signer for
-  `removeStake`/`transfer`, for the bridge-back direction. Argument order against the live runtime is
-  checked by `test/polkadot.test.mjs`, not assumed.
+- `tools/stake/src/oft_return.js` — builds/quotes the canonical wTAO -> Solana OFT send for the
+  return direction (rao/wei/6-decimal-dust conversions, funding math, live fee quoting). Pure.
+- `tools/stake/src/return_route.js` — the resumable free-TAO return engine: coldkey funding -> wrap ->
+  final fee re-quote/top-up -> canonical OFT send. Every mutation is signed, checkpointed (hash,
+  nonce, signed bytes) and only then broadcast; a resume reconciles each saved one first (bug history
+  item 12).
+- `tools/stake/src/substrate.js` — the coldkey side of the return: offline-signed funding transfers,
+  submit, account nonce, free balance. Signs with `@scure/sr25519` through a polkadot `Signer`, never
+  polkadot's Keyring, because Keyring needs WebAssembly and the page CSP has no `wasm-unsafe-eval`.
+- `tools/stake/src/return_entry.js` — entry for `stake/return.js`, the return bundle (~800 KB,
+  polkadot's api). Loaded by the page only when the return direction is opened, by content hash
+  (`__RETURN_BUNDLE__`, defined at build time). Built with polkadot's no-WebAssembly loader.
+- `tools/stake/src/pending.js` — sealing for saved browser records: the forward resume route
+  (`sealRoute`/`readRoute`) and the return checkpoints (`sealRecord`/`openRecord`, label "return").
+- The return direction in the page (`app.js`, "the return direction") opens only where
+  `RETURN_OPEN`: on local hosts, or when `CONFIG.returnLive` is true. **It is false.** Production
+  shows the option disabled until one small real-funds return has been done with Craig's approval.
 - `tools/stake/build.mjs` — esbuild bundler. Also stamps `stake/index.html`'s script tag with a
   content hash (`stake.js?v=<hash>`) so a new deploy can never be served stale from any cache layer.
   **Always run `npm run build` before deploying** — the hash must change for the fix to actually
@@ -262,6 +269,41 @@ This is **not** git-push-triggered. Steps, in order, every time:
       the page falls back to finishing to the wallet on screen. Covered by `test/pending.test.mjs`.
     - Clean: key derivation, SIWS text, no HTML-injection sinks anywhere, strict CSP, no Polkadot
       code in the forward bundle (checked), secrets dropped on `pagehide`.
+
+12. **Return route: recovery made exact, then wired into the page (24 Sep 2026, not deployed, gated
+    off in production).**
+    - *Pending mutations* (docs/codex-review-2026-09-24.md, P1). A resume only consulted the OFT send
+      hash, so a page closed after broadcasting a funding transfer or wrap, but before inclusion,
+      repeated it. Funding also returned a block hash, not the extrinsic's own, via a subscription an
+      HTTP provider cannot serve. Now `evm.js` has `signTx`/`broadcast`/`txStatus`/`waitMined` and
+      `substrate.js` has `prepareTransfer`/`submitSigned`/`accountNonce`; the engine signs, saves,
+      then broadcasts, and reconciles saved work as mined, pending (re-broadcast the same bytes) or
+      dead (nonce used elsewhere, or the 64-block mortal era expired). `test/return_route.test.mjs`
+      simulates a mempool and counts applied mutations for pending funding, pending wrap, a send whose
+      reply was lost, an expired transfer, a wrap whose nonce was taken, and a reverted send.
+    - *WebAssembly under the CSP.* polkadot's Keyring (sr25519) and its crypto init both need
+      WebAssembly; the page CSP blocks it (`script-src wasm-eval` violation seen in the browser), and
+      the api then waited forever. Fixed without touching the CSP: signing goes through
+      `coldkeySigner()` (`@scure/sr25519`), the return bundle uses polkadot's no-WebAssembly loader,
+      and the api starts with `initWasm: false`. `test/substrate_quote_live.test.mjs` proves on the
+      live runtime that the signature verifies under two sr25519 implementations and that the
+      extrinsic is byte-identical to a Keyring-signed one outside the signature.
+    - *Startup that never settles.* When the RPC refuses polkadot's startup (rate limit), it retries
+      forever. `getApi()` now fails after 30 s with a plain error and starts afresh next call.
+    - *First-time Solana token accounts.* Read from the wTAO contract on 24 Sep 2026:
+      `enforcedOptions(30168, 1)` = executor lzReceive with 200,000 compute units and 2,039,280
+      lamports, exactly a token account's rent; and the Solana OFT's `lzReceive` takes the Associated
+      Token and System programs. So a recipient with no TAO account has its rent carried by every
+      delivery. Inferred from both, not yet observed on a real delivery.
+    - *The page.* The return direction reads the derived coldkey's free TAO, quotes the LayerZero fee,
+      the funding transfer's fee and a gas reserve, states what arrives on Solana, runs the engine
+      with sealed checkpoints saved before each broadcast, and tracks arrival by the Solana wallet's
+      own TAO balance (baseline saved with the checkpoints). `test/page.test.mjs` run F covers it up
+      to review on a local host, with the coldkey's account read answered as 2 TAO free.
+    - Open before `returnLive`: one small real-funds return with Craig's approval; unstaking
+      (Milestone 4); a way to abandon a return whose send reverted (today the page reports it on
+      every sign-in); arrival detection is balance-based, so another deposit to the same wallet in
+      that window could be mistaken for it.
 
 ## Link previews and SEO
 

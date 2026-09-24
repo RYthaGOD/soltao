@@ -77,6 +77,14 @@ export function publicKeyFromMnemonic(mnemonic) {
   return getPublicKey(secretFromSeed(miniSecret(mnemonic)));
 }
 
+/**
+ * Phrase → the sr25519 secret that signs for it (pure JS, no WebAssembly), for the return route's
+ * coldkey transactions. The page's CSP has no 'wasm-unsafe-eval', which polkadot's own Keyring needs.
+ */
+export function coldkeySecret(mnemonic) {
+  return secretFromSeed(miniSecret(mnemonic));
+}
+
 function checksum(payload) {
   return blake2b(new Uint8Array([...utf8("SS58PRE"), ...payload]), { dkLen: 64 }).slice(0, 2);
 }

@@ -27,7 +27,7 @@
 <link rel="apple-touch-icon" href="../logo.png">
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="stake.css">
-<script src="stake.js?v=33e2d7ac" defer></script>
+<script src="stake.js?v=1aeb4831" defer></script>
 </head>
 <body>
 <a class="skip" href="#steps">Skip to the steps</a>
@@ -58,7 +58,7 @@
     </label>
     <label class="choice-opt">
       <input type="radio" name="direction" value="reverse" disabled>
-      <span><b>Bridge to Solana</b><i>planned: unstake, quote, and return canonical TAO</i></span>
+      <span><b>Bridge to Solana</b><i>free TAO back to canonical Solana TAO · coming soon</i></span>
     </label>
   </fieldset>
 </div>
@@ -71,7 +71,7 @@
   </h1>
   <p class="stake-lede">
     <span class="dir-fwd">One Solana transaction. Your TAO goes home over the LayerZero bridge it came in on, and this page stakes it to the validator you choose, owned by your own Bittensor wallet. There is no receipt token and no soltao contract: every key along the way comes from your signature, and nobody else holds one.</span>
-    <span class="dir-rev" hidden>Unstake your TAO from Bittensor and bridge it back to Solana over LayerZero. Everything is signed securely by your derived Bittensor wallet, returning canonical TAO to your Solana wallet.</span>
+    <span class="dir-rev" hidden>Send free TAO from the Bittensor wallet your signature creates back to your Solana wallet as canonical TAO, over the same LayerZero bridge. The page signs every Bittensor step with keys only you hold. Unstaking first comes in a later release: this moves free TAO only.</span>
   </p>
   <p class="stake-who">Run by the maintainer of the Solana TAO Board, who also launched the SOLTAO coin (see the
     disclosure below). Your keys are made and kept in this browser and never sent to them, and there is no
@@ -84,7 +84,7 @@
     <li><b>Your coldkey</b><span>root TAO or subnet Alpha · yours</span></li>
   </ol>
   <ol class="hops stake-hops dir-rev" aria-label="The route" hidden>
-    <li><b>Your coldkey</b><span>unstake and transfer</span></li>
+    <li><b>Your coldkey</b><span>free TAO · funds the transit account</span></li>
     <li><b>Bittensor EVM</b><span>wrap to wTAO</span></li>
     <li><b>LayerZero</b><span>OFT bridge to Solana</span></li>
     <li><b>Solana</b><span>arrives in your wallet</span></li>
@@ -218,7 +218,7 @@
     <label class="field">
       <span>
         <span class="dir-fwd">TAO to send</span>
-        <span class="dir-rev" hidden>TAO to Unstake and Bridge</span>
+        <span class="dir-rev" hidden>Free TAO to bring back</span>
       </span>
       <span class="field-row">
         <input type="text" id="amount" inputmode="decimal" autocomplete="off" placeholder="0.00">
@@ -288,11 +288,17 @@
       <div class="dir-fwd"><dt>soltao fee</dt><dd class="num" id="r-fee">—</dd></div>
       <div class="kv-total dir-fwd"><dt>Total SOL</dt><dd class="num" id="r-total">—</dd></div>
       <div class="dir-fwd"><dt>In dollars, roughly</dt><dd class="num" id="r-usd">—</dd></div>
+      <div class="dir-rev" hidden><dt>Taken from your Bittensor wallet</dt><dd class="num" id="r-cost">—</dd></div>
+      <div class="kv-total dir-rev" hidden><dt>Arrives in your Solana wallet</dt><dd class="num" id="r-receive">—</dd></div>
     </dl>
     <p class="step-p small dir-fwd">The LayerZero fee includes 0.001 TAO dropped on your transit account to pay for its first
       Bittensor transaction; what it does not use comes back to you. The Solana transaction fee is added by
       your wallet. The transaction is simulated against mainnet before your wallet asks you to sign.</p>
-    <p class="step-p small dir-rev" hidden>The LayerZero network fee is paid from the bridged TAO on Bittensor. No soltao fee is charged for bridging back to Solana.</p>
+    <p class="step-p small dir-rev" hidden>Your Bittensor wallet funds your transit account, which wraps the TAO and sends it
+      over LayerZero; the LayerZero fee and gas are paid in TAO there. Gas it does not use stays on the transit
+      account, and this page returns it to your Bittensor wallet next time you sign in. If your Solana wallet has
+      no TAO account yet, the bridge's delivery carries the rent to open one. No soltao fee is charged for
+      bridging back.</p>
     <p class="sign-warn">Keep this page open until step 5 finishes. Once the bridge delivers, usually within
       minutes, the page signs the Bittensor steps with your transit key; your wallet will not ask again. If
       the page closes, come back, sign the same message in step 2, and it finishes.</p>

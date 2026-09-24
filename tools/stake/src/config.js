@@ -54,6 +54,10 @@ export const CONFIG = {
   // Root has no pool, so root stakes stay plain addStake.
   subnetPriceToleranceBps: 200n, // 2%
 
+  // The Bittensor -> Solana return. Off in production until one small real-funds return has been done
+  // with Craig's explicit approval; the page opens it on local hosts only, for development and tests.
+  returnLive: false,
+
   // Kept unstaked in the user's wallet so they can pay for their own unstake later.
   defaultReserveRao: 10_000_000n, // 0.01 TAO
   // Subtensor's nominator minimum; smaller stakes can be swept back to free balance.

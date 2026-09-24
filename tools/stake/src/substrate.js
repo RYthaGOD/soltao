@@ -1,67 +1,95 @@
-import { ApiPromise, HttpProvider, Keyring } from "@polkadot/api";
-import { ss58Encode } from "./derive.js";
+// Coldkey transactions on Bittensor's Substrate side, for the return route. Loaded only by the return
+// bundle, never by the forward page.
+//
+// Signing never touches polkadot's Keyring: its sr25519 needs WebAssembly, which the page's CSP does
+// not allow ('wasm-unsafe-eval'). Instead the api is handed a signer backed by @scure/sr25519, the same
+// pure-JS code that derives the coldkey (src/derive.js). test/substrate_quote_live.test.mjs checks
+// that its signatures verify and that the extrinsic matches a Keyring-signed one byte for byte
+// outside the signature.
 
-let _api = null;
-export async function getApi() {
+import { ApiPromise, HttpProvider, Keyring } from "@polkadot/api";
+import { sign as srSign, getPublicKey } from "@scure/sr25519";
+import { blake2b } from "@noble/hashes/blake2b";
+import { coldkeySecret, ss58Encode } from "./derive.js";
+
+const API_START_MS = 30_000;
+let _api = null; // a promise of a ready api
+
+/**
+ * The polkadot api, started once. If it cannot start (the RPC down, or rate-limiting: its 429s carry no
+ * CORS header, so the browser just sees "Failed to fetch"), polkadot keeps retrying and never settles.
+ * So startup is bounded: after 30 s it fails with a plain error and the next call starts afresh.
+ */
+export function getApi() {
   if (!_api) {
     const provider = new HttpProvider("https://lite.chain.opentensor.ai");
-    _api = await ApiPromise.create({ provider, noInitWarn: true });
+    // initWasm: false, so readiness never waits on WebAssembly the page CSP forbids; the return bundle
+    // also swaps in polkadot's no-WebAssembly loader (build.mjs), leaving its pure-JS hashing in use.
+    const api = new ApiPromise({ provider, noInitWarn: true, initWasm: false });
+    let timer;
+    const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("could not reach Bittensor (its public RPC may be busy): try again in a minute")), API_START_MS); });
+    _api = Promise.race([api.isReadyOrError, timeout])
+      .then(() => api)
+      .catch((e) => { _api = null; api.disconnect().catch(() => {}); throw e; })
+      .finally(() => clearTimeout(timer));
   }
   return _api;
 }
 
 export async function disconnectApi() {
   if (!_api) return;
-  const api = _api;
+  const pending = _api;
   _api = null;
-  await api.disconnect();
+  try { await (await pending).disconnect(); } catch { /* it never started */ }
 }
 
+/** Node-only cross-check (test/keyring.test.mjs): polkadot's own Keyring for the same phrase. */
 export function coldkeyPair(mnemonic) {
   const keyring = new Keyring({ type: "sr25519", ss58Format: 42 });
   return keyring.addFromUri(mnemonic);
 }
 
-const destination = (value) => value instanceof Uint8Array ? ss58Encode(value) : value;
+const hexToU8a = (h) => Uint8Array.from(h.replace(/^0x/, "").match(/.{2}/g) || [], (x) => parseInt(x, 16));
+const u8aToHex = (b) => "0x" + Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 
-async function submit(extrinsic, pair) {
-  return new Promise(async (resolve, reject) => {
-    let unsubscribe = () => {};
-    const done = (fn, value) => { try { unsubscribe(); } finally { fn(value); } };
-    try {
-      unsubscribe = await extrinsic.signAndSend(pair, (result) => {
-        if (!result.status.isInBlock) return;
-        if (!result.dispatchError) return done(resolve, result.status.asInBlock.toHex());
-        if (!result.dispatchError.isModule) return done(reject, new Error(result.dispatchError.toString()));
-        const decoded = extrinsic.registry.findMetaError(result.dispatchError.asModule);
-        done(reject, new Error(`${decoded.section}.${decoded.name}: ${decoded.docs.join(" ")}`));
-      });
-    } catch (error) {
-      done(reject, error);
-    }
-  });
+/**
+ * The coldkey as an address plus a polkadot `Signer`. Extrinsic payloads over 256 bytes are signed as
+ * their blake2b-256 hash, and the signature carries the MultiSignature sr25519 prefix (0x01), exactly
+ * as polkadot's own ExtrinsicPayload.sign does.
+ */
+export function coldkeySigner(mnemonic, { onSign = null } = {}) {
+  const secret = coldkeySecret(mnemonic);
+  const address = ss58Encode(getPublicKey(secret));
+  const signer = {
+    async signRaw({ data }) {
+      let msg = hexToU8a(data);
+      if (msg.length > 256) msg = blake2b(msg, { dkLen: 32 });
+      if (onSign) onSign(msg);
+      return { id: 1, signature: u8aToHex(Uint8Array.of(1, ...srSign(secret, msg))) };
+    },
+  };
+  return { address, signer };
 }
+
+const destination = (value) => value instanceof Uint8Array ? ss58Encode(value) : value;
 
 /** Read-only fee and balance check for the coldkey -> EVM-mirror funding transfer. */
 export async function quoteTransfer(mnemonic, toAddress, amountRao) {
   const amount = BigInt(amountRao);
   if (amount <= 0n) throw new Error("transfer amount must be positive");
   const api = await getApi();
-  const pair = coldkeyPair(mnemonic);
+  const { address } = coldkeySigner(mnemonic);
   const extrinsic = api.tx.balances.transferAllowDeath(destination(toAddress), amount);
-  const [payment, account] = await Promise.all([extrinsic.paymentInfo(pair), api.query.system.account(pair.address)]);
+  const [payment, account] = await Promise.all([extrinsic.paymentInfo(address), api.query.system.account(address)]);
   const feeRao = payment.partialFee.toBigInt();
   const freeRao = account.data.free.toBigInt();
-  return { address: pair.address, freeRao, feeRao, amountRao: amount, remainingRao: freeRao - amount - feeRao };
+  return { address, freeRao, feeRao, amountRao: amount, remainingRao: freeRao - amount - feeRao };
 }
 
-export async function removeStake(mnemonic, hotkey, netuid, amountRao) {
+/** Free (transferable) TAO in rao for an SS58 account. */
+export async function freeBalance(address) {
   const api = await getApi();
-  const pair = coldkeyPair(mnemonic);
-
-  // Runtime metadata (spec checked by test/polkadot.test.mjs): hotkey, netuid, amount.
-  const extrinsic = api.tx.subtensorModule.removeStake(hotkey, netuid, amountRao);
-  return submit(extrinsic, pair);
+  return (await api.query.system.account(address)).data.free.toBigInt();
 }
 
 // ── resumable transfers: sign, save, submit, reconcile ──────────────────────
@@ -72,13 +100,13 @@ export async function removeStake(mnemonic, hotkey, netuid, amountRao) {
 const MORTAL_BLOCKS = 64;
 
 /** A signed funding transfer that has not been sent: { id, signed, nonce, address }. */
-export async function prepareTransfer(mnemonic, toAddress, amountRao) {
+export async function prepareTransfer(mnemonic, toAddress, amountRao, { onSign = null } = {}) {
   const api = await getApi();
-  const pair = coldkeyPair(mnemonic);
-  const nonce = (await api.rpc.system.accountNextIndex(pair.address)).toBigInt();
+  const { address, signer } = coldkeySigner(mnemonic, { onSign });
+  const nonce = (await api.rpc.system.accountNextIndex(address)).toBigInt();
   const extrinsic = api.tx.balances.transferAllowDeath(destination(toAddress), BigInt(amountRao));
-  await extrinsic.signAsync(pair, { nonce, era: MORTAL_BLOCKS });
-  return { id: extrinsic.hash.toHex(), signed: extrinsic.toHex(), nonce: String(nonce), address: pair.address };
+  await extrinsic.signAsync(address, { signer, nonce, era: MORTAL_BLOCKS });
+  return { id: extrinsic.hash.toHex(), signed: extrinsic.toHex(), nonce: String(nonce), address };
 }
 
 /** Submits signed bytes. "Already imported" means it is in the pool: pending, not an error. */
@@ -97,12 +125,4 @@ export async function submitSigned(signedHex) {
 export async function accountNonce(address) {
   const api = await getApi();
   return (await api.query.system.account(address)).nonce.toBigInt();
-}
-
-export async function transfer(mnemonic, toAddress, amountRao) {
-  const api = await getApi();
-  const pair = coldkeyPair(mnemonic);
-
-  const extrinsic = api.tx.balances.transferAllowDeath(destination(toAddress), amountRao);
-  return submit(extrinsic, pair);
 }
