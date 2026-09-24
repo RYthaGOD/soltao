@@ -354,7 +354,8 @@ const clean = async (page, problems, label) => {
   await page.close();
 }
 
-// ── Run E: a shared link names the subnet and validator ──
+// ── Run E: a shared link names the subnet and validator, and the validator picker ──
+const setFieldE = async (page, sel, value) => { await page.$eval(sel, (el, v) => { el.value = v; el.dispatchEvent(new Event("input", { bubbles: true })); }, value); };
 {
   const secret = ed25519.utils.randomPrivateKey();
   const pubkey = base58.encode(ed25519.getPublicKey(secret));
@@ -363,6 +364,22 @@ const clean = async (page, problems, label) => {
   expect("a shared link fills the subnet and validator and checks them on-chain", (await page.$eval("#netuid-in", (el) => el.value)) === "1" && /^Validator on subnet 1 · uid \d+/.test(await text(page, "#hotkey-note")), await text(page, "#hotkey-note"));
   const share = await page.$eval("#hotkey-note a", (a) => a.getAttribute("href")).catch(() => null);
   expect("a checked validator offers a link back to the same choice", share === `/stake/?netuid=1&hotkey=${SUBNET1_OWNER_HOTKEY}`, share);
+  // The picker: lists subnet 1's permit holders, states its sort rule, and choosing fills and checks.
+  expect("the picker offers this subnet's validators", (await text(page, "#pick-btn")) === "List subnet 1's validators", await text(page, "#pick-btn"));
+  await clickEl(page, "#pick-btn");
+  await waitText(page, "#pick-rule", /sorted by|No hotkey|Could not read/, 90_000);
+  const rows = await page.$$eval("#pick-body tr", (trs) => trs.map((tr) => [...tr.children].map((td) => td.textContent.trim())));
+  const shares = rows.map((r) => parseFloat(r[3]));
+  expect("it lists permit holders with uid, take and dividend share, and states its sort rule", rows.length > 0 && /sorted by share of its validator dividends at the last epoch/.test(await text(page, "#pick-rule")) && /not a recommendation/.test(await text(page, "#pick-rule")), `${rows.length} rows · ${rows[0]?.join(" | ")}`);
+  expect("…in exactly that order", shares.every((x, i) => i === 0 || shares[i - 1] >= x), shares.join(","));
+  expect("the validator already chosen is marked", (await page.$$eval('#pick-body tr[aria-current="true"]', (x) => x.length)) === 1);
+  const pickUid = rows.at(-1)[0];
+  await page.$$eval("#pick-body tr", (trs) => trs.at(-1).querySelector("button").click());
+  await waitText(page, "#hotkey-note", new RegExp(`uid ${pickUid}\\b|Holds uid|Not on subnet|Could not reach`));
+  expect("choosing a row fills the hotkey and runs the normal on-chain check", new RegExp(`^Validator on subnet 1 · uid ${pickUid}\\b`).test(await text(page, "#hotkey-note")), await text(page, "#hotkey-note"));
+  await setFieldE(page, "#netuid-in", "2");
+  expect("changing the subnet clears the list", (await page.$eval("#pick-wrap", (el) => el.hidden)) && (await text(page, "#pick-btn")) === "List subnet 2's validators");
+
   const who = (await text(page, ".stake-who")).replace(/\s+/g, " ");
   expect("the page says who runs it and what they can take, near the top", /never sent to them/.test(who) && /only charge is a flat SOL fee/.test(who), who);
   await clean(page, problems, "run E");

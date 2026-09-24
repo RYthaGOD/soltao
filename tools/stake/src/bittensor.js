@@ -72,6 +72,30 @@ export async function findOnSubnet(hotkey, netuid) {
 }
 
 /**
+ * Every hotkey holding a validator permit on `netuid`, for the picker: uid, hotkey (64-char hex), take
+ * (null when the hotkey is not a registered delegate) and its share of the subnet's validator dividends
+ * at the last epoch, a u16 fraction that moves every epoch. Sorted by that share, highest first, then
+ * by uid. Stake is left out on purpose: the metagraph's stake unit was never confirmed, and stake size
+ * is a poor guide to return (research/subnet-validator-data-research.md). ~13 requests on 256 uids.
+ */
+export async function subnetValidators(netuid) {
+  const n = BigInt(netuid);
+  const keys = await subnetHotkeys(n);
+  const permits = await ethCalls(keys.map((_, uid) => ({ to: PRECOMPILE.metagraph, data: encode("getValidatorStatus(uint16,uint16)", n, BigInt(uid)) })));
+  const uids = keys.map((_, uid) => uid).filter((uid) => BigInt("0x" + toWord(permits[uid])) === 1n);
+  if (!uids.length) return [];
+  const [divs, delegates] = await Promise.all([
+    ethCalls(uids.map((uid) => ({ to: PRECOMPILE.metagraph, data: encode("getDividends(uint16,uint16)", n, BigInt(uid)) }))),
+    ethCalls(uids.map((uid) => ({ to: PRECOMPILE.staking, data: encode("getDelegate(bytes32)", keys[uid]) }))),
+  ]);
+  return uids.map((uid, i) => {
+    const d = (delegates[i] || "").replace(/^0x/, "");
+    const exists = d.length >= 128 && BigInt("0x" + d.slice(0, 64)) === 1n;
+    return { uid, hotkey: keys[uid], takePct: exists ? Number(BigInt("0x" + d.slice(64, 128))) / 655.35 : null, dividendShare: Number(BigInt("0x" + toWord(divs[i]))) / 65535 };
+  }).sort((a, b) => b.dividendShare - a.dividendShare || a.uid - b.uid);
+}
+
+/**
  * A subnet's Alpha price in wei (18 decimals) of TAO per Alpha. Read 24 Sep 2026: subnet 1 returned
  * 0.00682 TAO, matching the ~11.2 Alpha that 0.0765 TAO bought in the zero-cost mainnet replay.
  */

@@ -178,3 +178,16 @@
 .final-balance h3::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px rgba(44, 202, 181, 0.18); }
 .final-balance .kv dt { color: var(--ink-2); }
 .final-balance .kv dd { color: var(--green-txt); font-size: 15px; font-weight: 650; }
+
+/* validator picker: the chosen subnet's permit holders, read from the metagraph */
+.picker { display: grid; gap: 8px; margin: 2px 0 8px; justify-items: start; }
+.picker #pick-wrap { width: 100%; display: grid; gap: 8px; }
+.pick-scroll { width: 100%; overflow-x: auto; border: 1px solid var(--line-2); border-radius: 10px; max-height: 320px; overflow-y: auto; }
+.pick { width: 100%; border-collapse: collapse; font: 400 12.5px/1.4 var(--mono); }
+.pick th { position: sticky; top: 0; background: var(--panel-2); text-align: left; font-weight: 500; color: var(--ink-3); padding: 8px 10px; border-bottom: 1px solid var(--line-2); white-space: nowrap; }
+.pick td { padding: 7px 10px; border-bottom: 1px solid var(--line); color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pick tr:last-child td { border-bottom: 0; }
+.pick td.num { text-align: right; }
+.pick tr[aria-current="true"] td { background: var(--green-dim); color: var(--ink); }
+.pick button { font: inherit; color: var(--green-txt); background: none; border: 1px solid var(--green-mid); border-radius: 6px; padding: 3px 9px; cursor: pointer; }
+.pick button:hover, .pick button:focus-visible { background: var(--green-dim); outline: none; }

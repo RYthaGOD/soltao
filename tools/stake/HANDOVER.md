@@ -316,10 +316,10 @@ user 5, first-time experience 4, core loop 2, moat 3, technical execution 8, nam
 |---|---|
 | Nobody has used it, and nothing measured that | Done: `npm run usage` counts routes on-chain from the fee wallet, since launch |
 | It only opens one way: stake in, no return through soltao | Milestone 3: wire the built free-TAO return, then unstake and return (Milestone 4) |
-| Subnet stakers must find a valid hotkey on taostats themselves | Validator picker from the on-chain metagraph scan, sort rule stated on the page |
-| The board, the stake route and the SOLTAO coin share one name; the stake page header says "Unofficial community reference" | The stake page states who runs it and what they can and cannot touch |
+| Subnet stakers must find a valid hotkey on taostats themselves | Done: "List subnet N's validators" reads the permit holders from the metagraph (`subnetValidators()`, ~13 requests, ~7 s on subnet 1), shows uid, take and last-epoch dividend share, states its one sort rule on the page, and choosing a row only fills the field, which is then checked as usual. No stake column: its unit was never confirmed. No names: not on-chain |
+| The board, the stake route and the SOLTAO coin share one name; the stake page header says "Unofficial community reference" | Done: a line under the headline says who runs it, that keys never leave the browser, that the page's code is the trust point, and that the flat SOL fee is its only charge. Header now "Self-custody stake route" |
 | Amounts are TAO and SOL only, never money | Show USD beside fees and amounts, labelled with source and time |
-| No shareable state | `?netuid=` and `?hotkey=` prefill the form |
+| No shareable state | Done: `?netuid=` and `?hotkey=` prefill step 3 and run the normal checks; a checked validator offers "link to this choice" |
 
 Sins flagged: phantom users, bridge to nowhere, jargon overload, and MEV bait (fixed in item 11).
 Avoided: token-first thinking; the $SOLTAO gate was rejected and the conflict is disclosed.

@@ -103,7 +103,12 @@ Acceptance:
 
 ## Milestone 5: gateway experience
 
-Status: not started. Data sources for the subnet directory and validator picker were researched on
+Status: started 24 Sep 2026 (built, not yet deployed). The validator picker is done: the chosen
+subnet's validator-permit holders from the metagraph, with uid, take and last-epoch dividend share,
+one stated sort rule, no names (not on-chain) and no stake column (unit unconfirmed). Shareable
+`?netuid=&hotkey=` links are done. Open: subnet directory, portfolio, return actions.
+
+Data sources for the subnet directory and validator picker were researched on
 24 Sep 2026 — see `research/subnet-validator-data-research.md` for what taostats can and cannot
 supply, what the Bittensor metagraph precompile supplies for free, and the measured cost of each.
 

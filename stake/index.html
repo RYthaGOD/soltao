@@ -27,7 +27,7 @@
 <link rel="apple-touch-icon" href="../logo.png">
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="stake.css">
-<script src="stake.js?v=76a19454" defer></script>
+<script src="stake.js?v=5a3782a9" defer></script>
 </head>
 <body>
 <a class="skip" href="#steps">Skip to the steps</a>
@@ -252,6 +252,18 @@
         <input type="text" id="hotkey-in" autocomplete="off" spellcheck="false" placeholder="5… (the validator's hotkey address)">
       </label>
       <span class="step-note" id="hotkey-note" role="status">Pick one yourself; this page does not choose for you. Validators and their take are listed on <a href="https://taostats.io/validators" rel="noopener" target="_blank">taostats ↗</a>.</span>
+      <div class="picker">
+        <button type="button" class="btn btn-ghost btn-sm" id="pick-btn">List root validators</button>
+        <div id="pick-wrap" hidden>
+          <p class="step-note" id="pick-rule" role="status"></p>
+          <div class="pick-scroll">
+            <table class="pick">
+              <thead><tr><th scope="col">uid</th><th scope="col">Hotkey</th><th scope="col">Take</th><th scope="col">Dividend share, last epoch</th><th scope="col"><span class="sr">Choose</span></th></tr></thead>
+              <tbody id="pick-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
       <label class="field field-sm">
         <span>Keep unstaked for future fees (TAO)</span>
         <input type="text" id="reserve" inputmode="decimal" autocomplete="off" value="0.01">

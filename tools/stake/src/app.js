@@ -8,7 +8,7 @@ import { ed25519 } from "@noble/curves/ed25519";
 import { CONFIG } from "./config.js";
 import { derivationMessage, signInFields, walletFromSignature, ss58Decode, ss58Encode, toHex } from "./derive.js";
 import { createClients, getTaoBalance, quoteNativeFee, quotePriorityFee, priorityFeeLamports, buildRouteTransaction, removeDust } from "./solana.js";
-import { findOnSubnet, getDelegate, getFreeBalance, getUidCount } from "./bittensor.js";
+import { findOnSubnet, getDelegate, getFreeBalance, getUidCount, subnetValidators } from "./bittensor.js";
 import { getGasPrice } from "./evm.js";
 import { sealRoute, readRoute, untrustedPlan } from "./pending.js";
 import { finishRoute, transitState, minStakeAmount, stakeGasReserve, sweepFloor } from "./route.js";
@@ -302,6 +302,9 @@ async function onNetuid() {
   const v = $("netuid-in").value.trim(); const seq = ++netuidSeq;
   state.netuid = 0n; state.netuidValid = true; state.netuidChecking = false;
   const recheckHotkey = () => { if ($("hotkey-in").value.trim()) onHotkey(); };
+  if (/^\d+$/.test(v) && BigInt(v) <= 65535n) state.netuid = BigInt(v);
+  resetPicker(); // a list belongs to one subnet; never leave another's on screen
+  state.netuid = 0n;
   if (!v) {
     $("netuid-in").removeAttribute("aria-invalid");
     note("netuid-note", "Default is 0 (Root network). Other subnets will mint Alpha tokens.");
@@ -348,6 +351,54 @@ async function onNetuid() {
     if (seq === netuidSeq) { state.netuidChecking = false; note("netuid-note", `Could not reach Bittensor to check it: ${e.message}`, "bad"); }
   }
   gate();
+}
+
+// ── the validator picker ────────────────────────────────────────────────────
+// Lists the chosen subnet's validator-permit holders from the metagraph, on request (about 13 reads
+// against a rate-limited RPC, so never on every keystroke). It states its one sort rule and picks
+// nothing: choosing a row only fills the hotkey field, which is then checked like a pasted one.
+let pickSeq = 0;
+function resetPicker() {
+  pickSeq++;
+  $("pick-wrap").hidden = true; $("pick-body").replaceChildren();
+  $("pick-btn").disabled = false;
+  $("pick-btn").textContent = state.netuid === 0n ? "List root validators" : `List subnet ${state.netuid}'s validators`;
+}
+async function openPicker() {
+  if (state.netuidChecking || !state.netuidValid) return;
+  const netuid = state.netuid, seq = ++pickSeq;
+  $("pick-btn").disabled = true; $("pick-wrap").hidden = false; $("pick-body").replaceChildren();
+  note("pick-rule", `reading ${netuid === 0n ? "root" : `subnet ${netuid}`}'s validators from Bittensor…`);
+  try {
+    const list = await subnetValidators(netuid);
+    if (seq !== pickSeq) return;
+    const at = new Date().toISOString().slice(11, 16);
+    const where = netuid === 0n ? "root" : `subnet ${netuid}`;
+    if (!list.length) { note("pick-rule", `No hotkey holds a validator permit on ${where} right now.`, "warn"); return; }
+    note("pick-rule", `${list.length} validators on ${where}, sorted by share of its validator dividends at the last epoch, highest first (read ${at} UTC). That share moves every epoch: it is a snapshot, not a forecast, and not a recommendation. Names are not on-chain, so check a hotkey on taostats before you choose.`);
+    const current = $("hotkey-in").value.trim();
+    $("pick-body").replaceChildren(...list.map((v) => {
+      const ss58 = ss58Encode(fromHex(v.hotkey));
+      const tr = document.createElement("tr");
+      if (ss58 === current) tr.setAttribute("aria-current", "true");
+      const td = (t, cls) => Object.assign(document.createElement("td"), { textContent: t, className: cls || "" });
+      const use = Object.assign(document.createElement("button"), { type: "button", textContent: "Use" });
+      use.setAttribute("aria-label", `Use validator uid ${v.uid}, ${ss58}`);
+      use.addEventListener("click", () => {
+        $("hotkey-in").value = ss58;
+        for (const row of $("pick-body").children) row.removeAttribute("aria-current");
+        tr.setAttribute("aria-current", "true");
+        onHotkey();
+      });
+      const cell = document.createElement("td"); cell.append(use);
+      tr.append(td(String(v.uid), "num"), td(short(ss58, 6)), td(v.takePct === null ? "not a delegate" : `${v.takePct.toFixed(2)}%`, "num"), td(`${(v.dividendShare * 100).toFixed(2)}%`, "num"), cell);
+      return tr;
+    }));
+  } catch (e) {
+    if (seq === pickSeq) note("pick-rule", `Could not read the validators from Bittensor: ${e.message}. Try again in a minute.`, "bad");
+  } finally {
+    if (seq === pickSeq) $("pick-btn").disabled = false;
+  }
 }
 
 let hotkeySeq = 0;
@@ -675,6 +726,7 @@ function init() {
   document.querySelectorAll('input[name="plan"]').forEach((r) => r.addEventListener("change", () => { state.plan = r.value; gate(); }));
   $("netuid-in").addEventListener("input", onNetuid);
   $("hotkey-in").addEventListener("input", onHotkey);
+  $("pick-btn").addEventListener("click", openPicker);
   $("sign").addEventListener("click", send);
   getGasPrice().then((p) => { state.gasPrice = p; gate(); }).catch(() => {});
   addEventListener("beforeunload", (e) => { if (state.running) { e.preventDefault(); e.returnValue = ""; } });
