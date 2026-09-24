@@ -4,22 +4,21 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-09-24. **Live in production at `soltao.xyz`; ten commits on `main` are unreleased.**
-The live site is commit `292b68b`, script hash `stake.js?v=65f935e0` (the subnet-aware hotkey check,
-bug history item 10). `main` (from `b800b93` to `b4abce8`, built as `stake.js?v=605f6fa1` +
-`return.js?v=2562e61a`) adds: the cleanup; the review fixes in item 11 (price-limited subnet stakes,
-the TAO/Alpha wording, debounced subnet checks, mobile wallet links, cache headers, Solana priority
-fee, sealed resume routes); both Codex P1 fixes (legacy saved routes, pending return mutations, item
-12); the roast fixes (validator picker, shareable links, who-runs-this line, USD in the review,
-holdings view, `npm run usage`); and the return direction, wired but **off in production**
-(`CONFIG.returnLive` false). All pass `npm test`, `test:page` (runs A-E, then F after a quiet pause),
-`test:mainnet` and the live Substrate test. Awaiting Craig's deploy go-ahead.
+Last updated: 2026-09-24. **Live in production at `soltao.xyz`, nothing unreleased.** Deployed commit
+`994f394` with Craig's go-ahead ("deploy once you are happy"), script hashes `stake.js?v=412be73a` and
+`return.js?v=8406712c`. Served on the first poll; `/healthz` 200 (so the new nginx rules are valid);
+`npm run test:live` 23/23 on the real domain, including both cache headers, both mirror redirects,
+`return.js` served and the return option still disabled.
 
-Deploy notes for this batch: the Dockerfile now also copies `stake/return.js` and its licence file;
-the nginx change could not be syntax-checked locally (no Docker), so after `railway up --ci` confirm
-`/healthz`, then run `npm run test:live` (it checks the served hashes, both cache headers, the mirror
-redirects, that the return option is still disabled and that `return.js` is served). The redesign,
-subnet staking, the Helius RPC switch with its CSP fix, and the link-preview metadata are all live.
+Live now: the cleanup; the review fixes (bug history item 11: price-limited subnet stakes, TAO/Alpha
+wording, debounced subnet checks, mobile wallet links, cache headers, Solana priority fee, sealed
+resume routes); both Codex P1 fixes (item 12); the roast fixes (validator picker, shareable links,
+who-runs-this line, USD in the review, holdings view); plus the redesign, subnet staking, the Helius
+switch and link previews from before.
+
+**Shipped but switched off** (`CONFIG.returnLive` false; opens on local hosts only): the return to
+Solana, and unstake/re-stake from the holdings view (item 13). Turning them on needs one small
+real-funds run of each, with Craig's approval, then `returnLive: true`, a build and a deploy.
 See "Current state" for what has real-funds proof versus what shipped on zero-cost mainnet-state
 verification plus Craig's own informed go-ahead.
 
