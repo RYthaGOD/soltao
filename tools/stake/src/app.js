@@ -10,6 +10,7 @@ import { derivationMessage, signInFields, walletFromSignature, ss58Decode, ss58E
 import { createClients, getTaoBalance, quoteNativeFee, quotePriorityFee, priorityFeeLamports, buildRouteTransaction, removeDust } from "./solana.js";
 import { findOnSubnet, getDelegate, getFreeBalance, getUidCount, subnetValidators } from "./bittensor.js";
 import { getGasPrice } from "./evm.js";
+import { usdPrices, fmtUsd } from "./prices.js";
 import { sealRoute, readRoute, untrustedPlan } from "./pending.js";
 import { finishRoute, transitState, minStakeAmount, stakeGasReserve, sweepFloor } from "./route.js";
 
@@ -519,10 +520,23 @@ function renderReview(ready) {
   set("r-gas", () => { const g = bittensorGas(); return g === null ? "—" : `about ${tao(g)}`; });
   // Name the counterparty, not just the amount: the fee is a plain transfer to this address.
   $("r-fee").textContent = CONFIG.fee.lamports ? `${sol(CONFIG.fee.lamports)}${CONFIG.fee.wallet ? ` → ${short(CONFIG.fee.wallet, 4)}` : ""}` : "none";
-  if (!ready) { $("r-lzfee").textContent = "—"; $("r-prio").textContent = "—"; $("r-total").textContent = "—"; }
+  if (!ready) { $("r-lzfee").textContent = "—"; $("r-prio").textContent = "—"; $("r-total").textContent = "—"; $("r-usd").textContent = "—"; }
 }
 
 let quoteTimer;
+/** Approximate dollars for the TAO being sent and the SOL it costs. Display only; a failed feed hides it. */
+async function showUsd(seq, totalLamports) {
+  $("r-usd").textContent = "…";
+  const p = await usdPrices().catch(() => null);
+  if (seq !== state.quoteSeq) return;
+  if (!p) { $("r-usd").textContent = "price feed unavailable"; return; }
+  const parts = [
+    p.tao !== null && `${fmtUsd((Number(state.amountLd) / 1e9) * p.tao)} of TAO`,
+    p.sol !== null && `${fmtUsd((Number(totalLamports) / 1e9) * p.sol)} in fees`,
+  ].filter(Boolean);
+  $("r-usd").textContent = `${parts.join(", ")} (Dexscreener, ${new Date(p.at).toISOString().slice(11, 16)} UTC)`;
+}
+
 function requestQuote() {
   clearTimeout(quoteTimer);
   $("r-lzfee").replaceChildren(Object.assign(document.createElement("span"), { className: "skel" }));
@@ -540,6 +554,7 @@ function requestQuote() {
       const prio = priorityFeeLamports(priority);
       const total = fee + prio + BigInt(CONFIG.fee.lamports ?? 0n);
       $("r-lzfee").textContent = sol(fee); $("r-prio").textContent = sol(prio); $("r-total").textContent = sol(total);
+      showUsd(seq, total);
       const lacking = state.lamports < total + 100_000n;
       if (!LIVE) note("sign-note", "The quote is live; sending opens once the route goes live.", "warn");
       else if (lacking) note("sign-note", `Not enough SOL: you need about ${sol(total + 100_000n)} including the transaction fee.`, "bad");

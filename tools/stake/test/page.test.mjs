@@ -236,6 +236,8 @@ const clean = async (page, problems, label) => {
   const total = parseFloat(await text(page, "#r-total"));
   const prio = parseFloat(await text(page, "#r-prio"));
   expect("a Solana priority fee is quoted and shown", prio > 0 && prio <= Number(CONFIG.priorityFee.maxMicroLamports * BigInt(CONFIG.computeUnits)) / 1e15 + 1e-9, `${prio} SOL`);
+  await waitText(page, "#r-usd", /Dexscreener|unavailable/, 30_000);
+  expect("the review shows the amount and fees in dollars, with source and time", /^(\$[\d,.]+|under \$0\.01) of TAO, (\$[\d,.]+|under \$0\.01) in fees \(Dexscreener, \d\d:\d\d UTC\)$/.test(await text(page, "#r-usd")), await text(page, "#r-usd"));
   expect("total adds the priority fee and soltao's flat fee", Math.abs(total - lz - prio - Number(CONFIG.fee.lamports) / 1e9) < 2e-6, `${total} SOL`);
   expect("review names the plan and the stake", /^Stake about 0\.0\d+ TAO on root/.test(await text(page, "#r-plan")), await text(page, "#r-plan"));
   expect("review shows the transit account", /^0x[0-9a-f]{40}$/.test(await text(page, "#r-via")));
