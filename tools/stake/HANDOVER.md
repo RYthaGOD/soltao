@@ -5,7 +5,12 @@ continue without re-deriving context. Keep it updated after every meaningful ste
 go stale.
 
 Last updated: 2026-09-24. **Live in production at `soltao.xyz`, nothing unreleased.** Latest deploy:
-commit `ad1161c` (polish, bug history item 15: unstake-then-return, send again after a revert,
+commit `477bde3`, `stake.js?v=cd93f703` + `return.js?v=c15e5834`: **`CONFIG.returnLive` is now true**,
+so the return to Solana and unstake/stake from the holdings view are open to everyone, switched on
+at Craig's explicit request BEFORE any real-funds run (wallets refuse the sign-in on localhost, since
+the message names soltao.xyz, so the first real runs have to be on the live page). `test:live` all
+passed, including the return option now enabled. The paragraph below on "shipped but switched off"
+is superseded. Before it, commit `ad1161c` (polish, bug history item 15: unstake-then-return, send again after a revert,
 "TAO added per day" in the directory), `stake.js?v=1e178c2d` + `return.js?v=3598743b`, served on the
 first poll, `/healthz` 200, `test:live` all passed; the return and stake moves are still switched off.
 Before it, `9f22575` (the subnet directory, item 14), `stake.js?v=d8f02947` +
