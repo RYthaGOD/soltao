@@ -253,7 +253,9 @@ const clean = async (page, problems, label) => {
   await waitText(page, "#hotkey-note", /Validator on subnet 1|Not on subnet 1|no validator permit/);
   expect("a hotkey validating on the subnet passes, with its uid", /^Validator on subnet 1 · uid \d+/.test(await text(page, "#hotkey-note")), await text(page, "#hotkey-note"));
   await waitText(page, "#r-plan", /subnet 1/);
-  expect("review names the subnet and the Alpha it mints", /^Stake about 0\.0\d+ Alpha on subnet 1/.test(await text(page, "#r-plan")), await text(page, "#r-plan"));
+  expect("review states the TAO going in, the subnet, and the price limit", /^Stake about 0\.0\d+ TAO on subnet 1 to .*bought as its Alpha at the pool price\. If that price is more than 2% worse/.test(await text(page, "#r-plan")), await text(page, "#r-plan"));
+  await setField("#netuid-in", "2");
+  expect("changing the subnet drops the hotkey's approval at once, before any re-check", /^waiting to check it on subnet 2/.test(await text(page, "#hotkey-note")) && (await text(page, "#r-plan")) === "—", `${await text(page, "#hotkey-note")} · ${await text(page, "#r-plan")}`);
   await setField("#netuid-in", "");
   await setField("#hotkey-in", VALIDATOR);
   await waitText(page, "#hotkey-note", /Registered validator/);

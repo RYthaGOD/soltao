@@ -38,6 +38,10 @@ expect("every uid's hotkey is read, in uid order, despite out-of-order batch rep
 expect("batches never exceed the RPC's 50-call cap", biggest === 50, `largest batch ${biggest}`);
 expect("120 uids cost 1 count read plus 3 batches", requests === 4, `${requests} requests`);
 
+const before = requests;
+await subnetHotkeys(7);
+expect("a second read of the same subnet within a minute costs no requests", requests === before, `${requests - before} requests`);
+
 const v = await findOnSubnet(key(1101), 7);
 expect("a validator on the subnet is found with its permit and dividend share", v.uid === 101 && v.validatorPermit === true && Math.abs(v.dividendShare - 0.5) < 1e-4, JSON.stringify(v));
 const m = await findOnSubnet(key(1005), 7);

@@ -11,11 +11,13 @@ const XFER = "0x0000000000000000000000000000000000000800", MAP = "0x000000000000
 const MIN_GAS = { withdraw: 43_181n, addStake: 100_637n, transferStake: 2_357_280n, transferAll: 27_545n };
 const USED = { withdraw: 38_000n, addStake: 80_000n, transferStake: 84_000n, transferAll: 26_000n };
 const sel = (s) => ethers.id(s).slice(0, 10);
-const S = { withdraw: sel("withdraw(uint256)"), balanceOf: sel("balanceOf(address)"), addStake: sel("addStake(bytes32,uint256,uint256)"), transferStake: sel("transferStake(bytes32,bytes32,uint256,uint256,uint256)"), getStake: sel("getStake(bytes32,bytes32,uint256)"), transferAll: sel("transferAll(bytes32,bool)"), map: sel("addressMapping(address)") };
+const S = { withdraw: sel("withdraw(uint256)"), balanceOf: sel("balanceOf(address)"), addStake: sel("addStake(bytes32,uint256,uint256)"), transferStake: sel("transferStake(bytes32,bytes32,uint256,uint256,uint256)"), getStake: sel("getStake(bytes32,bytes32,uint256)"), transferAll: sel("transferAll(bytes32,bool)"), map: sel("addressMapping(address)"), addStakeLimit: sel("addStakeLimit(bytes32,uint256,uint256,bool,uint256)"), alphaPrice: sel("getAlphaPrice(uint16)") };
+const ALPHA = "0x0000000000000000000000000000000000000808";
+const ALPHA_PRICE = 10_000_000_000_000_000n; // 0.01 TAO per Alpha, in wei
 
 let chain;
 function freshChain() {
-  return { native: new Map(), wtao: new Map(), stake: new Map(), free: new Map(), nonce: new Map(), receipts: new Map(), hotkeys: new Set(), pendingDelivery: null, balanceReads: 0, gasSpent: 0n };
+  return { native: new Map(), wtao: new Map(), stake: new Map(), free: new Map(), nonce: new Map(), receipts: new Map(), hotkeys: new Set(), pendingDelivery: null, balanceReads: 0, gasSpent: 0n, priceMove: 0n, stakeCalls: [] };
 }
 const get = (m, k) => m.get(k.toLowerCase()) ?? 0n;
 const add = (m, k, v) => m.set(k.toLowerCase(), get(m, k) + v);
@@ -39,8 +41,17 @@ function execute(tx) {
       add(chain.wtao, from, -amt); add(chain.native, from, amt); return true;
     }
     if (to === STAKING && d.startsWith(S.addStake)) {
-      kind = "addStake"; if (limit < MIN_GAS.addStake) return false;
+      kind = "addStake"; chain.stakeCalls.push("addStake"); if (limit < MIN_GAS.addStake) return false;
       const hk = word(d, 0), rao = u(d, 1), netuid = u(d, 2);
+      if (!chain.hotkeys.has(hk) || rao < 2_000_000n || get(chain.native, from) < rao * RAO) return false;
+      add(chain.native, from, -rao * RAO); add(chain.stake, stakeKey(hk, mirror(from), netuid), rao - 1n); return true;
+    }
+    if (to === STAKING && d.startsWith(S.addStakeLimit)) {
+      // The pool price can move between the page's read and execution: chain.priceMove models that.
+      kind = "addStake"; chain.stakeCalls.push("addStakeLimit"); if (limit < MIN_GAS.addStake) return false;
+      const hk = word(d, 0), rao = u(d, 1), limitRao = u(d, 2), partial = u(d, 3), netuid = u(d, 4);
+      const priceNow = ALPHA_PRICE + chain.priceMove;
+      if (partial !== 0n || limitRao * RAO < priceNow) return false;
       if (!chain.hotkeys.has(hk) || rao < 2_000_000n || get(chain.native, from) < rao * RAO) return false;
       add(chain.native, from, -rao * RAO); add(chain.stake, stakeKey(hk, mirror(from), netuid), rao - 1n); return true;
     }
@@ -85,6 +96,7 @@ globalThis.fetch = async (_url, { body }) => {
         if (chain.pendingDelivery && ++chain.balanceReads >= 2) { add(chain.wtao, addr, chain.pendingDelivery); chain.pendingDelivery = null; }
         return reply(ethers.toBeHex(get(chain.wtao, addr), 32));
       }
+      if (to.toLowerCase() === ALPHA && data.startsWith(S.alphaPrice)) return reply(ethers.toBeHex(ALPHA_PRICE, 32));
       if (to.toLowerCase() === MAP) return reply(mirror("0x" + data.slice(34, 74)));
       if (to.toLowerCase() === STAKING && data.startsWith(S.getStake)) return reply(ethers.toBeHex(get(chain.stake, stakeKey(word(data, 0), word(data, 1), u(data, 2))), 32));
       return fail(`unmocked call ${to} ${data.slice(0, 10)}`);
@@ -195,6 +207,21 @@ const DROP = 1_000_000_000_000_000n; // 0.001 TAO
   setTimeout(() => add(chain.native, t.addr, DROP), 50); // the executor's drop, a moment later
   const r = await finishRoute({ transitKey: t.key, coldkey: t.ck, hotkey: t.hk, plan: "stake", reserveRao: 10_000_000n, onStep: (k, s, m) => steps.push(m), dropWaitMs: 60_000 });
   expect("wTAO before the gas drop: waits for the drop, then stakes", steps.includes("waiting for the gas drop") && userStake(t) > 970_000_000n && r.txs[0].label === "unwrap", `${fmt(userStake(t))} TAO staked`);
+}
+
+// K. A fresh subnet stake is price-limited; root stays plain addStake (case A).
+{
+  const t = setup({ native: DROP, delivery: TAO });
+  const r = await finishRoute({ transitKey: t.key, coldkey: t.ck, hotkey: t.hk, netuid: 5n, plan: "stake", reserveRao: 10_000_000n, expectLd: RAO });
+  expect("subnet stake goes out as addStakeLimit, never partial, and lands", chain.stakeCalls.join() === "addStakeLimit" && userStake(t, 5n) > 970_000_000n && r.stakedRao === userStake(t, 5n), chain.stakeCalls.join());
+}
+
+// L. The subnet price moves more than the tolerance before the stake lands: delivered unstaked.
+{
+  const t = setup({ native: DROP, delivery: TAO });
+  chain.priceMove = ALPHA_PRICE / 20n; // +5%, past the 2% default
+  const r = await finishRoute({ transitKey: t.key, coldkey: t.ck, hotkey: t.hk, netuid: 5n, plan: "stake", reserveRao: 10_000_000n, expectLd: RAO });
+  expect("a price move past the tolerance is refused and the TAO arrives free", r.stakeRefused === true && userStake(t, 5n) === 0n && userFree(t) > 970_000_000n && r.txs.map((x) => x.label).join(",") === "unwrap,stake,sweep", `${fmt(userFree(t))} TAO free`);
 }
 
 // G. No gas drop: refuses clearly instead of burning anything.

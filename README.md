@@ -211,7 +211,10 @@ Bittensor EVM, signed by the page with the transit key:
 page checks the subnet's own metagraph before letting the user send: the subnet must exist and the
 pasted hotkey must hold a uid with a validator permit there. A validator on one subnet is not one on
 another, and the chain accepts a stake to a hotkey with no slot on the subnet, where it earns nothing
-(tested against mainnet state, 24 Sep 2026).
+(tested against mainnet state, 24 Sep 2026). A subnet stake swaps TAO into the subnet's Alpha pool,
+so it is sent as `addStakeLimit` with no partial fill, capped at 2% above the pool price read just
+before sending. If the price has moved further by the time it lands, the chain refuses it and the TAO
+arrives unstaked. Root has no pool and uses plain `addStake`.
 
 **The keys.** The user signs a fixed Sign-In-With-Solana message. HKDF over that ed25519 signature
 gives two independent keys: a 12-word phrase that is an ordinary sr25519 coldkey and imports into

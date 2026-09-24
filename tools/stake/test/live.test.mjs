@@ -62,6 +62,12 @@ try {
   const served = await page.evaluate(() => document.querySelector('script[src*="stake.js"]')?.getAttribute("src"));
   expect("the served script is the one just built", served?.endsWith(`v=${builtHash}`), `${served} vs v=${builtHash}`);
 
+  // Caching: the hashed script is kept for good, the HTML that names it stays fresh.
+  const cacheOf = async (url) => (await fetch(url, { method: "HEAD" })).headers.get("cache-control") || "";
+  const jsCache = await cacheOf(`${SITE}/stake/${served}`), htmlCache = await cacheOf(`${SITE}/stake/`);
+  expect("the hashed script is cached for a year", /max-age=31536000/.test(jsCache), jsCache);
+  expect("the stake page HTML is cached for at most 5 minutes", /max-age=300\b/.test(htmlCache), htmlCache);
+
   // The page's own RPC calls, made from inside the live page so the live CSP applies.
   const solana = await page.evaluate(async (url) => {
     try { const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getHealth" }) }); return `${r.status} ${JSON.stringify((await r.json()).result)}`; } catch (e) { return `blocked: ${e.message}`; }

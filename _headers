@@ -29,5 +29,9 @@
 /logo.png
   Cache-Control: public, max-age=86400
 
+# Always requested as stake.js?v=<content hash>, so a new build is a new URL.
 /stake/stake.js
-  Cache-Control: public, max-age=3600
+  Cache-Control: public, max-age=31536000, immutable
+
+/stake/
+  Cache-Control: public, max-age=300, must-revalidate

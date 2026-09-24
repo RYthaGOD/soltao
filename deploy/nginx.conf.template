@@ -28,6 +28,11 @@ server {
     location = /index.html { expires 5m;  }
     location = /            { expires 5m; try_files /index.html =404; }
 
+    # The stake page's HTML names its script by content hash (stake.js?v=<hash>), so the HTML must stay
+    # fresh and the script can be kept for good: a new build is always a new URL.
+    location = /stake/          { expires 5m; try_files /stake/index.html =404; }
+    location = /stake/stake.js  { expires 1y; }
+
     location ~* \.(css|js)$        { expires 1h; }
     location ~* \.(png|svg|ico)$   { expires 1d; }
 

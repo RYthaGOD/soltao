@@ -44,6 +44,12 @@ export const CONFIG = {
   // on chain that day: an on-curve key owned by the System Program, so an ordinary wallet.
   fee: { wallet: "BgGFMbwUtKLifQYZogbDorEXTXYp3UKVAZSH41xQ72Na", lamports: 3_000_000n }, // 0.003 SOL
 
+  // A subnet stake swaps TAO into the subnet's Alpha pool, and the transit account's transaction sits
+  // in a public mempool. So it is sent as addStakeLimit, refusing any fill worse than this much above
+  // the pool price read just before sending. A refusal delivers the TAO unstaked, as any other refusal.
+  // Root has no pool, so root stakes stay plain addStake.
+  subnetPriceToleranceBps: 200n, // 2%
+
   // Kept unstaked in the user's wallet so they can pay for their own unstake later.
   defaultReserveRao: 10_000_000n, // 0.01 TAO
   // Subtensor's nominator minimum; smaller stakes can be swept back to free balance.

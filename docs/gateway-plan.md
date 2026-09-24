@@ -52,7 +52,9 @@ Acceptance:
 
 - Netuid is validated before a user can send.
 - Resume uses the saved netuid.
-- Review copy distinguishes root TAO from subnet Alpha.
+- Review copy distinguishes root TAO from subnet Alpha. (Missed until 24 Sep 2026: the review
+  called the TAO going into a subnet "Alpha". Fixed, along with a 2% price limit on subnet stakes;
+  see bug history item 11 in `tools/stake/HANDOVER.md`.)
 - Final balance labels do not call Alpha "TAO".
 - Subnet staking is covered by a simulation or controlled integration test before release.
 

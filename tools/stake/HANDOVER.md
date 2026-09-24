@@ -4,13 +4,16 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-09-24. **Live in production at `soltao.xyz`, with one cleanup build unreleased.**
+Last updated: 2026-09-24. **Live in production at `soltao.xyz`, with review fixes unreleased.**
 The live site is commit `292b68b`, script hash `stake.js?v=65f935e0`, which adds the subnet-aware
 hotkey check (bug history item 10), verified on the real domain with `npm run test:live`. `main`
-also carries a cleanup build, `stake.js?v=a5a5207c`: the temporary `?debug` sign-in panel removed,
-and `/stake/` on the mirrors redirected to `soltao.xyz`. It passes `npm test` and `npm run
-test:page`, and awaits Craig's deploy go-ahead. After deploying it, `npm run test:live` also checks
-both mirror redirects. The redesign, subnet staking, the bridge-back scaffold, the Helius RPC switch
+carries two unreleased rounds, built together as `stake.js?v=30a1f8a5`: the cleanup (the `?debug`
+sign-in panel removed, `/stake/` on the mirrors redirected to `soltao.xyz`) and the review fixes in
+bug history item 11 (price-limited subnet stakes, the review line that called TAO "Alpha", debounced
+and cached subnet checks, a mobile open-in-wallet link, cache headers). Everything passes `npm test`,
+`npm run test:page` and `npm run test:mainnet`, and awaits Craig's deploy go-ahead. The nginx change
+could not be syntax-checked locally (no Docker), so after deploying, confirm `/healthz` and run
+`npm run test:live`, which now also checks the mirror redirects and both cache headers. The redesign, subnet staking, the bridge-back scaffold, the Helius RPC switch
 with its CSP fix, and the link-preview metadata are all live.
 See "Current state" for what has real-funds proof versus what shipped on zero-cost mainnet-state
 verification plus Craig's own informed go-ahead.
@@ -220,6 +223,42 @@ This is **not** git-push-triggered. Steps, in order, every time:
     and the duplicate found no wTAO. The harness now treats a re-broadcast of the same hash as one
     transaction and retries rate limits. If scenario 4 ever "fails" at the unwrap step, suspect this
     class of problem before suspecting the route.
+
+11. **Review-and-iterate pass, 24 Sep 2026.** Findings and what was done:
+    - **High, fixed: subnet stakes had no price limit.** `addStake` on a subnet swaps TAO into its
+      Alpha pool at whatever price holds when the transit account's public transaction lands. Now
+      `route.js` sends `addStakeLimit(hotkey, amount, limit, false, netuid)` for any netuid > 0, with
+      `limit = getAlphaPrice(netuid)` (precompile `0x808`, wei of TAO per Alpha) plus
+      `CONFIG.subnetPriceToleranceBps` (2%), converted to rao. No partial fills. A refusal goes
+      through the existing fallback and delivers the TAO free. Root stays `addStake`. Proven by
+      `test/mainnet.test.mjs`: scenario 1b stakes on subnet 1 through `addStakeLimit` (83,195 gas of
+      140,000), and scenario 6 shows a limit 50% under the pool price is refused and delivered free.
+      `test/route.test.mjs` cases K and L cover the same in the mocked chain. The unit reading was
+      checked: subnet 1's price 0.00682 TAO per Alpha matches the replay's 0.0765 TAO buying ~11.2
+      Alpha. Open: a large stake on a thin pool can move the price more than 2% by itself and be
+      refused; the review does not yet estimate that impact.
+    - **Medium, fixed: the review said "Stake about 0.076 Alpha on subnet 1"** for what is 0.076
+      TAO buying ~11 Alpha. It now states the TAO going in, that it buys the subnet's Alpha at the
+      pool price, and the 2% limit.
+    - **Medium, fixed: typing a subnet number scanned the metagraph per keystroke.** "128" scanned
+      subnets 1, 12 and 128, about six requests each, against a rate-limited RPC. The check now
+      waits 400 ms for typing to settle, drops the hotkey's approval immediately so a stale
+      approval can never reach the review, and caches each subnet's hotkey list for 60 s.
+    - **Low, fixed: phones had no way in.** A phone browser never has a wallet injected. With no
+      provider on a phone, the page now offers Phantom's and Solflare's documented browse links,
+      which reopen it inside the wallet app.
+    - **Low, fixed: caching.** The hashed script is cached for a year, and the stake HTML for 5
+      minutes, in both `deploy/nginx.conf.template` and `_headers`.
+    - **Low, open: no Solana priority fee.** Under congestion the transaction can expire (item 6
+      handled the aftermath, not the cause). Adding `ComputeBudgetProgram.setComputeUnitPrice` from
+      a recent-fees estimate would help, at a small cost to the user.
+    - **Low, open: the saved resume route is unauthenticated.** Anything that can write this origin's
+      `localStorage` (a malicious extension, local access) could change the destination a resume
+      pays out to. The resume screen shows the destination and needs a click, the CSP allows no
+      third-party script and no framing, and the board renders no HTML from API data. A MAC over the
+      saved route, keyed from the signature-derived transit key, would close it.
+    - Clean: key derivation, SIWS text, no HTML-injection sinks anywhere, strict CSP, no Polkadot
+      code in the forward bundle (checked), secrets dropped on `pagehide`.
 
 ## Link previews and SEO
 

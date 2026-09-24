@@ -122,7 +122,7 @@ let failures = 0;
 const expect = (name, ok, detail = "") => { console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? "  — " + detail : ""}`); if (!ok) failures++; };
 const fmt = (rao) => (Number(rao) / 1e9).toFixed(9);
 const bytes = (h) => Uint8Array.from(Buffer.from(h.replace(/^0x/, ""), "hex"));
-const NAMES = { [("0x" + selector("withdraw(uint256)"))]: "unwrap", [("0x" + selector("addStake(bytes32,uint256,uint256)"))]: "stake", [("0x" + selector("transferStake(bytes32,bytes32,uint256,uint256,uint256)"))]: "handover", [("0x" + selector("transferAll(bytes32,bool)"))]: "sweep" };
+const NAMES = { [("0x" + selector("withdraw(uint256)"))]: "unwrap", [("0x" + selector("addStake(bytes32,uint256,uint256)"))]: "stake", [("0x" + selector("addStakeLimit(bytes32,uint256,uint256,bool,uint256)"))]: "stake",[("0x" + selector("transferStake(bytes32,bytes32,uint256,uint256,uint256)"))]: "handover", [("0x" + selector("transferAll(bytes32,bool)"))]: "sweep" };
 const steps = () => S.calls.map((c) => NAMES[c.label] ?? c.label).join(",");
 const price = BigInt(await real("eth_gasPrice", []));
 console.log(`Bittensor EVM mainnet via ${RPC}, gas price ${Number(price) / 1e9} gwei\n`);
@@ -241,6 +241,22 @@ function checkSigning(label) {
   const free = await getFreeBalance(u.coldkey);
   console.log(`INFO  off-subnet delegate on netuid ${SUBNET_NETUID}: ${steps()}; addStake ${stakeTx?.ok ? "SUCCEEDED" : "REVERTED"}; ${fmt(stake)} Alpha owned; ${fmt(free)} TAO free`);
   expect("a delegate with no uid on the subnet: the route still ends clean, staked or refused, never stuck", S.calls.every((c) => NAMES[c.label] === "stake" || c.ok) && (stake > 0n || summary.stakeRefused === true), steps());
+}
+
+// ── 6. A subnet price limit the pool cannot meet ─────────────────────────────
+{
+  // Scenario 1b already stakes on subnet 1 through addStakeLimit at the configured tolerance and
+  // succeeds. Here the limit is set 50% *below* the pool price, which no fill can meet, to show the
+  // chain enforces it and the route then delivers the TAO unstaked.
+  const u = freshUser(), amountSD = 100_000n;
+  scenario({ transit: u.transit, amountSD, dropWei: CONFIG.gasDropWei });
+  const summary = await finishRoute({ transitKey: u.transitKey, coldkey: u.coldkey, hotkey: bytes(SUBNET_HOTKEY), netuid: SUBNET_NETUID, plan: "stake", reserveRao: CONFIG.defaultReserveRao, priceToleranceBps: -5000n, expectLd: amountSD * 1000n });
+  const stakeTx = S.calls.find((c) => NAMES[c.label] === "stake");
+  expect("subnet stakes go out as addStakeLimit", stakeTx?.label === "0x" + selector("addStakeLimit(bytes32,uint256,uint256,bool,uint256)"), stakeTx?.label);
+  expect("a limit the pool cannot meet is refused by the chain", stakeTx && !stakeTx.ok && summary.stakeRefused === true, steps());
+  const free = await getFreeBalance(u.coldkey), leftNative = (await replay()).transitBalance;
+  const inRao = amountSD * 1000n + CONFIG.gasDropWei / RAO;
+  expect("…and the TAO is delivered unstaked, nothing left on the transit account", steps() === "unwrap,stake,sweep" && inRao - free <= 1n && leftNative <= sweepFloor(price), `${fmt(free)} TAO free of ${fmt(inRao)}`);
 }
 
 console.log(failures ? `\n${failures} failed` : "\nall passed");

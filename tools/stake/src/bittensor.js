@@ -10,6 +10,7 @@ export const PRECOMPILE = {
   addressMapping: "0x000000000000000000000000000000000000080C",
   balance: "0x000000000000000000000000000000000000080e",
   metagraph: "0x0000000000000000000000000000000000000802",
+  alpha: "0x0000000000000000000000000000000000000808",
 };
 
 const hex = (b) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
@@ -37,11 +38,20 @@ const ethCalls = (list) => rpcBatch(list.map(({ to, data }) => ({ method: "eth_c
 /** Number of uids registered on `netuid`; 0 means the subnet does not exist. */
 export const getUidCount = async (netuid) => Number(await readUint(PRECOMPILE.metagraph, encode("getUidCount(uint16)", BigInt(netuid))));
 
+// Slots change at most once per tempo (~72 min on most subnets), and the public RPC rate-limits, so a
+// subnet's list is reused for a minute: pasting a second hotkey, or switching subnets and back, is free.
+const HOTKEYS_TTL_MS = 60_000;
+const hotkeyCache = new Map();
+
 /** Every hotkey on `netuid`, indexed by uid, as lowercase 64-char hex. ~6 requests for 256 uids. */
 export async function subnetHotkeys(netuid) {
+  const key = String(netuid), hit = hotkeyCache.get(key);
+  if (hit && Date.now() - hit.at < HOTKEYS_TTL_MS) return hit.keys;
   const n = await getUidCount(netuid);
   const calls = Array.from({ length: n }, (_, uid) => ({ to: PRECOMPILE.metagraph, data: encode("getHotkey(uint16,uint16)", BigInt(netuid), BigInt(uid)) }));
-  return (await ethCalls(calls)).map(toWord);
+  const keys = (await ethCalls(calls)).map(toWord);
+  hotkeyCache.set(key, { at: Date.now(), keys });
+  return keys;
 }
 
 /**
@@ -60,6 +70,12 @@ export async function findOnSubnet(hotkey, netuid) {
   ]);
   return { uidCount: keys.length, uid, validatorPermit: BigInt("0x" + toWord(permit)) === 1n, dividendShare: Number(BigInt("0x" + toWord(dividends))) / 65535 };
 }
+
+/**
+ * A subnet's Alpha price in wei (18 decimals) of TAO per Alpha. Read 24 Sep 2026: subnet 1 returned
+ * 0.00682 TAO, matching the ~11.2 Alpha that 0.0765 TAO bought in the zero-cost mainnet replay.
+ */
+export const getAlphaPrice = (netuid) => readUint(PRECOMPILE.alpha, encode("getAlphaPrice(uint16)", BigInt(netuid)));
 
 /** Root stake (rao) owned by `coldkey` under `hotkey`. */
 export const getRootStake = (hotkey, coldkey) => readUint(PRECOMPILE.staking, encode("getStake(bytes32,bytes32,uint256)", hotkey, coldkey, 0n));

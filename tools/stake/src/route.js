@@ -14,7 +14,7 @@
 import { CONFIG } from "./config.js";
 import { evmAddress } from "./derive.js";
 import { sendTx, getBalance, getGasPrice } from "./evm.js";
-import { PRECOMPILE, encode, getWtao, getStake, mirrorColdkey } from "./bittensor.js";
+import { PRECOMPILE, encode, getWtao, getStake, mirrorColdkey, getAlphaPrice } from "./bittensor.js";
 
 const RAO = 1_000_000_000n; // wei per rao
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -32,6 +32,16 @@ export function minStakeAmount({ reserveRao, gasPriceWei }) {
   return CONFIG.minStakeRao + BigInt(reserveRao) + stakeGasReserve(gasPriceWei) / RAO + 1n;
 }
 
+/** addStakeLimit's limit, in rao of TAO per Alpha: the pool price (wei per Alpha) plus the tolerance. */
+export const stakeLimitPrice = (priceWei, toleranceBps) => (BigInt(priceWei) * (10_000n + BigInt(toleranceBps))) / 10_000n / RAO;
+
+/** The stake call: plain on root, price-limited on a subnet, never a partial fill. */
+async function stakeCall(hotkey, stakeRao, netuid, toleranceBps) {
+  if (netuid === 0n) return encode("addStake(bytes32,uint256,uint256)", hotkey, stakeRao, 0n);
+  const limit = stakeLimitPrice(await getAlphaPrice(netuid), toleranceBps);
+  return encode("addStakeLimit(bytes32,uint256,uint256,bool,uint256)", hotkey, stakeRao, limit, 0n, netuid);
+}
+
 /** Below this, native TAO on the transit account is not worth a sweep: it would cost more gas than it moves. */
 export const sweepFloor = (price) => CONFIG.gasLimit.sweep * price + 1000n * RAO;
 
@@ -47,7 +57,7 @@ export async function transitState(transitKey, hotkey, netuid = 0n) {
  * Finish a route. `expectLd` (9-decimal units) makes it wait for a delivery of at least that size;
  * leave it null to finish whatever is already there. `onStep(key, status, text)` reports progress.
  */
-export async function finishRoute({ transitKey, coldkey, hotkey, netuid = 0n, plan, reserveRao, expectLd = null, onStep = () => {}, waitMs = 25 * 60_000, dropWaitMs = 10 * 60_000 }) {
+export async function finishRoute({ transitKey, coldkey, hotkey, netuid = 0n, plan, reserveRao, priceToleranceBps = CONFIG.subnetPriceToleranceBps, expectLd = null, onStep = () => {}, waitMs = 25 * 60_000, dropWaitMs = 10 * 60_000 }) {
   const address = evmAddress(transitKey);
   const self = await mirrorColdkey(address);
   const summary = { stakedRao: 0n, txs: [] };
@@ -99,10 +109,12 @@ export async function finishRoute({ transitKey, coldkey, hotkey, netuid = 0n, pl
       if (stakeRao >= CONFIG.minStakeRao) {
         onStep("stake", "busy", netuidBn === 0n ? "staking on root" : `staking on subnet ${netuidBn}`);
         try {
-          track(await sendTx(transitKey, { to: PRECOMPILE.staking, data: encode("addStake(bytes32,uint256,uint256)", hotkey, stakeRao, netuidBn), gasLimit: CONFIG.gasLimit.addStake, gasPrice: price }), "stake");
+          const data = await stakeCall(hotkey, stakeRao, netuidBn, priceToleranceBps);
+          track(await sendTx(transitKey, { to: PRECOMPILE.staking, data, gasLimit: CONFIG.gasLimit.addStake, gasPrice: price }), "stake");
         } catch (e) {
-          // Refused by the chain (the hotkey stopped being a validator, a rule changed): retrying the
-          // same stake would fail again, so deliver the TAO unstaked instead of leaving it here.
+          // Refused by the chain (the hotkey stopped being a validator, the subnet price moved past
+          // the limit, a rule changed): retrying the same stake would fail again, so deliver the TAO
+          // unstaked instead of leaving it here.
           if (!e.reverted) throw e;
           summary.txs.push({ label: "stake", hash: e.hash, reverted: true });
           summary.stakeRefused = true;

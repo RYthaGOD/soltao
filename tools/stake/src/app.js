@@ -84,6 +84,13 @@ function findProvider() {
 async function connect() {
   const provider = findProvider();
   if (!provider) {
+    // A phone browser never has a wallet injected, even with the wallet app installed: the page has
+    // to be opened inside the wallet's own browser. Its universal link does that, then lands back here.
+    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+      const here = encodeURIComponent(location.href), ref = encodeURIComponent(location.origin);
+      noteHtml("connect-note", [text("On a phone, open this page inside your wallet app: "), link(`https://phantom.app/ul/browse/${here}?ref=${ref}`, "Open in Phantom ↗"), text(" · "), link(`https://solflare.com/ul/v1/browse/${here}?ref=${ref}`, "Open in Solflare ↗")], "warn");
+      return;
+    }
     noteHtml("connect-note", [text("No Solana wallet found. "), link("https://phantom.com/download", "Install Phantom ↗")], "warn");
     return;
   }
@@ -278,6 +285,7 @@ function forget() {
 
 // ── step 3: amount and plan ─────────────────────────────────────────────────
 let netuidSeq = 0;
+const NETUID_SETTLE_MS = 400;
 async function onNetuid() {
   const v = $("netuid-in").value.trim(); const seq = ++netuidSeq;
   state.netuid = 0n; state.netuidValid = true; state.netuidChecking = false;
@@ -304,8 +312,12 @@ async function onNetuid() {
   // A subnet that does not exist would only be refused at the stake step, after the bridge.
   state.netuidValid = false; state.netuidChecking = true;
   note("netuid-note", `checking subnet ${state.netuid} on Bittensor…`);
-  recheckHotkey();
+  // Typing "128" passes through 1 and 12. Drop the hotkey's approval now, since it was for another
+  // subnet, but only scan once typing settles: each scan is ~6 requests to a rate-limited public RPC.
+  if ($("hotkey-in").value.trim()) { state.hotkey = null; hotkeySeq++; note("hotkey-note", `waiting to check it on subnet ${state.netuid}…`); }
   gate();
+  await new Promise((r) => setTimeout(r, NETUID_SETTLE_MS));
+  if (seq !== netuidSeq) return;
   try {
     const uids = await getUidCount(state.netuid);
     if (seq !== netuidSeq) return;
@@ -313,10 +325,12 @@ async function onNetuid() {
     if (uids === 0) {
       $("netuid-in").setAttribute("aria-invalid", "true");
       note("netuid-note", `Subnet ${state.netuid} is not registered on Bittensor.`, "bad");
+      if ($("hotkey-in").value.trim()) note("hotkey-note", "Enter a registered subnet first.", "bad");
     } else {
       state.netuidValid = true;
       $("netuid-in").setAttribute("aria-invalid", "false");
       note("netuid-note", `Subnet ${state.netuid} · ${uids} registered hotkeys. Staking here mints its Alpha.`, "ok");
+      recheckHotkey();
     }
   } catch (e) {
     if (seq === netuidSeq) { state.netuidChecking = false; note("netuid-note", `Could not reach Bittensor to check it: ${e.message}`, "bad"); }
@@ -431,8 +445,11 @@ function renderReview(ready) {
     if (state.plan !== "stake") return `Deliver ${tao(state.amountLd)}, plus what the gas drop has left, as free TAO`;
     const drop = CONFIG.gasDropWei / RAO, unwrap = (CONFIG.gasUsed.unwrap * state.gasPrice) / RAO;
     const stake = state.amountLd + drop - unwrap - state.reserveRao - stakeGasReserve(state.gasPrice) / RAO;
-    const net = state.netuid === 0n ? "root" : `subnet ${state.netuid}`;
-    return `Stake about ${stakeAmount(stake, state.netuid)} on ${net} to ${short(ss58Encode(state.hotkey), 6)}. Your ${tao(state.reserveRao)} reserve and the unused gas money arrive as free TAO`;
+    const to = short(ss58Encode(state.hotkey), 6), rest = `Your ${tao(state.reserveRao)} reserve and the unused gas money arrive as free TAO`;
+    if (state.netuid === 0n) return `Stake about ${tao(stake)} on root to ${to}. ${rest}`;
+    // What goes in is TAO; the Alpha it buys depends on the subnet's pool price when it lands.
+    const pct = Number(CONFIG.subnetPriceToleranceBps) / 100;
+    return `Stake about ${tao(stake)} on subnet ${state.netuid} to ${to}, bought as its Alpha at the pool price. If that price is more than ${pct}% worse when it lands, nothing is staked and the TAO arrives free. ${rest}`;
   });
   set("r-gas", () => { const g = bittensorGas(); return g === null ? "—" : `about ${tao(g)}`; });
   // Name the counterparty, not just the amount: the fee is a plain transfer to this address.
@@ -573,7 +590,7 @@ async function runRoute(route, { expectLd = null, fresh = false } = {}) {
     const free = freeBefore !== null && freeAfter !== null && freeAfter > freeBefore ? freeAfter - freeBefore : null;
     track("sweep", "ok", [summary.stakedRao > 0n && `staked ${stakeAmount(summary.stakedRao, netuid)}`, free !== null && `${tao(free)} free`].filter(Boolean).join(" · ") || "done");
     note("track-note", summary.stakedRao > 0n ? `Done. The ${bittensorStakeAsset(netuid)} stake is owned by your coldkey; unstake it any time from any Bittensor wallet.`
-      : summary.stakeRefused ? "Bittensor refused the stake, so your TAO arrived unstaked. It is free TAO in your wallet: stake it from any Bittensor wallet." : "Done. It is free TAO in your Bittensor wallet.", summary.stakeRefused ? "warn" : "ok");
+      : summary.stakeRefused ? `Bittensor refused the stake${netuid === 0n ? "" : ` (the validator changed, or subnet ${netuid}'s price moved past the ${Number(CONFIG.subnetPriceToleranceBps) / 100}% limit)`}, so your TAO arrived unstaked. It is free TAO in your wallet: stake it from any Bittensor wallet.` : "Done. It is free TAO in your Bittensor wallet.", summary.stakeRefused ? "warn" : "ok");
       
     $("f-dest").textContent = short(route.coldkey, 6);
     $("f-staked-label").textContent = netuid === 0n ? "Staked TAO" : `Staked Alpha, subnet ${netuid}`;
