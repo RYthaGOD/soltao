@@ -24,6 +24,37 @@ export function sealRoute(route, transitKey) {
   return { ...clean, mac: hex(hmac(sha256, macKey(transitKey), utf8(body(clean)))) };
 }
 
+const saneShape = (s) => s && typeof s === "object" && typeof s.coldkey === "string" && /^\d+$/.test(s.amountLd) && /^\d+$/.test(s.reserveRao);
+
+/**
+ * What the page may do with whatever is stored, given the wallet now on screen.
+ *
+ *   null        nothing usable stored
+ *   trusted     sealed by this wallet: finish exactly as saved
+ *   untrusted   saved by the page before sealing existed (live until 24 Sep 2026), or a seal that does
+ *               not verify. Its hotkey and netuid are only hints for finding stake already sitting on
+ *               the transit account, which the chain then confirms. Nothing is trusted to pay out: the
+ *               destination is always `onScreen`, and a route that has not staked yet delivers free TAO
+ *               instead of staking to a hotkey nobody can vouch for.
+ */
+export function readRoute(stored, transitKey, onScreen) {
+  const sealed = openRoute(stored, transitKey);
+  if (sealed) return { trusted: true, route: sealed, destination: sealed.coldkey, savedDestination: sealed.coldkey };
+  if (!saneShape(stored)) return null;
+  const hints = Object.fromEntries(FIELDS.map((f) => [f, stored[f] ?? null]));
+  const hotkeyOk = typeof hints.hotkey === "string" && /^0x[0-9a-f]{64}$/i.test(hints.hotkey);
+  const netuidOk = /^\d+$/.test(String(hints.netuid ?? "0"));
+  return {
+    trusted: false,
+    route: { ...hints, hotkey: hotkeyOk ? hints.hotkey : null, netuid: netuidOk ? String(hints.netuid ?? "0") : "0", coldkey: onScreen ?? null },
+    destination: onScreen ?? null,
+    savedDestination: stored.coldkey,
+  };
+}
+
+/** Stake found on the transit account can be handed over; an untrusted route stakes nothing new. */
+export const untrustedPlan = (found) => (found.stake > 0n ? "stake" : "deliver");
+
 /** The stored route if its MAC verifies and its shape is sane, otherwise null. */
 export function openRoute(stored, transitKey) {
   if (!stored || typeof stored !== "object" || typeof stored.mac !== "string") return null;
@@ -31,6 +62,5 @@ export function openRoute(stored, transitKey) {
   let diff = want.length ^ stored.mac.length;
   for (let i = 0; i < want.length; i++) diff |= want.charCodeAt(i) ^ (stored.mac.charCodeAt(i) || 0);
   if (diff !== 0) return null;
-  const okShape = typeof stored.coldkey === "string" && /^\d+$/.test(stored.amountLd) && /^\d+$/.test(stored.reserveRao);
-  return okShape ? Object.fromEntries(FIELDS.map((f) => [f, stored[f]])) : null;
+  return saneShape(stored) ? Object.fromEntries(FIELDS.map((f) => [f, stored[f]])) : null;
 }

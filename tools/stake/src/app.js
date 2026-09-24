@@ -10,7 +10,7 @@ import { derivationMessage, signInFields, walletFromSignature, ss58Decode, ss58E
 import { createClients, getTaoBalance, quoteNativeFee, quotePriorityFee, priorityFeeLamports, buildRouteTransaction, removeDust } from "./solana.js";
 import { findOnSubnet, getDelegate, getFreeBalance, getUidCount } from "./bittensor.js";
 import { getGasPrice } from "./evm.js";
-import { sealRoute, openRoute } from "./pending.js";
+import { sealRoute, readRoute, untrustedPlan } from "./pending.js";
 import { finishRoute, transitState, minStakeAmount, stakeGasReserve, sweepFloor } from "./route.js";
 
 const $ = (id) => document.getElementById(id);
@@ -67,8 +67,10 @@ const isRejection = (e) => e?.code === 4001 || /reject|cancel|denied|declined/i.
 // a MAC from the transit key (src/pending.js), so an edited destination is ignored, not honoured.
 const pendingKey = (transit) => `soltao.stake.pending.${transit}`;
 function loadPending(w) {
-  try { return openRoute(JSON.parse(localStorage.getItem(pendingKey(w.transitAddress)) || "null"), w.transitKey); } catch { return null; }
+  try { return JSON.parse(localStorage.getItem(pendingKey(w.transitAddress)) || "null"); } catch { return null; }
 }
+/** The saved route as the page may act on it now: trusted as saved, or hints bound to the wallet on screen. */
+const pendingNow = (raw) => (raw && state.signed ? readRoute(raw, state.signed.wallet.transitKey, state.coldkeyAddress) : null);
 function savePending(w, route) { try { localStorage.setItem(pendingKey(w.transitAddress), JSON.stringify(sealRoute(route, w.transitKey))); } catch { /* storage off: the route still finishes while the page is open */ } }
 function clearPending(transit) { try { localStorage.removeItem(pendingKey(transit)); } catch { /* nothing stored */ } }
 
@@ -225,11 +227,12 @@ function togglePhrase() {
 async function checkTransit() {
   const w = state.signed?.wallet;
   if (!w) return;
-  const pending = loadPending(w);
+  const raw = loadPending(w), rec = pendingNow(raw);
+  const pending = raw && rec ? raw : null; // kept raw: whether it is trusted is decided again at each render
   state.transitRead = false;
   try {
     const [t, price] = await Promise.all([
-      transitState(w.transitKey, pending?.hotkey ? fromHex(pending.hotkey) : null, pending?.netuid ?? "0"),
+      transitState(w.transitKey, rec?.route.hotkey ? fromHex(rec.route.hotkey) : null, rec?.route.netuid ?? "0"),
       getGasPrice(),
     ]);
     state.gasPrice = price;
@@ -251,17 +254,20 @@ function renderUnfinished() {
   const u = state.unfinished;
   $("resume").hidden = !u || state.running;
   if (!u) return;
-  const p = u.pending;
-  const dest = p?.coldkey ?? state.coldkeyAddress;
-  const netuid = BigInt(p?.netuid ?? 0);
+  const r = resumeRoute(u);
+  const p = r.route, dest = r.coldkey;
+  const netuid = BigInt(p.netuid ?? 0);
   const parts = [u.wtao > 0n && `${tao(u.wtao / RAO)} still bridged (wTAO)`, u.native > sweepFloor(state.gasPrice) && `${tao(u.native / RAO)}`, u.stake > 0n && `${stakeAmount(u.stake, netuid)} staked but not yet handed over`].filter(Boolean);
-  const plan = p?.plan === "stake" && p.hotkey ? `stake it to ${short(ss58Encode(fromHex(p.hotkey)), 6)} and send the rest` : "send it as free TAO";
+  const plan = r.plan === "stake" && p.hotkey ? (u.stake > 0n ? `hand the stake on ${short(ss58Encode(fromHex(p.hotkey)), 6)} to your wallet and send the rest` : `stake it to ${short(ss58Encode(fromHex(p.hotkey)), 6)} and send the rest`) : "send it as free TAO";
+  // A route saved before records were sealed (or whose seal does not verify) never chooses where the
+  // money goes: it finishes to the wallet in step 2, and says so if it had named another one.
+  const caveat = r.trusted ? "" : ` This route's saved record could not be verified (it may predate an update), so it finishes to the wallet shown in step 2${r.savedDestination && r.savedDestination !== dest ? `. It named ${short(r.savedDestination, 6)}; to finish there instead, choose "a Bittensor address I already have" in step 2 and paste it` : ""}${u.stake > 0n ? "" : ", unstaked"}.`;
   if (u.holds) {
-    $("resume-text").textContent = `Your transit account holds ${parts.join(", ")} from a route that did not finish. Finishing will ${plan} to ${dest ? short(dest, 6) : "the Bittensor wallet above"}.`;
+    $("resume-text").textContent = `Your transit account holds ${parts.join(", ")} from a route that did not finish. Finishing will ${plan} to ${dest ? short(dest, 6) : "the Bittensor wallet above"}.${caveat}`;
     $("resume-go").textContent = "Finish it";
   } else {
     const ago = Math.max(1, Math.round((Date.now() - (p.at || Date.now())) / 60_000));
-    $("resume-text").textContent = `A route sent from this browser ${ago} min ago has not reached your transit account yet. Keep this page open and it finishes when the bridge delivers: it will ${plan} to ${short(dest, 6)}.`;
+    $("resume-text").textContent = `A route sent from this browser ${ago} min ago has not reached your transit account yet. Keep this page open and it finishes when the bridge delivers: it will ${plan} to ${dest ? short(dest, 6) : "the Bittensor wallet above"}.${caveat}`;
     $("resume-go").textContent = "Wait for it";
   }
   $("resume-forget").hidden = u.holds;
@@ -271,10 +277,17 @@ function renderUnfinished() {
 
 async function resume() {
   const u = state.unfinished; if (!u || state.running) return;
-  const p = u.pending;
-  const route = p ?? { plan: "deliver", hotkey: null, coldkey: state.coldkeyAddress, netuid: "0", reserveRao: "0", amountLd: null };
-  if (!route.coldkey) return;
-  await runRoute(route, { expectLd: u.holds ? null : BigInt(p.amountLd) });
+  const r = resumeRoute(u);
+  if (!r.coldkey) return;
+  await runRoute({ ...r.route, plan: r.plan, coldkey: r.coldkey }, { expectLd: u.holds ? null : BigInt(r.route.amountLd) });
+}
+
+/** How an unfinished route would finish right now, from the chain read and whatever was saved. */
+function resumeRoute(u) {
+  const rec = pendingNow(u.pending);
+  if (!rec) return { trusted: true, plan: "deliver", coldkey: state.coldkeyAddress, route: { plan: "deliver", hotkey: null, netuid: "0", reserveRao: "0", amountLd: null } };
+  if (rec.trusted) return { trusted: true, plan: rec.route.plan, coldkey: rec.route.coldkey, route: rec.route, savedDestination: rec.savedDestination };
+  return { trusted: false, plan: untrustedPlan(u), coldkey: rec.destination, route: rec.route, savedDestination: rec.savedDestination };
 }
 
 function forget() {

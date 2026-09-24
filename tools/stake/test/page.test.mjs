@@ -17,6 +17,7 @@ import { VersionedTransaction } from "@solana/web3.js";
 import { derivationMessage, walletFromSignature } from "../src/derive.js";
 import { CONFIG } from "../src/config.js";
 import { sealRoute } from "../src/pending.js";
+import { selector } from "../src/bittensor.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const CHROME = process.env.CHROME || "C:/Program Files/Google/Chrome/Application/chrome.exe";
@@ -74,8 +75,9 @@ function buildSiwsText(input) {
   return message;
 }
 
-async function openWith({ pubkey, secret, base = plain.base, before, signIn = false }) {
+async function openWith({ pubkey, secret, base = plain.base, before, signIn = false, intercept = null }) {
   const page = await browser.newPage();
+  if (intercept) { await page.setRequestInterception(true); page.on("request", (req) => { if (!intercept(req)) req.continue(); }); }
   const problems = [];
   page.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`));
   page.on("console", (m) => { if (m.type() === "error") problems.push(`console: ${m.text()}`); });
@@ -313,6 +315,42 @@ const clean = async (page, problems, label) => {
   expect("declining leaves the page ready to try again", !(await page.$eval("#sign", (b) => b.disabled)) || (await text(page, "#sign-note")) === "", await text(page, "#sign-note"));
 
   await clean(page, problems, "run C");
+  await page.close();
+}
+
+// ── Run D: a route saved by the page before records were sealed, stake still on the transit account ──
+// The live page before 24 Sep 2026 saved routes unsealed. One interrupted after a subnet stake but
+// before the handover must still be found and handed over, but its saved destination is not trusted.
+{
+  const secret = ed25519.utils.randomPrivateKey();
+  const pubkey = base58.encode(ed25519.getPublicKey(secret));
+  const expected = walletFromSignature(ed25519.sign(new TextEncoder().encode(derivationMessage(pubkey)), secret), pubkey);
+  const OTHER = "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty";
+  const hotkeyHex = "0xe2ee75ea11e4c5b7f5dac2e735278cfa0b1590c9856690f66653bdd85b709104";
+  const legacy = { key: `soltao.stake.pending.${expected.transitAddress}`, value: JSON.stringify({ plan: "stake", hotkey: hotkeyHex, coldkey: OTHER, netuid: "17", reserveRao: "10000000", amountLd: "100000000", sig: null, at: Date.now() - 600_000 }) };
+  // The chain is real except for one answer: the transit account holds 0.5 Alpha under that hotkey on
+  // subnet 17 (nothing a test can put there for real), with native TAO below the sweep floor.
+  const GET_STAKE = "0x" + selector("getStake(bytes32,bytes32,uint256)");
+  const stakeAsked = [];
+  const intercept = (req) => {
+    if (req.method() !== "POST" || !req.url().startsWith(CONFIG.bittensorEvmRpc)) return false;
+    const body = JSON.parse(req.postData() || "{}");
+    if (Array.isArray(body) || body.method !== "eth_call" || !body.params?.[0]?.data?.startsWith(GET_STAKE)) return false;
+    const d = body.params[0].data;
+    stakeAsked.push({ hotkey: "0x" + d.slice(10, 74), netuid: BigInt("0x" + d.slice(138, 202)) });
+    req.respond({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify({ jsonrpc: "2.0", id: body.id, result: "0x" + (500_000_000n).toString(16).padStart(64, "0") }) });
+    return true;
+  };
+  const { page, problems } = await openWith({ pubkey, secret, before: legacy, intercept });
+  await page.click("#connect");
+  await waitText(page, "#tao-balance", /TAO/);
+  await page.click("#derive");
+  await waitText(page, "#resume-text", /./);
+  const resumeText = await text(page, "#resume-text");
+  expect("an unsealed saved route still finds the stake on the saved hotkey and subnet", stakeAsked.some((s) => s.hotkey === hotkeyHex && s.netuid === 17n), JSON.stringify(stakeAsked.map((s) => `${s.hotkey.slice(0, 10)}/${s.netuid}`)));
+  expect("…offers to hand that stake over", /0\.5 Alpha staked but not yet handed over/.test(resumeText) && /hand the stake on 5HCFWv…1wgDHh to your wallet/.test(resumeText), resumeText);
+  expect("…to the wallet on screen, not the saved destination", resumeText.includes(`to ${expected.address.slice(0, 6)}…${expected.address.slice(-6)}`) && /could not be verified/.test(resumeText) && resumeText.includes("It named 5FHneW…M694ty"), resumeText);
+  expect("…and the finish button is available", !(await page.$eval("#resume-go", (b) => b.disabled)));
   await page.close();
 }
 
