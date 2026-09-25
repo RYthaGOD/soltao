@@ -794,8 +794,8 @@ async function showHoldings() {
     // validator until claimed, and a claim adds them to the root stake.
     const yieldNote = rewards === null
       ? (rootHotkeys.size ? " Could not read the root rewards waiting to be claimed; try again in a minute." : "")
-      : owedTotal ? ` Root rewards do not add to the stake on their own: ${tao(owedTotal)} is waiting to be claimed, and "Claim" adds it to your root stake.`
-      : rootHotkeys.size ? " Root rewards wait with the validator until claimed; none is waiting yet." : "";
+      : owedTotal ? ` Root rewards do not add to the stake on their own: ${tao(owedTotal)} is waiting to be claimed, and "Claim" adds it to your root stake. Each claim pays a Bittensor fee (about 0.008 TAO on 25 Sep 2026), so it only pays off once more than that has built up.`
+      : rootHotkeys.size ? " Root rewards wait with the validator until claimed, and each claim pays a Bittensor fee (about 0.008 TAO on 25 Sep 2026); none is waiting yet." : "";
     note("holdings-note", `Read ${new Date().toISOString().slice(11, 16)} UTC. ${positions.length ? `${positions.length} stake position${positions.length === 1 ? "" : "s"}. Subnet stakes are in that subnet's Alpha and collect their rewards in the stake itself; root stakes are in TAO.` : "No stake positions."}${yieldNote}${inAll}${changed ? " Changes since you last looked here include rewards and anything added or taken out elsewhere." : ""}`);
   } catch (e) {
     if (seq === holdingsSeq) note("holdings-note", `Could not read it from Bittensor: ${e.message}`, "bad");
