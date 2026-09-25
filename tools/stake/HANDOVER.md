@@ -521,6 +521,33 @@ This is **not** git-push-triggered. Steps, in order, every time:
       indexer; `evm.taostats.io` answers a Blockscout API, so a counting script over the transit
       accounts' transactions is the likely route.
 
+22. **"Did it land?" now trusts the chain's own event, not just a balance moving, 25 Sep 2026 (built,
+    not deployed).** Every action that signs an extrinsic — a stake move, a root claim, a Chutes
+    top-up — used to decide whether it landed by reading a balance or stake before and after. That
+    reading can be fooled: TAO arriving from anywhere else in the same block looks identical to the
+    move succeeding, or masks a real failure, and either way a user closing the tab and reopening
+    could sign the same payment twice.
+    - `extrinsicOutcome(id, fromBlock)` (`substrate.js`) reads the block the extrinsic actually landed
+      in, finds it by hash, and reads its own `System.ExtrinsicSuccess` / `ExtrinsicFailed` event —
+      the runtime's own verdict, not an inference from state. It scans from the block it was signed at
+      (recorded now in every `prepareCall` record as `fromBlock`) to the end of its mortal era (64
+      blocks), and returns `null`, not a guess, if the hash isn't found there or the node has pruned
+      those blocks' events (a public lite node keeps only recent history).
+    - `dispatchResult()` (`settle.js`) wraps that lookup; `runStakeMove`, `runRootClaim` and
+      `runPayment` now call it first and use it as the verdict whenever it answers, falling back to
+      the balance/stake comparison only when it comes back `null`. A root claim under the minimum
+      still needs the state check (a successful call can pay nothing), so the event only rules a
+      *failed* claim out there; everywhere else it decides outright.
+    - Tests: `stake_moves.test.mjs` and `payments.test.mjs` each gained a case where TAO arrives in
+      the same block as the move (masking a real success or a real failure) and a case with events
+      switched off, so the balance fallback is exercised too. `npm test` all green.
+    - Verified against the live chain, not just the simulated one: `extrinsicOutcome` on a real
+      recent extrinsic's hash returned "success" matching its actual `ExtrinsicSuccess` event, and on
+      a made-up hash returned `null` rather than a false positive.
+    - Not yet run against a real signed transaction from the live page (needs no real funds to build,
+      but the actual proof is a live stake move or Chutes top-up settling through this path). Do that
+      alongside the next real-funds test.
+
 ## Link previews and SEO
 
 `index.html` and `stake/index.html` each carry their own `og:`/`twitter:` block; they are hand-

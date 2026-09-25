@@ -23,3 +23,13 @@ export async function settleSigned(ops, rec, { waitMs = 2 * 60_000, pollMs = 4_0
   }
   return "included";
 }
+
+// Whether an included extrinsic's dispatch succeeded, from its own ExtrinsicSuccess / ExtrinsicFailed
+// event rather than from a balance or stake moving, which another transfer landing at the same time can
+// fake. `ops.outcome(id, fromBlock)` finds the extrinsic by hash between the block it was signed at and
+// the end of its mortal era. Returns "success", "failed", or null when it cannot tell (no such op, old
+// blocks pruned by the node, a read failed); callers then fall back to reading state.
+export async function dispatchResult(ops, rec) {
+  if (!ops.outcome || rec?.status !== "included" || rec.fromBlock == null) return null;
+  try { return await ops.outcome(rec.id, Number(rec.fromBlock)); } catch { return null; }
+}

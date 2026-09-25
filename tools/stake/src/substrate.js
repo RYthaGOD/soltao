@@ -116,10 +116,12 @@ const MORTAL_BLOCKS = 64;
 export async function prepareCall(mnemonic, build, { onSign = null } = {}) {
   const api = await getApi();
   const { address, signer } = coldkeySigner(mnemonic, { onSign });
-  const nonce = (await api.rpc.system.accountNextIndex(address)).toBigInt();
+  const [nonce, head] = await Promise.all([api.rpc.system.accountNextIndex(address), api.rpc.chain.getHeader()]);
   const extrinsic = build(api);
-  await extrinsic.signAsync(address, { signer, nonce, era: MORTAL_BLOCKS });
-  return { id: extrinsic.hash.toHex(), signed: extrinsic.toHex(), nonce: String(nonce), address };
+  await extrinsic.signAsync(address, { signer, nonce: nonce.toBigInt(), era: MORTAL_BLOCKS });
+  // fromBlock: the extrinsic cannot land before this block, and its era ends MORTAL_BLOCKS later, which
+  // bounds the search for its outcome (extrinsicOutcome).
+  return { id: extrinsic.hash.toHex(), signed: extrinsic.toHex(), nonce: String(nonce.toBigInt()), address, fromBlock: String(head.number.toNumber()) };
 }
 
 /** A signed funding transfer that has not been sent: { id, signed, nonce, address }. */
@@ -244,6 +246,28 @@ export async function submitSigned(signedHex) {
     if (/already imported|AlreadyImported|Priority is too low|1013|1014/i.test(m)) return { state: "submitted" };
     return { state: "rejected", reason: m }; // stale, expired, or invalid: this extrinsic can never land
   }
+}
+
+/**
+ * "success" or "failed" from the extrinsic's own System event, found by hash in the blocks it could have
+ * landed in (fromBlock to the end of its mortal era, or the chain head if sooner); null if it is not
+ * there or the node no longer has those blocks' events.
+ */
+export async function extrinsicOutcome(id, fromBlock) {
+  const api = await getApi();
+  const head = (await api.rpc.chain.getHeader()).number.toNumber();
+  for (let n = fromBlock; n <= Math.min(head, fromBlock + MORTAL_BLOCKS); n++) {
+    const hash = await api.rpc.chain.getBlockHash(n);
+    const index = (await api.rpc.chain.getBlock(hash)).block.extrinsics.findIndex((x) => x.hash.toHex() === id);
+    if (index < 0) continue;
+    for (const { phase, event } of await (await api.at(hash)).query.system.events()) {
+      if (!phase.isApplyExtrinsic || phase.asApplyExtrinsic.toNumber() !== index) continue;
+      if (api.events.system.ExtrinsicSuccess.is(event)) return "success";
+      if (api.events.system.ExtrinsicFailed.is(event)) return "failed";
+    }
+    return null;
+  }
+  return null;
 }
 
 /** The account's on-chain nonce: a saved transfer with a lower nonce has been included. */

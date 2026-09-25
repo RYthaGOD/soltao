@@ -10,8 +10,8 @@
 // change: the coldkey's free balance and this position's stake, read before and after.
 
 import { CONFIG } from "./config.js";
-import { settleSigned } from "./settle.js";
-import { accountNonce, alphaPriceRao, coldkeySigner, freeBalance, prepareRootClaim, prepareStakeMove, rootPayout, stakeOf, submitSigned } from "./substrate.js";
+import { dispatchResult, settleSigned } from "./settle.js";
+import { accountNonce, alphaPriceRao, coldkeySigner, extrinsicOutcome, freeBalance, prepareRootClaim, prepareStakeMove, rootPayout, stakeOf, submitSigned } from "./substrate.js";
 
 const realOps = {
   signerAddress: (mnemonic) => coldkeySigner(mnemonic).address,
@@ -21,6 +21,7 @@ const realOps = {
   prepare: prepareStakeMove,
   submit: submitSigned,
   coldkeyNonce: accountNonce,
+  outcome: extrinsicOutcome,
   rootPayout,
   prepareClaim: prepareRootClaim,
 };
@@ -47,15 +48,16 @@ export async function runStakeMove({
   let saved = { ...progress };
   const save = (patch) => { saved = { ...saved, ...patch }; onCheckpoint(saved); };
   const outcome = async () => {
-    const [stakeAfter, freeAfter] = await Promise.all([ops.stakeOf(coldkey, hotkey, netuid), ops.free(coldkey)]);
+    const [stakeAfter, freeAfter, event] = await Promise.all([ops.stakeOf(coldkey, hotkey, netuid), ops.free(coldkey), dispatchResult(ops, saved.rec)]);
     const before = BigInt(saved.stakeBefore), freeBefore = BigInt(saved.freeBefore);
     const moved = kind === "unstake" ? before - stakeAfter : stakeAfter - before;
     // Free TAO rises on an unstake and falls by at least the amount on a stake; either alone could be
     // noise (emission, another wallet's transfer), together they are the move.
-    const landed = saved.rec?.status === "included" && moved > 0n && (kind === "unstake" ? freeAfter > freeBefore : freeBefore - freeAfter >= BigInt(saved.amount));
+    // The extrinsic's own event decides when the node still has it; the state reading is the fallback.
+    const landed = saved.rec?.status === "included" && (event ? event === "success" : moved > 0n && (kind === "unstake" ? freeAfter > freeBefore : freeBefore - freeAfter >= BigInt(saved.amount)));
     // `freed`: free TAO gained by an unstake (after its fee), which is what a chained return may send.
-    const freed = landed && kind === "unstake" ? freeAfter - freeBefore : 0n;
-    const result = { done: landed, refused: !landed, moved: landed ? moved : 0n, freed, stakeAfter, freeAfter };
+    const freed = landed && kind === "unstake" && freeAfter > freeBefore ? freeAfter - freeBefore : 0n;
+    const result = { done: landed, refused: !landed, moved: landed && moved > 0n ? moved : 0n, freed, stakeAfter, freeAfter };
     save({ stage: landed ? "done" : "refused" });
     onStep(kind, landed ? "ok" : "bad", landed ? "done" : "Bittensor did not make this move (the price moved past the limit, or a rule refused it); nothing was spent but the transaction fee");
     return result;
@@ -102,9 +104,11 @@ export async function runRootClaim({
   let saved = { ...progress };
   const save = (patch) => { saved = { ...saved, ...patch }; onCheckpoint(saved); };
   const outcome = async () => {
-    const stakeAfter = await ops.stakeOf(coldkey, hotkey, 0);
+    const [stakeAfter, event] = await Promise.all([ops.stakeOf(coldkey, hotkey, 0), dispatchResult(ops, saved.rec)]);
     const gained = stakeAfter - BigInt(saved.stakeBefore);
-    const landed = saved.rec?.status === "included" && gained > 0n;
+    // A claim can succeed and pay nothing (under the chain's minimum), so the stake rising still decides;
+    // a failed event rules it out outright.
+    const landed = saved.rec?.status === "included" && event !== "failed" && gained > 0n;
     save({ stage: landed ? "done" : "refused" });
     onStep("claim", landed ? "ok" : "bad", landed ? "done" : "Bittensor paid nothing for this claim (it may have been under the chain's minimum); only the transaction fee was spent");
     return { done: landed, refused: !landed, gained: landed ? gained : 0n, stakeAfter };

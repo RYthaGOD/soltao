@@ -11,13 +11,17 @@ const FEE = 120_000n;
 const OWN = ss58Encode(new Uint8Array(32).fill(1));
 const CHUTES = ss58Encode(new Uint8Array(32).fill(2));
 
-function chain({ free = 1_000_000_000n, dispatchFails = false } = {}) {
-  const s = { free, paid: 0n, nonce: 0n, pool: new Map(), signed: new Map(), applied: 0, expired: new Set(), autoInclude: true, crashAfterSubmit: false, to: [] };
+// events: the fake node reports each included extrinsic's ExtrinsicSuccess/Failed (false: it has pruned
+// them, as an old block would be). incoming: TAO that lands on the wallet in the same block, which is
+// what can fool a balance reading.
+function chain({ free = 1_000_000_000n, dispatchFails = false, events = true, incoming = 0n } = {}) {
+  const s = { free, paid: 0n, nonce: 0n, pool: new Map(), signed: new Map(), applied: 0, expired: new Set(), autoInclude: true, crashAfterSubmit: false, to: [], result: new Map() };
   const include = () => {
     for (const [k, tx] of [...s.pool]) {
       s.pool.delete(k);
       if (tx.nonce !== s.nonce) continue;
-      s.nonce++; s.free -= FEE; // the fee is paid even when dispatch fails
+      s.nonce++; s.free -= FEE - incoming; // the fee is paid even when dispatch fails
+      s.result.set(`0x${k}`, dispatchFails ? "failed" : "success");
       if (dispatchFails) continue;
       s.free -= tx.amount; s.paid += tx.amount; s.applied++; s.to.push(tx.to);
     }
@@ -28,7 +32,7 @@ function chain({ free = 1_000_000_000n, dispatchFails = false } = {}) {
     prepare: async (_m, to, amount) => {
       const key = `signed-${s.signed.size}`;
       s.signed.set(key, { key, to, amount: BigInt(amount), nonce: s.nonce });
-      return { id: `0x${key}`, signed: key, nonce: String(s.nonce), address: OWN };
+      return { id: `0x${key}`, signed: key, nonce: String(s.nonce), address: OWN, fromBlock: "100" };
     },
     submit: async (signed) => {
       const tx = s.signed.get(signed);
@@ -39,6 +43,7 @@ function chain({ free = 1_000_000_000n, dispatchFails = false } = {}) {
       return { state: "submitted" };
     },
     coldkeyNonce: async () => { if (s.autoInclude) include(); return s.nonce; },
+    outcome: async (id) => (events ? s.result.get(id) ?? null : null),
   };
   let last = {};
   const run = (args, progress = last) => runPayment({ mnemonic: "words", to: CHUTES, ...args, progress, ops, waitMs: 0, pollMs: 0, onCheckpoint: (p) => { last = JSON.parse(JSON.stringify(p)); } });
@@ -127,6 +132,27 @@ expect("an empty address is refused", payeeProblem("", OWN) !== null);
   let err = null;
   try { paymentCall({ tx: { balances: api.tx.balances, system: api.tx.system } }, CHUTES, 1n); } catch (e) { err = e; }
   expect("without batching on the chain nothing untagged is sent instead", err && /nothing was sent/.test(err.message));
+}
+
+{
+  // TAO arriving in the same block as the top-up hides the balance drop; the batch's own event does not lie.
+  const { s, run } = chain({ incoming: 300_000_000n });
+  const r = await run({ amount: 200_000_000n });
+  expect("a top-up masked by an incoming transfer is still reported as sent, from its success event", r.done && s.applied === 1, JSON.stringify({ done: r.done, applied: s.applied }));
+}
+
+{
+  // The same masking with the events pruned: the balance fallback cannot see it, and says not sent.
+  const { s, run } = chain({ incoming: 300_000_000n, events: false });
+  const r = await run({ amount: 200_000_000n });
+  expect("…and without the event the balance fallback is what decides", !r.done && s.applied === 1);
+}
+
+{
+  // A failed batch whose fee happened to coincide with an outgoing drop is still failed.
+  const { s, run } = chain({ dispatchFails: true, incoming: -500_000_000n });
+  const r = await run({ amount: 200_000_000n });
+  expect("a failed batch is reported as not sent even when the balance fell by the amount", r.refused && s.applied === 0);
 }
 
 if (failures) { console.log(`\n${failures} failure(s)`); process.exit(1); }
