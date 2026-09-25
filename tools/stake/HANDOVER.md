@@ -4,8 +4,10 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-09-24. **Live in production at `soltao.xyz`, nothing unreleased.** Latest deploy:
-commit `477bde3`, `stake.js?v=cd93f703` + `return.js?v=c15e5834`: **`CONFIG.returnLive` is now true**,
+Last updated: 2026-09-25. **Live in production at `soltao.xyz`, nothing unreleased on `main`.** Latest
+deploy (25 Sep, Craig's go-ahead): commit `77a17cb`, `stake.js?v=77617c90` + `return.js?v=a211b567`,
+Solana RPC back on PublicNode after Helius began answering 403 (see "The Solana RPC is PublicNode
+again" below); served on the first poll, `test:live` all passed. Before it, commit `477bde3`, `stake.js?v=cd93f703` + `return.js?v=c15e5834`: **`CONFIG.returnLive` is now true**,
 so the return to Solana and unstake/stake from the holdings view are open to everyone, switched on
 at Craig's explicit request BEFORE any real-funds run (wallets refuse the sign-in on localhost, since
 the message names soltao.xyz, so the first real runs have to be on the live page). `test:live` all
