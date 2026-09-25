@@ -4,9 +4,12 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-09-25. **Built, not deployed: bug history item 21** (claim root rewards from the
-holdings view, and a subnet's own page at `/stake/?netuid=N`); it needs Craig's go-ahead to deploy. Live
-on `soltao.xyz` at that point: `stake.js?v=3f2ee7a4` (read 25 Sep, after `31cafeb`). An earlier
+Last updated: 2026-09-25. **Live in production, nothing unreleased on `main`.** Latest deploy (25 Sep,
+Craig's go-ahead after a review of it): commit `d50a180`, `stake.js?v=d20813dc`, which ships item 21
+(claim root rewards, subnet pages) and `31cafeb` (board and stake-page polish: hero copy, subscript
+prices, SOLTAO row, footer, notes font). Served on the first poll; `npm test`, page-test runs A, E and
+F, and `test:live` (28 checks) all passed. Before it, `1e3c803` (the front page redirects to `/stake/`,
+board at `/board/`, with nginx `absolute_redirect off`) shipped `stake.js?v=3f2ee7a4`. An earlier
 deploy (25 Sep, Craig's go-ahead): commit `77a17cb`, `stake.js?v=77617c90` + `return.js?v=a211b567`,
 Solana RPC back on PublicNode after Helius began answering 403 (see "The Solana RPC is PublicNode
 again" below); served on the first poll, `test:live` all passed. Before it, commit `477bde3`, `stake.js?v=cd93f703` + `return.js?v=c15e5834`: **`CONFIG.returnLive` is now true**,
