@@ -41,7 +41,7 @@
 .step-p { margin: 0 0 14px; color: var(--ink-2); font-size: 14px; max-width: 72ch; }
 .step-p.small { font-size: 12px; color: var(--ink-3); }
 .step-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
-.step-note { font: 400 12px/1.5 var(--mono); color: var(--ink-3); min-width: 0; overflow-wrap: anywhere; }
+.step-note { font: 400 12.5px/1.5 var(--sans); font-variant-numeric: tabular-nums; color: var(--ink-3); min-width: 0; overflow-wrap: anywhere; }
 .step-note[data-tone="ok"] { color: var(--green); }
 .step-note[data-tone="bad"] { color: var(--red); }
 .step-note[data-tone="warn"] { color: var(--amber-txt); }
@@ -111,7 +111,7 @@
 .ack input { accent-color: var(--green); margin-top: 2px; width: 16px; height: 16px; flex: none; }
 
 .track { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 8px; }
-.track li { display: flex; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r); background: var(--canvas); transition: border-color 200ms; }
+.track li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r); background: var(--canvas); transition: border-color 200ms; }
 .track b { font-size: 13.5px; }
 .track span { font: 400 12px/1.5 var(--mono); color: var(--ink-3); text-align: right; overflow-wrap: anywhere; }
 .track li[data-s="busy"] { border-color: var(--amber-mid); }
@@ -222,3 +222,6 @@
 .info-row .info { margin: 0; }
 .info-row .info[open] { flex-basis: 100%; }
 .direction-toggle { margin-top: 20px; }
+
+/* the trust toggle sits alone between the steps and the footer: no full section padding around it */
+.sec-trust { padding-block: 20px 36px; }

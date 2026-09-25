@@ -741,6 +741,9 @@ tbody tr { transition: background 120ms; }
 tbody tr:hover { background: rgba(255, 255, 255, 0.018); }
 .r { text-align: right; }
 td.num { font-size: 13.5px; white-space: nowrap; }
+/* the zero count: the Unicode subscript glyph stays in the text (copy, setText) but is drawn as a readable digit */
+.zc { font-size: 0; }
+.zc::before { content: attr(data-n); font-size: 9.5px; font-weight: 700; vertical-align: -0.35em; margin: 0 1px; color: var(--ink-3); }
 .pairs td.r:not(.num) { white-space: nowrap; }
 .c-opt { display: none; }
 /* Coin names stay put while a narrow screen scrolls the numbers under them. */
@@ -782,7 +785,7 @@ td.num { font-size: 13.5px; white-space: nowrap; }
 }
 .tlinks a:hover { color: var(--ink); border-color: var(--line-3); background: var(--panel-3); }
 
-.row-self { background: linear-gradient(90deg, var(--amber-dim), transparent 60%); }
+.row-self { background: var(--amber-dim); } /* flat: the sticky first cell paints the same tint, so the row reads as one band */
 .row-self td:first-child { box-shadow: 2px 0 0 var(--amber) inset; }
 .row-dead td { color: var(--ink-3); }
 .row-dead .coin-sym { color: var(--ink-2); }
@@ -817,6 +820,7 @@ td.num { font-size: 13.5px; white-space: nowrap; }
 .foot-grid { display: grid; gap: 28px; margin-bottom: 28px; }
 @media (min-width: 900px) { .foot-grid { grid-template-columns: 1.1fr 2fr; gap: 56px; } }
 .foot-brand { display: grid; gap: 14px; align-content: start; }
+.foot-brand .brand { grid-area: auto; } /* the topbar gives .brand a named grid area; here it would open a phantom column */
 .foot-brand p { margin: 0; max-width: 36ch; }
 .foot p { margin: 0 0 12px; }
 .foot a { color: var(--ink-2); }

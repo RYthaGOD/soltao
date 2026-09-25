@@ -122,6 +122,10 @@ function fmtQty(v, dp = 0) {
 function setPrice(node, v) {
   const { text, aria } = fmtPrice(v);
   setText(node, text);
+  // A subscript digit is tiny in most monospace fonts and reads as a stray comma; give it its own span
+  // to size. The text content stays identical, so setText still sees an unchanged price as unchanged.
+  const m = node && /^(\$0\.0)([₀-₉]+)(\d+)$/.exec(text);
+  if (m && !node.querySelector('.zc')) { const z = el('span', 'zc', m[2]); z.dataset.n = [...m[2]].map((c) => SUBS.indexOf(c)).join(''); node.replaceChildren(m[1], z, m[3]); }
   if (aria) node.setAttribute('aria-label', aria); else node.removeAttribute('aria-label');
 }
 
@@ -529,7 +533,7 @@ function renderYield(tvl, ts, degraded) {
     bar.append(fill);
     bar.setAttribute('aria-hidden', 'true');
     x.append(bar);
-    x.append(el('span', 'cell-s', 'EVM DeFi as a share of the base chain'));
+    x.append(el('span', 'cell-s', 'times more on the base chain · the bar is EVM DeFi, to scale'));
     cells.push(x);
   }
   cwrap.replaceChildren(...cells);
