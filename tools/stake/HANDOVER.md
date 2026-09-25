@@ -421,6 +421,11 @@ or a page's positioning, change these too or the shared link silently starts lyi
 - **`/stake/` only runs on `soltao.xyz` or a local host.** The SIWS message names `soltao.xyz`, and
   the GitHub Pages and Railway-generated mirrors serve no CSP, so `init()` redirects any other host
   to the canonical page. `test/live.test.mjs` checks both mirrors hand off.
+- **The Solana RPC is PublicNode again (25 Sep 2026).** The Helius URL `config.js` used from
+  `fc630a3` began answering every request with `403 Secure URLs are not available on your current
+  plan`, so connecting a wallet never loaded a balance. `solanaRpc` is back on
+  `https://solana-rpc.publicnode.com`; the Helius origin is still in both CSPs, so switching back
+  is a one-line change once the plan is restored. Check it with a bare `getSlot` before you do.
 - **Space out the live test runs.** `lite.chain.opentensor.ai` rate-limits per client over a 60 s
   window (`429`, `retry-after: 60`, `x-ratelimit-policy: http_60s`), and it limits requests that
   carry a browser `Origin` more readily than bare ones. Running the mainnet replay, the page test and
