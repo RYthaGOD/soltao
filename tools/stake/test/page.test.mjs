@@ -143,6 +143,8 @@ if (want("A")) {
   await page.click("#connect");
   await waitText(page, "#tao-balance", /TAO/);
   expect("connect shows the wallet and a TAO balance", (await text(page, "#tao-balance")) === "0 TAO", await text(page, "#tao-balance"));
+  const swap = await page.$eval("#connect-note a", (a) => a.href).catch(() => "");
+  expect("a wallet with no TAO is pointed at a SOL→canonical TAO swap, by mint", swap === `https://jup.ag/swap/So11111111111111111111111111111111111111112-${CONFIG.taoMint}` && /Check again/.test(await text(page, "#connect-note")), swap);
 
   await page.click("#derive");
   await waitText(page, "#coldkey-out", /^5/);
@@ -242,6 +244,11 @@ if (want("B")) {
   expect("a Solana priority fee is quoted and shown", prio > 0 && prio <= Number(CONFIG.priorityFee.maxMicroLamports * BigInt(CONFIG.computeUnits)) / 1e15 + 1e-9, `${prio} SOL`);
   await waitText(page, "#r-usd", /Dexscreener|unavailable/, 30_000);
   expect("the review shows the amount and fees in dollars, with source and time", /^(\$[\d,.]+|under \$0\.01) of TAO, (\$[\d,.]+|under \$0\.01) in fees \(Dexscreener, \d\d:\d\d UTC\)$/.test(await text(page, "#r-usd")), await text(page, "#r-usd"));
+  {
+    const share = await text(page, "#r-share"), pct = parseFloat(share.replace(/^about /, "")) || 0;
+    const warned = (await attr(page, "#share-note", "data-tone")) === "warn" && /mostly flat/.test(await text(page, "#share-note"));
+    expect("the review states fees as a share of the amount, and warns from 10%", /^(about [\d.]+%|under 1%)$/.test(share) && warned === pct >= 10, `${share} · ${await text(page, "#share-note") || "no warning"}`);
+  }
   expect("total adds the priority fee and soltao's flat fee", Math.abs(total - lz - prio - Number(CONFIG.fee.lamports) / 1e9) < 2e-6, `${total} SOL`);
   expect("review names the plan and the stake", /^Stake about 0\.0\d+ TAO on root/.test(await text(page, "#r-plan")), await text(page, "#r-plan"));
   expect("review shows the transit account", /^0x[0-9a-f]{40}$/.test(await text(page, "#r-via")));
@@ -464,7 +471,19 @@ if (want("F")) {
   await clickEl(page, "#holdings-btn");
   await waitText(page, "#holdings-note", /^Read \d\d:\d\d UTC|Could not/, 90_000);
   const holdings = await page.$$eval("#holdings-body tr", (trs) => trs.map((tr) => [...tr.children].map((td) => td.textContent.trim()).join(" | ")));
-  expect("holdings show the wallet's free TAO and its stake positions, read from the chain", holdings[0] === "Free | — | 2 TAO | Stake Top up Chutes" && holdings.length === 3 && holdings.slice(1).every((h) => /^Staked on subnet 1 \| 5\w+…\w+ \| [\d,.]+ Alpha \| Unstake$/.test(h)) && /2 stake positions\. Subnet stakes are in that subnet's Alpha/.test(await text(page, "#holdings-note")), `${holdings.join(" / ")} · ${await text(page, "#holdings-note")}`);
+  expect("holdings show free TAO and each stake position with its worth in TAO, read from the chain", holdings[0] === "Free | — | 2 TAO | 2 TAO | Stake Top up Chutes" && holdings.length === 3 && holdings.slice(1).every((h) => /^Staked on subnet 1 \| 5\w+…\w+ \| [\d,.]+ Alpha \| ≈ [\d,.]+ TAO \| Unstake$/.test(h)) && /2 stake positions\. Subnet stakes are in that subnet's Alpha, root stakes in TAO\. Worth about [\d,.]+ TAO in all/.test(await text(page, "#holdings-note")), `${holdings.join(" / ")} · ${await text(page, "#holdings-note")}`);
+  // The next read compares with this one: make the stored look 0.001 Alpha smaller, as if rewards arrived since.
+  await page.evaluate(() => {
+    for (const k of Object.keys(localStorage).filter((k) => k.startsWith("soltao.stake.lastlook."))) {
+      const look = JSON.parse(localStorage.getItem(k));
+      for (const p of Object.keys(look.pos)) look.pos[p] = String(BigInt(look.pos[p]) - 1_000_000n);
+      localStorage.setItem(k, JSON.stringify(look));
+    }
+  });
+  await clickEl(page, "#holdings-btn");
+  await waitText(page, "#holdings-note", /^Read \d\d:\d\d UTC.*since you last looked|Could not/, 90_000);
+  const changes = await page.$$eval("#holdings-body .holdings-change", (s) => s.map((x) => x.textContent));
+  expect("a later read shows what each position gained since the last look, and that it may not all be rewards", changes.length === 2 && changes.every((c) => /^\+0\.001 Alpha since \d\d-\d\d \d\d:\d\d UTC$/.test(c)) && /include rewards and anything added or taken out elsewhere/.test(await text(page, "#holdings-note")), changes.join(" / "));
   // Unstake, then return: offered on an unstake, and priced (sale and bridge fee) before anything is signed.
   await page.$eval("#holdings-body tr:nth-child(3) button", (b) => b.click());
   await waitText(page, "#move-quote", /Sells for about|Could not/, 60_000);
@@ -515,6 +534,7 @@ if (want("F")) {
   await waitText(page, "#r-receive", /TAO|—/, 90_000);
   await waitText(page, "#r-cost", /TAO/, 90_000);
   expect("the review states what arrives on Solana", /^0\.5 canonical TAO$/.test(await text(page, "#r-receive")), await text(page, "#r-receive"));
+  expect("the return review states its fees as a share of the amount", /^(about [\d.]+%|under 1%)$/.test(await text(page, "#r-share")), await text(page, "#r-share"));
   const lz = parseFloat(await text(page, "#r-lzfee")), cost = parseFloat(await text(page, "#r-cost"));
   expect("…the LayerZero fee, quoted live in TAO", lz > 0 && lz < 0.05, `${lz} TAO`);
   expect("…and what leaves the Bittensor wallet: the amount plus fees and a gas reserve", cost > 0.5 && cost < 0.6, `${cost} TAO`);

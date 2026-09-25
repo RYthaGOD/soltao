@@ -33,6 +33,9 @@ const SUBNET_NETUID = 1n;
 // old hotkey check passed it for every subnet. Scenario 5 records what the chain then does.
 const OFF_SUBNET_HOTKEY = "0x84d83d08ca89f8e60424ffa286f165c16dd8752e4faa4d8977221e6720678d28";
 const RAO = 1_000_000_000n;
+// The sweep keeps the existential deposit on the transit account so it is never reaped (bug history 16).
+// The EVM balance reports only what is spendable, so those 500 rao read as 0 wei there.
+const ED = 500n;
 
 const here = dirname(fileURLToPath(import.meta.url));
 const out = JSON.parse(solc.compile(JSON.stringify({
@@ -161,7 +164,7 @@ function checkSigning(label) {
   expect("the stake is owned by the user's coldkey on the chosen validator", stake > 0n && stake === summary.stakedRao, `${fmt(stake)} TAO staked`);
   expect("the reserve and unused gas money arrive as free TAO", free > CONFIG.defaultReserveRao, `${fmt(free)} TAO free`);
   expect("the transit account ends with no wTAO, no stake, and native TAO under the sweep floor", leftWtao === 0n && leftStake === 0n && leftNative <= sweepFloor(price), `${leftNative} wei left`);
-  const inRao = amountSD * 1000n + CONFIG.gasDropWei / RAO, outRao = stake + free + leftNative / RAO;
+  const inRao = amountSD * 1000n + CONFIG.gasDropWei / RAO, outRao = stake + free + leftNative / RAO + ED;
   expect("every rao accounted for (no gas is charged inside eth_call)", inRao - outRao >= 0n && inRao - outRao <= 10n, `in ${fmt(inRao)}, out ${fmt(outRao)}, Δ ${inRao - outRao} rao`);
 }
 
@@ -197,7 +200,9 @@ function checkSigning(label) {
   checkSigning("deliver plan");
   const free = await getFreeBalance(u.coldkey), leftNative = (await replay()).transitBalance;
   const inRao = amountSD * 1000n + CONFIG.gasDropWei / RAO;
-  expect("all of it arrives as free TAO in the coldkey", inRao - free <= 1n && leftNative <= sweepFloor(price), `${fmt(free)} TAO free of ${fmt(inRao)}`);
+  expect("all of it arrives as free TAO in the coldkey", inRao - free - leftNative / RAO - ED <= 1n && leftNative <= sweepFloor(price), `${fmt(free)} TAO free of ${fmt(inRao)}`);
+  // A reaped transit account restarts at nonce 0, which let an old sweep replay (bug history 16).
+  expect("the sweep keeps exactly the existential deposit on the transit account, so it is never reaped", inRao - free - leftNative / RAO === ED, `${inRao - free - leftNative / RAO} rao kept`);
 }
 
 // ── 3. The page closes between staking and the handover; the user signs again ──
@@ -228,7 +233,7 @@ function checkSigning(label) {
   expect("a hotkey that is not a validator is refused by the chain", stakeTx && !stakeTx.ok && summary.stakeRefused === true, steps());
   const free = await getFreeBalance(u.coldkey), leftNative = (await replay()).transitBalance;
   const inRao = amountSD * 1000n + CONFIG.gasDropWei / RAO;
-  expect("…and the TAO is delivered unstaked to the coldkey, nothing left on the transit account", steps() === "unwrap,stake,sweep" && inRao - free <= 1n && leftNative <= sweepFloor(price), `${fmt(free)} TAO free of ${fmt(inRao)}`);
+  expect("…and the TAO is delivered unstaked to the coldkey, nothing left on the transit account", steps() === "unwrap,stake,sweep" && inRao - free - leftNative / RAO - ED <= 1n && leftNative <= sweepFloor(price), `${fmt(free)} TAO free of ${fmt(inRao)}`);
 }
 
 // ── 5. A delegate that holds no uid on the chosen subnet ──────────────────────
@@ -256,7 +261,7 @@ function checkSigning(label) {
   expect("a limit the pool cannot meet is refused by the chain", stakeTx && !stakeTx.ok && summary.stakeRefused === true, steps());
   const free = await getFreeBalance(u.coldkey), leftNative = (await replay()).transitBalance;
   const inRao = amountSD * 1000n + CONFIG.gasDropWei / RAO;
-  expect("…and the TAO is delivered unstaked, nothing left on the transit account", steps() === "unwrap,stake,sweep" && inRao - free <= 1n && leftNative <= sweepFloor(price), `${fmt(free)} TAO free of ${fmt(inRao)}`);
+  expect("…and the TAO is delivered unstaked, nothing left on the transit account", steps() === "unwrap,stake,sweep" && inRao - free - leftNative / RAO - ED <= 1n && leftNative <= sweepFloor(price), `${fmt(free)} TAO free of ${fmt(inRao)}`);
 }
 
 console.log(failures ? `\n${failures} failed` : "\nall passed");

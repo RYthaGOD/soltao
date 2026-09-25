@@ -64,7 +64,8 @@ function execute(tx) {
     }
     if (to === XFER && d.startsWith(S.transferAll)) {
       kind = "transferAll"; if (limit < MIN_GAS.transferAll) return false;
-      const all = get(chain.native, from), rao = all / RAO;
+      // keep_alive leaves the existential deposit (500 rao) behind, as pallet_balances does
+      const all = get(chain.native, from), rao = all / RAO - (u(d, 1) ? 500n : 0n);
       add(chain.native, from, -rao * RAO); add(chain.free, word(d, 0), rao); return true;
     }
     kind = "unknown"; return false;

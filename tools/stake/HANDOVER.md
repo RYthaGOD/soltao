@@ -387,12 +387,11 @@ This is **not** git-push-triggered. Steps, in order, every time:
     `signTx()` (`evm.js`) now looks up a receipt for the hash it just signed; a receipt for a nonce not
     yet used can only be such a copy, so it re-signs with the gas limit one higher (up to 16 tries).
     Covers the forward route and the return (both sign through `signTx`). Test: `evm.test.mjs`.
-    Still open: (a) the sweep's second argument is presumably keep-alive; sending `true` would leave
-    the existential deposit and stop the reaping, but its meaning was not verified, so it is unchanged;
-    (b) after a reap, anyone could re-broadcast an old transaction of this account at a reused nonce.
-    Old sweeps pay the user's own coldkey and old unwraps only unwrap the user's own wTAO, so the
-    realistic harm is small, but an old addStake could stake transit TAO to an earlier route's hotkey;
-    (c) `evm.test.mjs` sees the public RPC answer "already known" for a fresh, unfunded transaction
+    (a) and (b) closed by item 20: the sweep now keeps the transit account alive, so it is never
+    reaped again. Before that: (a) the sweep's second argument was presumably keep-alive but
+    unverified; (b) after a reap, anyone could re-broadcast an old transaction of this account at a
+    reused nonce (an old addStake could stake transit TAO to an earlier route's hotkey).
+    Still open: (c) `evm.test.mjs` sees the public RPC answer "already known" for a fresh, unfunded transaction
     from a random key, so "already known" is not proof a transaction is in the pool.
 
 17. **First real-funds return to Solana: landed (24 Sep 2026).** After item 16's fix, "Finish it" swept
@@ -461,6 +460,28 @@ This is **not** git-push-triggered. Steps, in order, every time:
     `/` 302 (query kept), `/board` 301, `/board/`, `/stake/`, `/pairs.json` 200; headless loads of
     `/`, `/stake/` (desktop and phone) and `/board/` show no errors, and the board loads `pairs.json`.
     `test/live.test.mjs` now checks the redirect and the board at `/board/`.
+
+20. **Second review pass, 25 Sep 2026 (built, not deployed).** Re-run report (same artifact as the
+    first roast): 61/110. Fixed from it:
+    - *The transit account is never reaped.* The sweep sends `transferAll(coldkey, true)`. Verified in
+      subtensor's `precompiles/src/balance_transfer.rs`: the bool is `pallet_balances::transfer_all`'s
+      `keep_alive`. The live existential deposit is 500 rao (`balances.existentialDeposit`, read
+      25 Sep), left on the transit account once per wallet; later routes reuse it. The EVM balance
+      reports only what is spendable, so it reads 0 wei there, and `sweepFloor` is unaffected.
+      `test:mainnet` asserts exactly 500 rao is kept (deliver plan) and every rao is accounted for;
+      `route.test.mjs`'s mock models the flag. An account reaped before this (Craig's) is simply
+      kept alive from its next sweep on.
+    - *`npm run usage` no longer undercounts silently.* PublicNode returned only 8 signatures for the
+      fee wallet (oldest 24 Sep 07:35 UTC), so it reported 2 routes, not 3. The script now reads
+      `api.mainnet-beta.solana.com` by default (958 signatures, full history), takes `--rpc`, and
+      exits 2 when history ends after `--since` or a transaction cannot be read. Count on 25 Sep:
+      3 routes from 2 wallets, 0.0135 SOL, all Craig's tests.
+    - *Fees as a share of the amount.* The review shows "Fees, as a share of what you send" in both
+      directions (forward: SOL fees in USD over the TAO in USD, both from Dexscreener; return: the
+      bridge fee plus the funding transfer fee over the amount, in TAO), and from 10% a warning that
+      the fees are mostly flat. `showShare()` in `app.js`; page-test assertions in runs B and F.
+    - *A way in from plain SOL.* A connected wallet with no canonical TAO gets a Jupiter SOL→TAO link
+      by mint, the mint's short form to check, and "Check again". Page-test assertion in run A.
 
 ## Link previews and SEO
 

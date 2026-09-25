@@ -27,7 +27,7 @@
 <link rel="apple-touch-icon" href="../logo.png">
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="stake.css">
-<script src="stake.js?v=6240019c" defer></script>
+<script src="stake.js?v=3f2ee7a4" defer></script>
 </head>
 <body>
 <a class="skip" href="#steps">Skip to the steps</a>
@@ -215,7 +215,7 @@
           <p class="step-note" id="holdings-note" role="status"></p>
           <div class="pick-scroll">
             <table class="pick">
-              <thead><tr><th scope="col">Where</th><th scope="col">Validator</th><th scope="col">Amount</th><th scope="col"><span class="sr">Action</span></th></tr></thead>
+              <thead><tr><th scope="col">Where</th><th scope="col">Validator</th><th scope="col">Amount</th><th scope="col">Worth now</th><th scope="col"><span class="sr">Action</span></th></tr></thead>
               <tbody id="holdings-body"></tbody>
             </table>
           </div>
@@ -377,9 +377,11 @@
       <div class="dir-fwd"><dt>soltao fee</dt><dd class="num" id="r-fee">—</dd></div>
       <div class="kv-total dir-fwd"><dt>Total SOL</dt><dd class="num" id="r-total">—</dd></div>
       <div class="dir-fwd"><dt>In dollars, roughly</dt><dd class="num" id="r-usd">—</dd></div>
+      <div><dt>Fees, as a share of what you send</dt><dd class="num" id="r-share">—</dd></div>
       <div class="dir-rev" hidden><dt>Leaves your Bittensor wallet</dt><dd class="num" id="r-cost">—</dd></div>
       <div class="kv-total dir-rev" hidden><dt>Arrives in your Solana wallet</dt><dd class="num" id="r-receive">—</dd></div>
     </dl>
+    <p class="step-note" id="share-note" role="status"></p>
     <details class="info"><summary><span class="info-i" aria-hidden="true">i</span><span class="info-l">About these fees</span></summary><div class="info-body"><p class="dir-fwd">The bridge fee (LayerZero's) includes 0.001 TAO dropped on your transit account to pay for its first
       Bittensor transaction; what it does not use comes back to you. The Solana network fee is added by
       your wallet. The transaction is simulated against mainnet before your wallet asks you to sign.</p>

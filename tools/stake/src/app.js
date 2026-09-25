@@ -130,7 +130,16 @@ async function refreshBalances() {
   $("tao-balance").textContent = taoBal === null ? "unavailable" : tao(taoBal);
   $("sol-balance").textContent = lamports === null ? "unavailable" : sol(lamports);
   if (taoBal === null) note("connect-note", "Could not read your TAO balance from Solana. Try again in a moment.", "bad");
-  else if (taoBal === 0n && state.direction === "forward") note("connect-note", "This wallet holds no canonical Solana TAO in its main token account.", "warn");
+  else if (taoBal === 0n && state.direction === "forward") {
+    // The route starts from canonical TAO; the one way in from plain SOL is a swap, which opens in a new tab so this page keeps its place.
+    const again = Object.assign(document.createElement("button"), { type: "button", className: "btn btn-ghost btn-sm", textContent: "Check again" });
+    again.addEventListener("click", () => { again.disabled = true; refreshBalances(); });
+    noteHtml("connect-note", [
+      text("This wallet holds no canonical Solana TAO yet. "),
+      link(`https://jup.ag/swap/So11111111111111111111111111111111111111112-${CONFIG.taoMint}`, "Swap SOL for it on Jupiter ↗"),
+      text(`, check the mint is ${CONFIG.taoMint.slice(0, 6)}…${CONFIG.taoMint.slice(-4)}, then come back. `), again,
+    ], "warn");
+  } else note("connect-note", "");
   gate();
 }
 
@@ -577,7 +586,7 @@ function renderReview(ready) {
   if (state.direction === "reverse") {
     set("r-send", () => tao(state.amountLd));
     set("r-dest", () => `${state.user} (your Solana wallet)`);
-    if (!ready) for (const id of ["r-gas", "r-lzfee", "r-cost", "r-receive"]) $(id).textContent = "—";
+    if (!ready) { for (const id of ["r-gas", "r-lzfee", "r-cost", "r-receive"]) $(id).textContent = "—"; showShare(NaN); }
     return;
   }
   $("r-huge-dest").textContent = ready ? state.coldkeyAddress : "—";
@@ -597,7 +606,7 @@ function renderReview(ready) {
   set("r-gas", () => { const g = bittensorGas(); return g === null ? "—" : `about ${tao(g)}`; });
   // Name the counterparty, not just the amount: the fee is a plain transfer to this address.
   $("r-fee").textContent = CONFIG.fee.lamports ? `${sol(CONFIG.fee.lamports)}${CONFIG.fee.wallet ? ` → ${short(CONFIG.fee.wallet, 4)}` : ""}` : "none";
-  if (!ready) { $("r-lzfee").textContent = "—"; $("r-prio").textContent = "—"; $("r-total").textContent = "—"; $("r-usd").textContent = "—"; }
+  if (!ready) { $("r-lzfee").textContent = "—"; $("r-prio").textContent = "—"; $("r-total").textContent = "—"; $("r-usd").textContent = "—"; showShare(NaN); }
 }
 
 let quoteTimer;
@@ -649,6 +658,15 @@ async function refreshReturn() {
 // Free TAO plus every stake position, from the chain's own StakeInfo runtime API. Read on request,
 // through the Bittensor-side bundle, so the forward page stays light. Works for a pasted coldkey too.
 let holdingsSeq = 0;
+// The last read of each coldkey's positions, kept in this browser only (a coldkey is public), so the
+// next read can say what changed. It cannot tell rewards from stake added or taken out elsewhere, and says so.
+const lastLookKey = (coldkey) => `soltao.stake.lastlook.${coldkey}`;
+function lastLook(coldkey) { try { return JSON.parse(localStorage.getItem(lastLookKey(coldkey)) || "null"); } catch { return null; } }
+function saveLook(coldkey, positions) {
+  try { localStorage.setItem(lastLookKey(coldkey), JSON.stringify({ at: Date.now(), pos: Object.fromEntries(positions.map((p) => [`${p.netuid}:${p.hotkey}`, String(p.stake)])) })); } catch { /* storage off: no comparison next time */ }
+}
+const signed = (amount, netuid) => `${amount < 0n ? "−" : "+"}${stakeAmount(amount < 0n ? -amount : amount, netuid)}`;
+
 async function showHoldings() {
   const coldkey = state.coldkeyAddress;
   if (!coldkey) return;
@@ -658,10 +676,19 @@ async function showHoldings() {
   try {
     const lib = await loadReturnLib();
     const [free, positions] = await Promise.all([lib.freeBalance(coldkey), lib.stakePositions(coldkey)]);
+    // Each subnet's Alpha price once, and dollars if the feed answers; either failing only hides the worth.
+    const netuids = [...new Set(positions.map((p) => p.netuid))];
+    const [prices, usd] = await Promise.all([
+      Promise.all(netuids.map((n) => lib.alphaPriceRao(n).catch(() => null))).then((ps) => new Map(netuids.map((n, i) => [n, ps[i]]))),
+      usdPrices().catch(() => null),
+    ]);
     if (seq !== holdingsSeq || coldkey !== state.coldkeyAddress) return;
-    const row = (where, hotkey, amount) => {
+    const worthOf = (p) => (prices.get(p.netuid) == null ? null : (p.stake * prices.get(p.netuid)) / 1_000_000_000n);
+    const before = lastLook(coldkey);
+    const row = (where, hotkey, amount, worth, change) => {
       const tr = document.createElement("tr");
-      for (const [t, cls] of [[where], [hotkey], [amount, "num"]]) tr.append(Object.assign(document.createElement("td"), { textContent: t, className: cls || "" }));
+      for (const [t, cls] of [[where], [hotkey], [amount, "num"], [worth, "num"]]) tr.append(Object.assign(document.createElement("td"), { textContent: t, className: cls || "" }));
+      if (change) tr.children[2].append(Object.assign(document.createElement("span"), { className: "holdings-change", textContent: change }));
       return tr;
     };
     const action = (label, fn) => {
@@ -669,7 +696,7 @@ async function showHoldings() {
       if (canMove()) { const b = Object.assign(document.createElement("button"), { type: "button", textContent: label }); b.addEventListener("click", fn); td.append(b); }
       return td;
     };
-    const freeRow = row("Free", "—", tao(free));
+    const freeRow = row("Free", "—", tao(free), tao(free));
     const freeActions = action("Stake", () => openMove({ kind: "stake", free }));
     if (canPay()) {
       const b = Object.assign(document.createElement("button"), { type: "button", textContent: "Top up Chutes" });
@@ -680,14 +707,20 @@ async function showHoldings() {
     $("holdings-body").replaceChildren(
       freeRow,
       ...positions.map((p) => {
-        const tr = row(p.netuid === 0 ? "Staked on root" : `Staked on subnet ${p.netuid}`, short(p.hotkey, 6), stakeAmount(p.stake, p.netuid));
+        const was = before?.pos?.[`${p.netuid}:${p.hotkey}`], worth = worthOf(p);
+        const change = was !== undefined && BigInt(was) !== p.stake ? `${signed(p.stake - BigInt(was), p.netuid)} since ${new Date(before.at).toISOString().slice(5, 16).replace("T", " ")} UTC` : "";
+        const tr = row(p.netuid === 0 ? "Staked on root" : `Staked on subnet ${p.netuid}`, short(p.hotkey, 6), stakeAmount(p.stake, p.netuid), worth === null ? "—" : `≈ ${tao(worth)}`, change);
         tr.append(action("Unstake", () => openMove({ kind: "unstake", hotkey: p.hotkey, netuid: p.netuid, max: p.stake })));
         return tr;
       }),
     );
     resumeMove();
     resumePay();
-    note("holdings-note", `Read ${new Date().toISOString().slice(11, 16)} UTC. ${positions.length ? `${positions.length} stake position${positions.length === 1 ? "" : "s"}. Subnet stakes are in that subnet's Alpha, root stakes in TAO.` : "No stake positions."}`);
+    saveLook(coldkey, positions);
+    const worths = positions.map(worthOf), total = worths.includes(null) ? null : worths.reduce((a, w) => a + w, free);
+    const inAll = total === null ? "" : ` Worth about ${tao(total)} in all${usd?.tao ? ` (${fmtUsd((Number(total) / 1e9) * usd.tao)})` : ""}, at each pool's current price.`;
+    const changed = before && positions.some((p) => { const was = before.pos?.[`${p.netuid}:${p.hotkey}`]; return was !== undefined && BigInt(was) !== p.stake; });
+    note("holdings-note", `Read ${new Date().toISOString().slice(11, 16)} UTC. ${positions.length ? `${positions.length} stake position${positions.length === 1 ? "" : "s"}. Subnet stakes are in that subnet's Alpha, root stakes in TAO.` : "No stake positions."}${inAll}${changed ? " Changes since you last looked here include rewards and anything added or taken out elsewhere." : ""}`);
   } catch (e) {
     if (seq === holdingsSeq) note("holdings-note", `Could not read it from Bittensor: ${e.message}`, "bad");
   } finally {
@@ -954,6 +987,8 @@ function requestReturnQuote() {
       $("r-gas").textContent = `up to ${tao(plan.gasReserveWei / RAO)} held for gas; what is not used stays yours`;
       $("r-cost").textContent = tao(plan.fundingRao + fq.feeRao);
       $("r-receive").textContent = `${fmtUnits(q.solanaAmountLd, 9)} canonical TAO`;
+      // The bridge fee and the funding transfer's fee, both in TAO; unused gas stays the user's, so it is left out.
+      showShare(state.amountLd > 0n ? Number(q.nativeFee / RAO + fq.feeRao) / Number(state.amountLd) : NaN);
       if (fq.remainingRao < 0n) {
         note("sign-note", `Not enough free TAO: this return needs ${tao(plan.fundingRao + fq.feeRao)} including fees, and the wallet has ${tao(state.ret.free ?? 0n)}.`, "bad");
         $("sign").disabled = true;
@@ -1038,6 +1073,7 @@ async function runReturn({ amountRao: chosen = null, retryReverted = false, afte
 /** Approximate dollars for the TAO being sent and the SOL it costs. Display only; a failed feed hides it. */
 async function showUsd(seq, totalLamports) {
   $("r-usd").textContent = "…";
+  showShare(NaN);
   const p = await usdPrices().catch(() => null);
   if (seq !== state.quoteSeq) return;
   if (!p) { $("r-usd").textContent = "price feed unavailable"; return; }
@@ -1046,6 +1082,17 @@ async function showUsd(seq, totalLamports) {
     p.sol !== null && `${fmtUsd((Number(totalLamports) / 1e9) * p.sol)} in fees`,
   ].filter(Boolean);
   $("r-usd").textContent = `${parts.join(", ")} (Dexscreener, ${new Date(p.at).toISOString().slice(11, 16)} UTC)`;
+  // SOL fees against TAO sent needs both prices; the gas drop's unused part comes back, so this is an upper bound.
+  if (p.tao !== null && p.sol !== null && state.amountLd > 0n) showShare(((Number(totalLamports) / 1e9) * p.sol) / ((Number(state.amountLd) / 1e9) * p.tao));
+}
+
+/** Fees as a share of the amount, with a plain warning when they eat a large part of a small route. */
+function showShare(frac) {
+  if (!(frac >= 0)) { $("r-share").textContent = "—"; note("share-note", ""); return; }
+  const pct = frac * 100;
+  const shown = pct < 1 ? "under 1%" : `about ${pct < 10 ? pct.toFixed(1) : Math.round(pct)}%`;
+  $("r-share").textContent = shown;
+  note("share-note", pct >= 10 ? `Fees are ${shown} of this amount. They are mostly flat, so the same fees weigh far less on a larger amount.` : "", pct >= 10 ? "warn" : null);
 }
 
 function requestQuote() {

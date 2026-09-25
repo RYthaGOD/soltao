@@ -136,11 +136,13 @@ export async function finishRoute({ transitKey, coldkey, hotkey, netuid = 0n, pl
     }
   }
 
-  // 4. sweep everything else to the coldkey as free TAO
+  // 4. sweep everything else to the coldkey as free TAO. keep_alive (true) leaves the existential
+  //    deposit (500 rao) behind, so Bittensor never reaps the transit account: a reaped account's
+  //    nonce goes back to 0, and its old signed transactions could then be replayed (bug history 16).
   const price = await getGasPrice();
   if ((await getBalance(address)) > sweepFloor(price)) {
     onStep("sweep", "busy", "sending the rest to your wallet");
-    track(await sendTx(transitKey, { to: PRECOMPILE.balanceTransfer, data: encode("transferAll(bytes32,bool)", coldkey, 0n), gasLimit: CONFIG.gasLimit.sweep, gasPrice: price }), "sweep");
+    track(await sendTx(transitKey, { to: PRECOMPILE.balanceTransfer, data: encode("transferAll(bytes32,bool)", coldkey, 1n), gasLimit: CONFIG.gasLimit.sweep, gasPrice: price }), "sweep");
   }
   onStep("sweep", "ok", "done");
   return summary;
