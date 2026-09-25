@@ -49,7 +49,9 @@ try {
   // ── soltao.xyz opens the stake page; the board lives at /board/ ──
   {
     const res = await fetch(`${SITE}/?live-check=1`, { redirect: "manual" });
-    expect("/ redirects to the stake page", res.status === 302 && new URL(res.headers.get("location"), SITE).pathname === "/stake/", `${res.status} ${res.headers.get("location")}`);
+    // The whole target, not just its path: nginx behind Railway once answered http://soltao.xyz:8080/stake/.
+    const to = new URL(res.headers.get("location") || "", SITE);
+    expect("/ redirects to the stake page, on the same origin", res.status === 302 && to.origin === new URL(SITE).origin && to.pathname === "/stake/", `${res.status} ${res.headers.get("location")}`);
   }
   {
     const { page, problems, status } = await open("/board/");

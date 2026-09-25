@@ -8,6 +8,9 @@
 server {
     listen      ${PORT};
     server_name _;
+    # Railway's proxy terminates TLS and forwards to ${PORT}, so an absolute redirect would name
+    # http://soltao.xyz:8080/. Relative Location headers keep the browser on the scheme and host it used.
+    absolute_redirect off;
 
     root  /usr/share/nginx/html;
     index index.html;
