@@ -37,7 +37,7 @@ async function open(path) {
     window.__csp = [];
     document.addEventListener("securitypolicyviolation", (e) => window.__csp.push(`${e.violatedDirective} ${e.blockedURI}`));
   });
-  const res = await page.goto(`${SITE}${path}?live-check=${Date.now()}`, { waitUntil: "networkidle2", timeout: 60_000 });
+  const res = await page.goto(`${SITE}${path}${path.includes("?") ? "&" : "?"}live-check=${Date.now()}`, { waitUntil: "networkidle2", timeout: 60_000 });
   return { page, problems, status: res.status() };
 }
 const text = (page, sel) => page.$eval(sel, (el) => el.textContent.trim());
@@ -117,11 +117,25 @@ try {
     const res = await fetch(`${SITE}/stake/${returnSrc}`, { method: "HEAD" });
     expect("the return bundle the page names is served, cached for a year", res.status === 200 && /max-age=31536000/.test(res.headers.get("cache-control") || ""), `${returnSrc} · ${res.status} · ${res.headers.get("cache-control")}`);
   }
+  expect("the plain stake page shows no subnet card", await page.$eval("#subnet-card", (el) => el.hidden));
   expect("the return direction is open (CONFIG.returnLive)", await page.evaluate(() => document.querySelector('input[name="direction"][value="reverse"]')?.disabled === false));
   const csp = await page.evaluate(() => window.__csp);
   expect("/stake/: no CSP violations", csp.length === 0, csp.join(" | "));
   expect("/stake/: no page or console errors", problems.length === 0, problems.join(" | "));
   await page.close();
+
+  // A subnet's own page (bug history item 21): the deployed bundle reads subnet 64's on-chain identity
+  // and pool. "Chutes" is what its owner registered on 25 Sep 2026; a rename would fail this, not the page.
+  {
+    const { page, problems, status } = await open("/stake/?netuid=64");
+    await waitText(page, "#subnet-note", /registered on Bittensor|Could not read|has no subnet/, 90_000);
+    const h = await text(page, "#subnet-card-h"), note = await text(page, "#subnet-note");
+    expect("/stake/?netuid=64 opens subnet 64's page with its registered name and pool", status === 200 && !(await page.$eval("#subnet-card", (el) => el.hidden)) && h.startsWith("Chutes") && /^[\d,]+ TAO$/.test(await text(page, "#subnet-pool")) && /does not endorse this subnet/.test(note), `${h} · ${note}`);
+    const csp = await page.evaluate(() => window.__csp);
+    expect("subnet page: no CSP violations", csp.length === 0, csp.join(" | "));
+    expect("subnet page: no page or console errors", problems.length === 0, problems.join(" | "));
+    await page.close();
+  }
 
   // Mirrors cannot sign in (the message names soltao.xyz) or serve the CSP, so they must hand off.
   for (const mirror of MIRRORS) {

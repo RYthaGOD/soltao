@@ -136,6 +136,7 @@ if (want("A")) {
   const { page, problems } = await openWith({ pubkey, secret, before: planted });
 
   expect("not-live banner is shown while the fee wallet is unset", !(await hidden(page, "#not-live")));
+  expect("the plain page has no subnet card; only a subnet link opens one", await hidden(page, "#subnet-card"));
   // Wallet providers share this page's globals; a stand-in `process` or `Buffer` here can break them.
   const globals = await page.evaluate(() => ({ process: typeof window.process, Buffer: typeof window.Buffer }));
   expect("the page adds no Node globals (process, Buffer) a wallet could trip over", globals.process === "undefined" && globals.Buffer === "undefined", JSON.stringify(globals));
@@ -377,6 +378,12 @@ if (want("E")) {
   expect("a shared link fills the subnet and validator and checks them on-chain", (await page.$eval("#netuid-in", (el) => el.value)) === "1" && /^Validator on subnet 1 · uid \d+/.test(await text(page, "#hotkey-note")), await text(page, "#hotkey-note"));
   const share = await page.$eval("#hotkey-note a", (a) => a.getAttribute("href")).catch(() => null);
   expect("a checked validator offers a link back to the same choice", share === `/stake/?netuid=1&hotkey=${SUBNET1_OWNER_HOTKEY}`, share);
+  // The link makes this subnet 1's page: its on-chain identity and pool on top, labelled as the owner's.
+  await waitText(page, "#subnet-note", /registered on Bittensor|Could not read|has no subnet/, 90_000);
+  const card = { hidden: await page.$eval("#subnet-card", (el) => el.hidden), n: await text(page, "#subnet-card-n"), h: await text(page, "#subnet-card-h"), price: await text(page, "#subnet-price"), pool: await text(page, "#subnet-pool"), validator: await text(page, "#subnet-validator"), note: await text(page, "#subnet-note"), title: await page.title() };
+  expect("a subnet link opens that subnet's page, with its registered name, pool and the linked validator", !card.hidden && card.n === "1" && card.h.length > 0 && /^[\d,.]+ TAO$/.test(card.price) && /^[\d,]+ TAO$/.test(card.pool) && card.validator.startsWith(SUBNET1_OWNER_HOTKEY.slice(0, 6)) && /soltao has not checked them and does not endorse this subnet/.test(card.note) && /^Stake on .+ from your Solana wallet — soltao$/.test(card.title), JSON.stringify(card));
+  const cardLinks = await page.$$eval("#subnet-links a", (as) => as.map((a) => [a.href, a.rel, a.target]));
+  expect("…with the owner's links, https only, opening elsewhere", cardLinks.every(([href, rel, target]) => href.startsWith("https://") && /noopener/.test(rel) && target === "_blank"), JSON.stringify(cardLinks));
   // The picker: lists subnet 1's permit holders, states its sort rule, and choosing fills and checks.
   expect("the picker offers this subnet's validators", (await text(page, "#pick-btn")) === "List subnet 1's validators", await text(page, "#pick-btn"));
   await clickEl(page, "#pick-btn");
@@ -437,6 +444,10 @@ if (want("F")) {
   const STAKE_INFO = "StakeInfoRuntimeApi_get_stake_info_for_coldkey";
   const ownerKey = "0x" + Buffer.from(ss58Decode(SUBNET1_OWNER_HOTKEY)).toString("hex");
   const stakeInfo = (await (await fetch(CONFIG.bittensorEvmRpc, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "state_call", params: [STAKE_INFO, ownerKey] }) })).json()).result;
+  // Root rewards waiting: one validator owes 0.003 TAO (over the chain's 0.0005 TAO claim minimum).
+  // Vec<(AccountId32, owed shares u64, payout u64)>, SCALE: compact length 1, then the tuple.
+  const BASKET = "BetaBasketRuntimeApi_get_root_basket_positions";
+  const basket = "0x04" + ownerKey.slice(2) + le(1_000_000n, 8) + le(3_000_000n, 8);
   const intercept = (req) => {
     if (req.method() !== "POST" || !req.url().startsWith(CONFIG.bittensorEvmRpc)) return false;
     const body = JSON.parse(req.postData() || "{}");
@@ -444,11 +455,29 @@ if (want("F")) {
       req.respond({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify({ jsonrpc: "2.0", id: body.id, result: stakeInfo }) });
       return true;
     }
+    if (!Array.isArray(body) && body.method === "state_call" && body.params?.[0] === BASKET) {
+      req.respond({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify({ jsonrpc: "2.0", id: body.id, result: basket }) });
+      return true;
+    }
     // polkadot reads storage through state_queryStorageAt: [{ block, changes: [[key, value]] }].
     if (Array.isArray(body) || body.method !== "state_queryStorageAt") return false;
     const keys = body.params?.[0] || [];
-    if (!keys.length || !keys.every((k) => String(k).startsWith(SYSTEM_ACCOUNT))) return false;
+    // polkadot can batch reads made in the same tick (the holdings read the root claim minimum beside the
+    // balance), so answer any batch holding an account key, and read its other keys from the live chain.
+    const isAccount = (k) => String(k).startsWith(SYSTEM_ACCOUNT);
+    if (!keys.some(isAccount)) return false;
     accountReads++;
+    const others = keys.filter((k) => !isAccount(k));
+    if (others.length) {
+      fetch(CONFIG.bittensorEvmRpc, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "state_queryStorageAt", params: [others, ...(body.params || []).slice(1)] }) })
+        .then((r) => r.json()).catch(() => null)
+        .then((live) => {
+          const got = new Map(live?.result?.[0]?.changes ?? []);
+          const result = [{ block: live?.result?.[0]?.block ?? "0x" + "00".repeat(32), changes: keys.map((k) => [k, isAccount(k) ? account : got.get(k) ?? null]) }];
+          req.respond({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify({ jsonrpc: "2.0", id: body.id, result }) });
+        });
+      return true;
+    }
     const result = [{ block: "0x" + "00".repeat(32), changes: keys.map((k) => [k, account]) }];
     req.respond({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify({ jsonrpc: "2.0", id: body.id, result }) });
     return true;
@@ -471,7 +500,13 @@ if (want("F")) {
   await clickEl(page, "#holdings-btn");
   await waitText(page, "#holdings-note", /^Read \d\d:\d\d UTC|Could not/, 90_000);
   const holdings = await page.$$eval("#holdings-body tr", (trs) => trs.map((tr) => [...tr.children].map((td) => td.textContent.trim()).join(" | ")));
-  expect("holdings show free TAO and each stake position with its worth in TAO, read from the chain", holdings[0] === "Free | — | 2 TAO | 2 TAO | Stake Top up Chutes" && holdings.length === 3 && holdings.slice(1).every((h) => /^Staked on subnet 1 \| 5\w+…\w+ \| [\d,.]+ Alpha \| ≈ [\d,.]+ TAO \| Unstake$/.test(h)) && /2 stake positions\. Subnet stakes are in that subnet's Alpha, root stakes in TAO\. Worth about [\d,.]+ TAO in all/.test(await text(page, "#holdings-note")), `${holdings.join(" / ")} · ${await text(page, "#holdings-note")}`);
+  expect("holdings show free TAO and each stake position with its worth in TAO, read from the chain", holdings[0] === "Free | — | 2 TAO | 2 TAO | Stake Top up Chutes" && holdings.length === 4 && holdings.slice(1, 3).every((h) => /^Staked on subnet 1 \| 5\w+…\w+ \| [\d,.]+ Alpha \| ≈ [\d,.]+ TAO \| Unstake$/.test(h)) && /2 stake positions\. Subnet stakes are in that subnet's Alpha and collect their rewards in the stake itself; root stakes are in TAO\./.test(await text(page, "#holdings-note")), `${holdings.join(" / ")} · ${await text(page, "#holdings-note")}`);
+  expect("root rewards waiting with a validator are listed with a Claim, and counted in the total", /^Root rewards \| 5\w+…\w+ \| —waiting to be claimed \| ≈ 0\.003 TAO \| Claim$/.test(holdings[3] || "") && /0\.003 TAO is waiting to be claimed, and "Claim" adds it to your root stake\. Worth about [\d,.]+ TAO in all.*counting rewards still to claim/.test(await text(page, "#holdings-note")), `${holdings[3]} · ${await text(page, "#holdings-note")}`);
+  await page.$eval("#holdings-body tr:nth-child(4) button", (b) => b.click());
+  await waitText(page, "#move-quote", /^Claims about|Could not|The Bittensor fee/, 60_000);
+  // The real claim fee (read live, about 0.008 TAO on 25 Sep) is more than the 0.003 TAO served here.
+  expect("Claim is priced before anything is signed, has no amount to enter, and warns when its fee outweighs the rewards", /^Claims about 0\.003 TAO of root rewards and adds it to your root stake with this validator\. Bittensor reserves a network fee of about [\d.]+ TAO from free TAO and charges what the claim actually used, which can be less\..* That fee is more than the rewards waiting, so claiming now can cost more than it pays/.test(await text(page, "#move-quote")) && (await text(page, "#move-title")).startsWith("Claim root rewards from 5") && (await page.$eval("#move-amount-wrap", (el) => el.hidden)) && !(await page.$eval("#move-go", (b) => b.disabled)), await text(page, "#move-quote"));
+  await clickEl(page, "#move-cancel");
   // The next read compares with this one: make the stored look 0.001 Alpha smaller, as if rewards arrived since.
   await page.evaluate(() => {
     for (const k of Object.keys(localStorage).filter((k) => k.startsWith("soltao.stake.lastlook."))) {
@@ -482,7 +517,7 @@ if (want("F")) {
   });
   await clickEl(page, "#holdings-btn");
   await waitText(page, "#holdings-note", /^Read \d\d:\d\d UTC.*since you last looked|Could not/, 90_000);
-  const changes = await page.$$eval("#holdings-body .holdings-change", (s) => s.map((x) => x.textContent));
+  const changes = await page.$$eval("#holdings-body .holdings-change", (s) => s.map((x) => x.textContent).filter((t) => / since /.test(t)));
   expect("a later read shows what each position gained since the last look, and that it may not all be rewards", changes.length === 2 && changes.every((c) => /^\+0\.001 Alpha since \d\d-\d\d \d\d:\d\d UTC$/.test(c)) && /include rewards and anything added or taken out elsewhere/.test(await text(page, "#holdings-note")), changes.join(" / "));
   // Unstake, then return: offered on an unstake, and priced (sale and bridge fee) before anything is signed.
   await page.$eval("#holdings-body tr:nth-child(3) button", (b) => b.click());

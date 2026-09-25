@@ -4,7 +4,9 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-09-25. **Live in production at `soltao.xyz`, nothing unreleased on `main`.** Latest
+Last updated: 2026-09-25. **Built, not deployed: bug history item 21** (claim root rewards from the
+holdings view, and a subnet's own page at `/stake/?netuid=N`); it needs Craig's go-ahead to deploy. Live
+on `soltao.xyz` at that point: `stake.js?v=3f2ee7a4` (read 25 Sep, after `31cafeb`). An earlier
 deploy (25 Sep, Craig's go-ahead): commit `77a17cb`, `stake.js?v=77617c90` + `return.js?v=a211b567`,
 Solana RPC back on PublicNode after Helius began answering 403 (see "The Solana RPC is PublicNode
 again" below); served on the first poll, `test:live` all passed. Before it, commit `477bde3`, `stake.js?v=cd93f703` + `return.js?v=c15e5834`: **`CONFIG.returnLive` is now true**,
@@ -482,6 +484,39 @@ This is **not** git-push-triggered. Steps, in order, every time:
       the fees are mostly flat. `showShare()` in `app.js`; page-test assertions in runs B and F.
     - *A way in from plain SOL.* A connected wallet with no canonical TAO gets a Jupiter SOL→TAO link
       by mint, the mint's short form to check, and "Check again". Page-test assertion in run A.
+
+21. **Root rewards and subnet pages, 25 Sep 2026 (built, not deployed).** For the Colosseum pitch
+    ("earn staking yield without leaving your Solana wallet"), which was not true for root until this:
+    - *Root rewards are not in the root stake.* On the live runtime (spec 470, read 25 Sep) root
+      dividends accrue as the coldkey's shares of each validator's basket, an escrowed fund of subnet
+      Alpha, and **nothing claims them automatically**: subtensor's `block_step.rs` says "Beta baskets are
+      redeemed on-demand by stakers via `claim_root`; no auto-swap". So a root stake made through soltao
+      earned rewards the page could neither show nor collect. `claim_root_with_hotkey(hotkey)` sells the
+      coldkey's slice and stakes the TAO on root under the same hotkey (`claim_root.rs`, verified). A claim
+      paying under `RootClaimableThreshold(0)` (500,000 rao = 0.0005 TAO, read 25 Sep) is accepted,
+      charged, and pays nothing.
+    - *The holdings view shows and claims them.* `rootRewards()` (`BetaBasketRuntimeApi
+      .get_root_basket_positions`, checked against three real stakers: per-validator payouts match
+      `get_basket_payout`), `rootClaimMinRao()`, `quoteRootClaim()` and `prepareRootClaim()` in
+      `substrate.js`; `runRootClaim()` in `stake_moves.js` (sign, seal, submit, settle like a stake move;
+      outcome judged by the root stake under that hotkey rising). Each root row shows "+ X in rewards to
+      claim" and a Claim button; rewards with a validator the wallet no longer stakes to get their own
+      row; the total counts them; the note says where each kind of yield lands. Under the minimum the
+      Claim is explained and not offered. The claim's fee is large: `paymentInfo` put it at about
+      0.00825 TAO on 25 Sep (its declared weight covers a scan of the whole basket; the chain charges
+      the work actually done, which can be less, per subtensor's `docs/tx/claim-root.mdx`). So the
+      quote warns when the reserved fee is at least the payout. Tests: four cases in `stake_moves.test.mjs`; call shape, basket
+      reads and the minimum in `polkadot.test.mjs` (`test:return:metadata`); page-test run F serves a
+      0.003 TAO basket position and checks the row, the note and the priced Claim (nothing signed).
+    - *Subnet pages.* `/stake/?netuid=N` (optionally `&hotkey=5…`) opens with a card for that subnet:
+      its registered name, symbol, description, website and GitHub (https only, `rel=noopener
+      nofollow`), Alpha price, TAO in its pool, TAO added per day, and the linked validator, all from
+      the directory's SubnetInfo read (shared cache), labelled as the owner's words, not endorsed. The
+      tab title names the subnet. Page-test run E (a subnet 1 link) and run A (no card on the plain page).
+      Not built: a per-subnet "TAO staked through soltao" total. The Solana transaction does not record
+      the netuid (1,184 of 1,232 bytes used, so a memo would barely fit), and the Bittensor side needs an
+      indexer; `evm.taostats.io` answers a Blockscout API, so a counting script over the transit
+      accounts' transactions is the likely route.
 
 ## Link previews and SEO
 

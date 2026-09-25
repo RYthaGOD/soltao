@@ -424,6 +424,50 @@ function renderDirectory() {
   }));
 }
 
+// ── a subnet's own page ─────────────────────────────────────────────────────
+// /stake/?netuid=N opens with that subnet on top: its name, description and links as its owner
+// registered them on-chain, and its pool, from the same SubnetInfo read as the directory (and sharing
+// its cache). None of it is soltao's opinion of the subnet; the steps below are the same for every one.
+const safeLink = (raw) => {
+  const s = (raw || "").trim();
+  if (!s) return null;
+  try { const u = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(s) ? s : `https://${s}`); return u.protocol === "https:" ? u : null; } catch { return null; }
+};
+async function showSubnetCard(netuid, hotkey) {
+  $("subnet-card").hidden = false;
+  $("subnet-card-n").textContent = String(netuid);
+  $("subnet-card-h").textContent = `Subnet ${netuid}`;
+  if (hotkey) { $("subnet-validator").textContent = short(hotkey, 6); $("subnet-validator-row").hidden = false; }
+  note("subnet-note", "reading this subnet from Bittensor…");
+  const blank = () => { for (const id of ["subnet-price", "subnet-pool", "subnet-day"]) $(id).textContent = "—"; };
+  try {
+    if (!directory || Date.now() - directory.at > 5 * 60_000) {
+      const lib = await loadReturnLib();
+      directory = { at: Date.now(), rows: await lib.subnetDirectory() };
+    }
+    const r = directory.rows.find((x) => x.netuid === netuid);
+    if (!r) { blank(); note("subnet-note", `Bittensor has no subnet ${netuid} right now: check the number in the link.`, "bad"); return; }
+    const h = $("subnet-card-h");
+    h.replaceChildren(document.createTextNode(r.name || `Subnet ${netuid}`));
+    if (r.symbol) h.append(Object.assign(document.createElement("span"), { className: "subnet-symbol", textContent: r.symbol }));
+    document.title = `Stake on ${r.name || `subnet ${netuid}`} from your Solana wallet — soltao`;
+    $("subnet-desc").textContent = r.description; $("subnet-desc").hidden = !r.description;
+    $("subnet-price").textContent = r.priceRao === null ? "—" : `${fmtUnits(r.priceRao, 9)} TAO`;
+    $("subnet-pool").textContent = `${fmtUnits(r.taoInRao, 9, 0)} TAO`;
+    $("subnet-day").textContent = r.taoPerBlockRao === null ? "—" : `${fmtUnits(r.taoPerBlockRao * BLOCKS_PER_DAY, 9, 2)} TAO`;
+    const links = [["Website", safeLink(r.url)], ["GitHub", safeLink(r.github)]].filter(([, u]) => u);
+    $("subnet-links").replaceChildren(...links.map(([label, u]) => Object.assign(document.createElement("a"), {
+      href: u.href, textContent: `${label}: ${u.host}${u.pathname === "/" ? "" : u.pathname}`, rel: "noopener noreferrer nofollow", target: "_blank",
+    })));
+    $("subnet-links").hidden = !links.length;
+    const at = new Date(directory.at).toISOString().slice(11, 16);
+    note("subnet-note", `The name, description and links are what this subnet's owner registered on Bittensor, read at ${at} UTC. soltao has not checked them and does not endorse this subnet. Staking here buys its Alpha at the pool price. "TAO added to the pool per day" is the last block's figure times 7,200.${hotkey ? " Step 3 checks that the validator in this link holds a permit on this subnet before anything can be sent." : " Step 3 lists this subnet's validators to choose from."}`);
+  } catch (e) {
+    blank();
+    note("subnet-note", `Could not read this subnet from Bittensor: ${e.message}. The steps below still work.`, "bad");
+  }
+}
+
 // ── the validator picker ────────────────────────────────────────────────────
 // Lists the chosen subnet's validator-permit holders from the metagraph, on request (about 13 reads
 // against a rate-limited RPC, so never on every keystroke). It states its one sort rule and picks
@@ -675,7 +719,12 @@ async function showHoldings() {
   note("holdings-note", `reading ${short(coldkey, 6)} from Bittensor…`);
   try {
     const lib = await loadReturnLib();
-    const [free, positions] = await Promise.all([lib.freeBalance(coldkey), lib.stakePositions(coldkey)]);
+    // Root rewards wait with each validator until claimed (substrate.js, "root rewards"); a failed read
+    // only hides them, it never hides the positions.
+    const [free, positions, rewards, claimMin] = await Promise.all([
+      lib.freeBalance(coldkey), lib.stakePositions(coldkey),
+      lib.rootRewards(coldkey).catch(() => null), lib.rootClaimMinRao().catch(() => 0n),
+    ]);
     // Each subnet's Alpha price once, and dollars if the feed answers; either failing only hides the worth.
     const netuids = [...new Set(positions.map((p) => p.netuid))];
     const [prices, usd] = await Promise.all([
@@ -704,23 +753,50 @@ async function showHoldings() {
       freeActions.append(" ", b);
     }
     freeRow.append(freeActions);
+    const owedBy = new Map((rewards ?? []).map((r) => [r.hotkey, r.payoutRao]));
+    const claimButton = (td, hotkey, payoutRao) => {
+      if (!canMove()) return;
+      const b = Object.assign(document.createElement("button"), { type: "button", textContent: "Claim" });
+      b.addEventListener("click", () => openMove({ kind: "claim", hotkey, payoutRao, minRao: claimMin }));
+      td.append(td.childNodes.length ? " " : "", b);
+    };
+    const rewardNote = (tr, payoutRao) => tr.children[2].append(Object.assign(document.createElement("span"), { className: "holdings-change", textContent: `+ ${tao(payoutRao)} in rewards to claim` }));
+    const rootHotkeys = new Set(positions.filter((p) => p.netuid === 0).map((p) => p.hotkey));
     $("holdings-body").replaceChildren(
       freeRow,
       ...positions.map((p) => {
         const was = before?.pos?.[`${p.netuid}:${p.hotkey}`], worth = worthOf(p);
         const change = was !== undefined && BigInt(was) !== p.stake ? `${signed(p.stake - BigInt(was), p.netuid)} since ${new Date(before.at).toISOString().slice(5, 16).replace("T", " ")} UTC` : "";
         const tr = row(p.netuid === 0 ? "Staked on root" : `Staked on subnet ${p.netuid}`, short(p.hotkey, 6), stakeAmount(p.stake, p.netuid), worth === null ? "—" : `≈ ${tao(worth)}`, change);
-        tr.append(action("Unstake", () => openMove({ kind: "unstake", hotkey: p.hotkey, netuid: p.netuid, max: p.stake })));
+        const td = action("Unstake", () => openMove({ kind: "unstake", hotkey: p.hotkey, netuid: p.netuid, max: p.stake }));
+        const owed = p.netuid === 0 ? owedBy.get(p.hotkey) : undefined;
+        if (owed) { rewardNote(tr, owed); claimButton(td, p.hotkey, owed); }
+        tr.append(td);
+        return tr;
+      }),
+      // Rewards still waiting with a validator this wallet no longer stakes to on root.
+      ...[...owedBy].filter(([hotkey]) => !rootHotkeys.has(hotkey)).map(([hotkey, owed]) => {
+        const tr = row("Root rewards", short(hotkey, 6), "—", `≈ ${tao(owed)}`, "waiting to be claimed");
+        const td = document.createElement("td");
+        claimButton(td, hotkey, owed);
+        tr.append(td);
         return tr;
       }),
     );
     resumeMove();
     resumePay();
     saveLook(coldkey, positions);
-    const worths = positions.map(worthOf), total = worths.includes(null) ? null : worths.reduce((a, w) => a + w, free);
-    const inAll = total === null ? "" : ` Worth about ${tao(total)} in all${usd?.tao ? ` (${fmtUsd((Number(total) / 1e9) * usd.tao)})` : ""}, at each pool's current price.`;
+    const owedTotal = [...owedBy.values()].reduce((a, v) => a + v, 0n);
+    const worths = positions.map(worthOf), total = worths.includes(null) ? null : worths.reduce((a, w) => a + w, free + owedTotal);
+    const inAll = total === null ? "" : ` Worth about ${tao(total)} in all${usd?.tao ? ` (${fmtUsd((Number(total) / 1e9) * usd.tao)})` : ""}, at each pool's current price${owedTotal ? ", counting rewards still to claim" : ""}.`;
     const changed = before && positions.some((p) => { const was = before.pos?.[`${p.netuid}:${p.hotkey}`]; return was !== undefined && BigInt(was) !== p.stake; });
-    note("holdings-note", `Read ${new Date().toISOString().slice(11, 16)} UTC. ${positions.length ? `${positions.length} stake position${positions.length === 1 ? "" : "s"}. Subnet stakes are in that subnet's Alpha, root stakes in TAO.` : "No stake positions."}${inAll}${changed ? " Changes since you last looked here include rewards and anything added or taken out elsewhere." : ""}`);
+    // Where the yield shows: a subnet stake collects it in the stake itself; root rewards wait with the
+    // validator until claimed, and a claim adds them to the root stake.
+    const yieldNote = rewards === null
+      ? (rootHotkeys.size ? " Could not read the root rewards waiting to be claimed; try again in a minute." : "")
+      : owedTotal ? ` Root rewards do not add to the stake on their own: ${tao(owedTotal)} is waiting to be claimed, and "Claim" adds it to your root stake.`
+      : rootHotkeys.size ? " Root rewards wait with the validator until claimed; none is waiting yet." : "";
+    note("holdings-note", `Read ${new Date().toISOString().slice(11, 16)} UTC. ${positions.length ? `${positions.length} stake position${positions.length === 1 ? "" : "s"}. Subnet stakes are in that subnet's Alpha and collect their rewards in the stake itself; root stakes are in TAO.` : "No stake positions."}${yieldNote}${inAll}${changed ? " Changes since you last looked here include rewards and anything added or taken out elsewhere." : ""}`);
   } catch (e) {
     if (seq === holdingsSeq) note("holdings-note", `Could not read it from Bittensor: ${e.message}`, "bad");
   } finally {
@@ -740,6 +816,17 @@ function clearMove(w) { try { localStorage.removeItem(moveKey(w.transitAddress))
 
 let move = null, moveQuoteSeq = 0;
 function openMove(m) {
+  $("move-amount-wrap").hidden = m.kind === "claim";
+  if (m.kind === "claim") {
+    move = m;
+    $("pay-panel").hidden = true; pay = null;
+    $("move-title").textContent = `Claim root rewards from ${short(m.hotkey, 6)}`;
+    $("move-then").checked = false; $("move-then-wrap").hidden = true;
+    $("move-go").textContent = "Claim"; $("move-go").disabled = true; note("move-note", "");
+    $("move-panel").hidden = false;
+    quoteClaim();
+    return;
+  }
   if (m.kind === "stake") {
     // Staking reuses step 3's subnet and validator, which have already passed the on-chain checks.
     if (!state.hotkey || !state.netuidValid || state.netuidChecking) {
@@ -764,8 +851,30 @@ function openMove(m) {
   $("move-panel").hidden = false;
   quoteMove();
 }
+// A claim has no amount: the chain pays the coldkey's whole slice of the validator's basket. Under the
+// chain's minimum it pays nothing and still charges the fee, so it is not offered then.
+async function quoteClaim() {
+  const m = move, seq = ++moveQuoteSeq;
+  if (!m || m.kind !== "claim" || m.resume) return;
+  if (m.minRao && m.payoutRao < m.minRao) {
+    note("move-quote", `About ${tao(m.payoutRao)} is waiting, under the chain's ${tao(m.minRao)} minimum for a claim. A claim now would pay nothing and still cost the fee, so wait until more has built up.`, "warn");
+    return;
+  }
+  note("move-quote", "reading the fee from Bittensor…");
+  try {
+    const lib = await loadReturnLib(), q = await lib.quoteRootClaim(state.signed.wallet.mnemonic, m.hotkey);
+    if (seq !== moveQuoteSeq || move !== m) return;
+    if (q.freeRao < q.feeRao) { note("move-quote", `The Bittensor fee is about ${tao(q.feeRao)}, paid from free TAO, and this wallet has ${tao(q.freeRao)} free.`, "bad"); return; }
+    $("move-go").disabled = state.running;
+    // A claim's fee is reserved for its declared work (it scans the validator's whole basket), so it can
+    // exceed a small payout; the chain charges what the claim actually did, which may be less.
+    const costly = q.feeRao >= m.payoutRao;
+    note("move-quote", `Claims about ${tao(m.payoutRao)} of root rewards and adds it to your root stake with this validator. Bittensor reserves a network fee of about ${tao(q.feeRao)} from free TAO and charges what the claim actually used, which can be less. The exact amount is set when it lands.${costly ? " That fee is more than the rewards waiting, so claiming now can cost more than it pays; letting them build up first is cheaper." : ""} To bring it to Solana afterwards, unstake it with "Then send the freed TAO back to my Solana wallet".`, costly ? "warn" : null);
+  } catch (e) { if (seq === moveQuoteSeq) note("move-quote", `Could not read the fee from Bittensor: ${e.message}`, "bad"); }
+}
 async function quoteMove() {
   if (!move) return;
+  if (move.kind === "claim") return quoteClaim();
   const amt = parseTao($("move-amount").value), seq = ++moveQuoteSeq;
   if (amt === null || amt <= 0n) { note("move-quote", "Enter an amount like 0.5", "bad"); $("move-go").disabled = true; return; }
   if (amt > move.max) { note("move-quote", `More than the ${fmtUnits(move.max, 9)} available${move.kind === "stake" ? ` (${tao(CONFIG.defaultReserveRao)} stays free for fees)` : ""}`, "bad"); $("move-go").disabled = true; return; }
@@ -790,6 +899,15 @@ async function quoteMove() {
 function resumeMove() {
   const saved = state.signed && loadMove(state.signed.wallet);
   if (!saved || !canMove()) return;
+  if (saved.kind === "claim") {
+    move = { kind: "claim", hotkey: saved.hotkey, resume: saved };
+    $("move-amount-wrap").hidden = true; $("move-then").checked = false; $("move-then-wrap").hidden = true;
+    $("move-title").textContent = "An earlier claim did not finish";
+    note("move-quote", "Finishing checks the claim that was already signed and sent; it never signs a second one while that one could still land.", "warn");
+    $("move-go").textContent = "Finish it"; $("move-go").disabled = false; $("move-panel").hidden = false;
+    return;
+  }
+  $("move-amount-wrap").hidden = false;
   move = { kind: saved.kind, hotkey: saved.hotkey, netuid: Number(saved.netuid), max: BigInt(saved.amount), resume: saved };
   $("move-then").checked = Boolean(saved.thenReturn); $("move-then-wrap").hidden = !saved.thenReturn;
   $("move-title").textContent = `An earlier ${saved.kind} did not finish`;
@@ -797,8 +915,30 @@ function resumeMove() {
   note("move-quote", "Finishing checks the transaction that was already signed and sent; it never signs a second one while that one could still land.", "warn");
   $("move-go").textContent = "Finish it"; $("move-go").disabled = false; $("move-panel").hidden = false;
 }
+async function runClaim() {
+  const w = state.signed.wallet, m = move, saved = m.resume ?? null;
+  state.running = true; $("move-go").disabled = true; $("move-cancel").disabled = true; gate();
+  const meta = { kind: "claim", hotkey: m.hotkey };
+  try {
+    const lib = await loadReturnLib();
+    const res = await lib.runRootClaim({
+      mnemonic: w.mnemonic, hotkey: m.hotkey, progress: saved?.progress ?? {},
+      onStep: (_k, s, msg) => note("move-note", msg, s === "bad" ? "warn" : s === "ok" ? "ok" : null),
+      onCheckpoint: (progress) => saveMove(w, { ...meta, progress }),
+    });
+    clearMove(w);
+    if (res.done) note("move-note", `Done: ${tao(res.gained)} of rewards added to your root stake, now ${tao(res.stakeAfter)}. "Unstake" can bring it to Solana.`, "ok");
+    move = null;
+  } catch (e) {
+    note("move-note", `${e.message || e}. Anything already sent is saved, so opening the holdings again continues it.`, "bad");
+  } finally {
+    state.running = false; $("move-cancel").disabled = false; gate();
+    if (move === null) showHoldings().then(() => { $("move-panel").hidden = false; });
+  }
+}
 async function runMove() {
   if (!move || state.running || !canMove()) return;
+  if (move.kind === "claim") return runClaim();
   const w = state.signed.wallet, m = move;
   const saved = m.resume ?? null;
   const amount = saved ? BigInt(saved.amount) : parseTao($("move-amount").value);
@@ -1347,7 +1487,10 @@ function prefillFromLink() {
   const q = new URLSearchParams(location.search);
   const netuid = (q.get("netuid") || "").trim(), hotkey = (q.get("hotkey") || "").trim();
   if (/^\d{1,5}$/.test(netuid)) { $("netuid-in").value = netuid; onNetuid(); }
-  if (/^5[1-9A-HJ-NP-Za-km-z]{47}$/.test(hotkey)) { $("hotkey-in").value = hotkey; if (!netuid || netuid === "0") onHotkey(); }
+  const hotkeyOk = /^5[1-9A-HJ-NP-Za-km-z]{47}$/.test(hotkey);
+  if (hotkeyOk) { $("hotkey-in").value = hotkey; if (!netuid || netuid === "0") onHotkey(); }
+  // A subnet in the link makes this that subnet's page (root has no page of its own).
+  if (/^\d{1,5}$/.test(netuid) && Number(netuid) > 0) showSubnetCard(Number(netuid), hotkeyOk ? hotkey : null);
   // ?chutes=5F… (a Chutes payment address) pre-fills "Top up Chutes" once the user opens it; it is
   // still shown, checked and acknowledged there like a pasted one.
   const chutes = (q.get("chutes") || "").trim();

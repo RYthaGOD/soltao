@@ -1,7 +1,7 @@
 // Stake moves from the coldkey (src/stake_moves.js) against a simulated Substrate account with a
 // transaction pool. Counts moves the chain APPLIED, since the danger is a second one landing.
 
-import { runStakeMove, limitPrice } from "../src/stake_moves.js";
+import { runStakeMove, runRootClaim, limitPrice } from "../src/stake_moves.js";
 import { fitReturnAmount } from "../src/fit.js";
 
 let failures = 0;
@@ -92,6 +92,65 @@ expect("unstake floor and stake ceiling sit 2% either side of the price", limitP
   let m1 = ""; try { await run({ kind: "unstake", netuid: 1, amount: 900_000_000n }, {}); } catch (e) { m1 = e.message; }
   let m2 = ""; try { await run({ kind: "stake", netuid: 1, amount: 9_000_000_000n }, {}); } catch (e) { m2 = e.message; }
   expect("more than the position, or more than the free TAO, is refused before signing", /more than this position/.test(m1) && /more free TAO/.test(m2), `${m1} | ${m2}`);
+}
+
+// ── root rewards: a claim pays the coldkey's slice of the validator's basket into its root stake ──
+function claimChain({ rootStake = 100_000_000n, owed = 2_000_000n, minRao = 500_000n } = {}) {
+  const s = { rootStake, owed, free: 50_000_000n, nonce: 0n, pool: new Map(), signed: new Map(), applied: 0, autoInclude: true, crashAfterSubmit: false };
+  const include = () => {
+    for (const [k, tx] of [...s.pool]) {
+      s.pool.delete(k);
+      if (tx.nonce !== s.nonce) continue;
+      s.nonce++; s.free -= FEE;
+      if (s.owed < minRao) continue; // under the chain's minimum: accepted, charged, pays nothing
+      s.rootStake += s.owed; s.owed = 0n; s.applied++;
+    }
+  };
+  const ops = {
+    signerAddress: () => "5Cold",
+    stakeOf: async (_c, _h, n) => (Number(n) === 0 ? s.rootStake : 0n),
+    rootPayout: async () => s.owed,
+    prepareClaim: async () => {
+      const key = `claim-${s.signed.size}`;
+      s.signed.set(key, { key, nonce: s.nonce });
+      return { id: `0x${key}`, signed: key, nonce: String(s.nonce), address: "5Cold" };
+    },
+    submit: async (signed) => {
+      const tx = s.signed.get(signed);
+      if (tx.nonce < s.nonce) return { state: "rejected", reason: "outdated" };
+      s.pool.set(signed, tx);
+      if (s.crashAfterSubmit) { s.crashAfterSubmit = false; throw new Error("page closed after submitting"); }
+      if (s.autoInclude) include();
+      return { state: "submitted" };
+    },
+    coldkeyNonce: async () => { if (s.autoInclude) include(); return s.nonce; },
+  };
+  let last = {};
+  const run = (progress = last) => runRootClaim({ mnemonic: "words", hotkey: "5Hot", progress, ops, waitMs: 0, pollMs: 0, onCheckpoint: (p) => { last = JSON.parse(JSON.stringify(p)); } });
+  return { s, run };
+}
+{
+  const { s, run } = claimChain();
+  const r = await run({});
+  expect("a root claim lands once and adds the rewards to the root stake", r.done && s.applied === 1 && r.gained === 2_000_000n && s.rootStake === 102_000_000n, `gained ${r.gained}, root ${s.rootStake}`);
+}
+{
+  const { s, run } = claimChain();
+  s.autoInclude = false; s.crashAfterSubmit = true;
+  let threw = false; try { await run({}); } catch { threw = true; }
+  s.autoInclude = true;
+  const r = await run();
+  expect("a claim resumed after the page closed settles the same extrinsic and never signs a second", threw && r.done && s.applied === 1 && s.signed.size === 1, `signed ${s.signed.size}, applied ${s.applied}`);
+}
+{
+  const { s, run } = claimChain({ owed: 100_000n });
+  const r = await run({});
+  expect("a claim under the chain's minimum is reported as paying nothing", r.refused && !r.done && s.applied === 0 && s.rootStake === 100_000_000n);
+}
+{
+  const { s, run } = claimChain({ owed: 0n });
+  let m = ""; try { await run({}); } catch (e) { m = e.message; }
+  expect("nothing waiting: refused before anything is signed", /no root rewards/.test(m) && s.signed.size === 0, m);
 }
 
 // ── unstake, then return: how much of the freed TAO fits after the return's own costs ──

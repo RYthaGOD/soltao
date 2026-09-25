@@ -27,7 +27,7 @@
 <link rel="apple-touch-icon" href="../logo.png">
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="stake.css">
-<script src="stake.js?v=3f2ee7a4" defer></script>
+<script src="stake.js?v=d20813dc" defer></script>
 </head>
 <body>
 <a class="skip" href="#steps">Skip to the steps</a>
@@ -80,6 +80,23 @@
     disclosure below). Your keys are made and kept in this browser and never sent to them, and there is no
     soltao contract holding funds. You do trust this page's code, which is open source. Its only charge is a
     flat SOL fee, shown in step 4 before you sign.</p></div></details>
+  </div>
+</section>
+
+<!-- A subnet's own page: /stake/?netuid=N (and optionally &hotkey=5…) opens with this card on top. -->
+<section class="wrap subnet-card" id="subnet-card" aria-labelledby="subnet-card-h" hidden>
+  <div class="panel subnet-card-in">
+    <p class="eyebrow"><span class="eyebrow-n" id="subnet-card-n"></span>Stake on this subnet from your Solana wallet</p>
+    <h2 id="subnet-card-h"></h2>
+    <p class="subnet-desc" id="subnet-desc" hidden></p>
+    <dl class="kv subnet-kv">
+      <div><dt>Alpha price</dt><dd class="num" id="subnet-price"><span class="skel"></span></dd></div>
+      <div><dt>TAO in its pool</dt><dd class="num" id="subnet-pool"><span class="skel"></span></dd></div>
+      <div><dt>TAO added to the pool per day</dt><dd class="num" id="subnet-day"><span class="skel"></span></dd></div>
+      <div id="subnet-validator-row" hidden><dt>Validator in this link</dt><dd class="num" id="subnet-validator"></dd></div>
+    </dl>
+    <p class="subnet-links" id="subnet-links" hidden></p>
+    <p class="step-note" id="subnet-note" role="status"></p>
   </div>
 </section>
 
@@ -221,7 +238,7 @@
           </div>
           <div class="move-panel" id="move-panel" hidden>
             <h3 id="move-title"></h3>
-            <label class="field field-sm">
+            <label class="field field-sm" id="move-amount-wrap">
               <span id="move-amount-label">Amount</span>
               <span class="field-row">
                 <input type="text" id="move-amount" inputmode="decimal" autocomplete="off">

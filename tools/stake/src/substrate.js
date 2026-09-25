@@ -146,8 +146,8 @@ export function prepareStakeMove(mnemonic, { kind, hotkey, netuid, amount, limit
  * Every subnet, from the chain's own SubnetInfo runtime API (getAllDynamicInfo, one read-only call, ~50
  * KB): netuid, name and symbol (the owner's on-chain identity, as registered), the pool's reserves, and
  * the spot price those reserves imply (TAO in / Alpha in, rao per Alpha), which is how the pool prices
- * a swap, and the TAO the chain injected into the pool in the last block (taoInEmission, rao per
- * block). Root (netuid 0) has no pool.
+ * a swap, the TAO the chain injected into the pool in the last block (taoInEmission, rao per
+ * block), and the website and GitHub the owner registered. Root (netuid 0) has no pool.
  */
 export async function subnetDirectory() {
   const api = await getApi();
@@ -169,6 +169,8 @@ export async function subnetDirectory() {
       name: netuid === 0 ? "Root" : text(d.subnetName) || (identity ? text(identity.subnetName) : ""),
       symbol: text(d.tokenSymbol),
       description: identity ? text(identity.description) : "",
+      url: identity ? text(identity.subnetUrl) : "",
+      github: identity ? text(identity.githubRepo) : "",
       taoInRao: taoIn,
       taoPerBlockRao: d.taoInEmission === undefined ? null : BigInt(d.taoInEmission.toString()),
       priceRao: netuid === 0 ? 1_000_000_000n : alphaIn > 0n ? (taoIn * 1_000_000_000n) / alphaIn : null,
@@ -186,6 +188,50 @@ export async function alphaPriceRao(netuid) {
 /** The stake one coldkey holds under one hotkey on one netuid (rao on root, Alpha units elsewhere). */
 export async function stakeOf(coldkey, hotkey, netuid) {
   return (await stakePositions(coldkey)).filter((p) => p.hotkey === hotkey && p.netuid === Number(netuid)).reduce((a, p) => a + p.stake, 0n);
+}
+
+// ── root rewards ─────────────────────────────────────────────────────────────
+// Since the basket runtime (spec 470 on 25 Sep 2026), root dividends do not land in the root stake. They
+// accrue as the coldkey's shares of each validator's basket, an escrowed fund of subnet Alpha, and wait
+// there until the coldkey claims them: `claim_root_with_hotkey` sells the coldkey's slice and stakes the
+// TAO on root under that same validator (pallets/subtensor/src/staking/claim_root.rs). Nothing claims
+// automatically ("Beta baskets are redeemed on-demand by stakers via `claim_root`; no auto-swap").
+
+/** Root rewards waiting to be claimed, per validator: [{ hotkey, payoutRao }], what a claim would pay now. */
+export async function rootRewards(address) {
+  const api = await getApi();
+  const rows = await api.call.betaBasketRuntimeApi.getRootBasketPositions(address);
+  return rows.map(([hotkey, , payout]) => ({ hotkey: hotkey.toString(), payoutRao: BigInt(payout.toString()) }))
+    .filter((r) => r.payoutRao > 0n)
+    .sort((a, b) => (b.payoutRao > a.payoutRao ? 1 : -1));
+}
+
+/** What claiming one validator's root rewards would pay now, in rao. */
+export async function rootPayout(coldkey, hotkey) {
+  const api = await getApi();
+  return BigInt((await api.call.betaBasketRuntimeApi.getBasketPayout(hotkey, coldkey)).toString());
+}
+
+/** The chain's minimum root claim, in rao. A claim that would pay less is accepted, charged, and pays nothing. */
+export async function rootClaimMinRao() {
+  const api = await getApi();
+  const v = await api.query.subtensorModule.rootClaimableThreshold(0);
+  return BigInt((v.bits ?? v).toString()) >> 32n; // I96F32 fixed point: 32 fractional bits
+}
+
+/** A root claim for one validator, signed and not sent: { id, signed, nonce, address }. */
+export const prepareRootClaim = (mnemonic, hotkey) =>
+  prepareCall(mnemonic, (api) => api.tx.subtensorModule.claimRootWithHotkey(hotkey));
+
+/** Read-only: the network fee for that claim, and the coldkey's free TAO, which has to cover it. */
+export async function quoteRootClaim(mnemonic, hotkey) {
+  const api = await getApi();
+  const { address } = coldkeySigner(mnemonic);
+  const [payment, account] = await Promise.all([
+    api.tx.subtensorModule.claimRootWithHotkey(hotkey).paymentInfo(address),
+    api.query.system.account(address),
+  ]);
+  return { feeRao: payment.partialFee.toBigInt(), freeRao: account.data.free.toBigInt() };
 }
 
 /** Submits signed bytes. "Already imported" means it is in the pool: pending, not an error. */
