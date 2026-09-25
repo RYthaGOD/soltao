@@ -25,8 +25,12 @@ server {
 
     # The registry is the one file that must not go stale behind a cache.
     location = /pairs.json { expires 1m;  }
-    location = /index.html { expires 5m;  }
-    location = /            { expires 5m; try_files /index.html =404; }
+    # soltao.xyz opens the stake page; the board lives at /board/. index.html is the same hop for hosts
+    # that cannot redirect.
+    location = /            { return 302 /stake/$is_args$args; }
+    location = /index.html  { expires 5m; }
+    location = /board       { return 301 /board/$is_args$args; }
+    location = /board/      { expires 5m; try_files /board/index.html =404; }
 
     # The stake page's HTML names its script by content hash (stake.js?v=<hash>), so the HTML must stay
     # fresh and the script can be kept for good: a new build is always a new URL.

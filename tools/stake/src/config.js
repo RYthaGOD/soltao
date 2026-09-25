@@ -59,6 +59,11 @@ export const CONFIG = {
   // sign-in on localhost, so that run has to happen on the live page).
   returnLive: true,
 
+  // "Top up Chutes" in the holdings view (src/payments.js): free TAO from the coldkey to a pasted
+  // Chutes payment address. Off in production until one small real-funds top-up has been credited by
+  // Chutes; local hosts open it for testing.
+  chutesLive: false,
+
   // Kept unstaked in the user's wallet so they can pay for their own unstake later.
   defaultReserveRao: 10_000_000n, // 0.01 TAO
   // Subtensor's nominator minimum; smaller stakes can be swept back to free balance.

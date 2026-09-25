@@ -19,7 +19,8 @@ build. See "/stake/" below.) Market data comes from the keyless
 cached in `localStorage` for 30 seconds.
 
 ```
-index.html     layout and copy; the canonical mint is hardcoded here, not fetched
+index.html     soltao.xyz's front door: forwards to /stake/ (nginx redirects "/" itself; this covers static hosts)
+board/index.html  the board: layout and copy; the canonical mint is hardcoded here, not fetched
 styles.css     design tokens and layout
 app.js         fetch, cache, number formatting, rendering, the address checker
 pairs.json     the curated registry — the only file you edit to keep the site current
@@ -36,12 +37,12 @@ tools/stake/   source, build and tests for stake/stake.js
 ### Why the mint is hardcoded
 
 The one fact this site exists to deliver must survive a dead API, a failed `pairs.json`
-fetch, and JavaScript being off entirely. It is written into `index.html` in three places and
+fetch, and JavaScript being off entirely. It is written into `board/index.html` in three places and
 repeated in the `<noscript>` block. Live numbers degrade; the address does not.
 
 The same reasoning covers the look-alike list and the deepest TAO-quoted coin, which are
 rendered from `pairs.json` at runtime and would otherwise leave two empty containers to a
-reader with JavaScript off. They are written into `index.html` as static markup between
+reader with JavaScript off. They are written into `board/index.html` as static markup between
 `<!-- fallback:notThis -->` and `<!-- fallback:pairs -->` markers, and `app.js` replaces them
 once it has live data. Static copy drifts, so it is generated rather than typed:
 
@@ -110,7 +111,7 @@ there too.
 
 **Every host serves `rel="canonical"` and the OG tags pointing at `soltao.xyz`**, so the
 mirrors do not compete with the primary in search or on social. That is six absolute URLs in
-total — `link rel="canonical"`, `og:url`, `og:image` and `twitter:image` in `index.html`, the
+total — `link rel="canonical"`, `og:url`, `og:image` and `twitter:image` in `board/index.html`, the
 `Sitemap:` line in `robots.txt`, and `<loc>` in `sitemap.xml`. If the home domain ever moves,
 change all six together or the mirrors start competing with each other.
 

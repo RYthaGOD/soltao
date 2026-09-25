@@ -87,6 +87,9 @@ main "Solana TAO Board" page which stays no-wallet-connect).
   or `CONFIG.returnLive`, which is false), so production cannot reach them.
 - `tools/stake/src/stake_moves.js` + `src/settle.js` — unstake / re-stake from the coldkey (item 13)
   and the shared settling of a signed coldkey extrinsic.
+- `tools/stake/src/payments.js` — "Top up Chutes" (item 18): free TAO from the coldkey to a pasted
+  Chutes payment address, signed, sealed (label "chutes-pay") and settled like a stake move. Gated by
+  `CONFIG.chutesLive` (false) on soltao.xyz; open on local hosts.
 - `tools/stake/src/prices.js` — display-only USD prices from Dexscreener for the review.
 - `tools/stake/src/fit.js` — how much of an unstake's freed TAO a chained return can send (item 15).
 - `tools/stake/usage.mjs` — `npm run usage`: completed routes counted on-chain from the fee wallet.
@@ -399,6 +402,65 @@ This is **not** git-push-triggered. Steps, in order, every time:
     Solana tx `2aC7Uv8A…` at 10:32:27 UTC, about 3 minutes 15 seconds later: the TAO account went from
     0.030002593 to 0.032502593, exactly the amount. The existing token account was used, so the
     first-time rent path is still unobserved. Still to do with real funds: unstake / stake moves.
+
+18. **Top up Chutes (subnet 64) from the holdings view, 24 Sep 2026, built, not deployed, gated off
+    in production (`CONFIG.chutesLive: false`).** Partnership groundwork (`docs/subnet-partnerships.md`).
+    Free TAO in the derived coldkey gets a "Top up Chutes" action beside "Stake": paste the account's
+    Chutes payment address (or arrive with `?chutes=5…`, which only pre-fills it), enter an amount,
+    tick an acknowledgement, send. It is a `balances.transferAllowDeath` from the coldkey, batched with
+    the tag below (`runPayment()` in `src/payments.js`, through `prepareCall`/`settleSigned`), never part of the
+    route, so the route's own rule (it pays only the user's coldkey) is unchanged.
+    - *What Chutes does with it* (read in `chutesai/chutes-api` at `3b5609f`, 3 Sep 2026): its payment
+      watcher credits a `Balances.Transfer` to a user's payment address at the TAO price of that block
+      and ignores anything under 0.01 TAO as dust (`DUST_THRESHOLD_RAO`), so the page refuses less.
+      Its autostaker then stakes the TAO into SN64 and burns the Alpha. Chutes' own setup text: "The
+      payment address accepts both TAO and subnet alpha tokens to top up your balance."
+    - *The "via soltao" tag (added the same day):* each top-up is one `utility.batchAll` of the
+      transfer and `system.remarkWithEvent("soltao.xyz:chutes-topup:v1")`, all or nothing
+      (`paymentCall()`), so top-ups through soltao can be counted from the chain alone. Every one emits
+      `System.Remarked` with hash `0x0f0d95b0ed710d56d26bcf41bea776f5ca2dee9f4de60b0995538a30fb321cc4`
+      (blake2-256 of the tag; the runtime's `Hashing` is `BlakeTwo256`). The live runtime allows
+      `batch_all` of these calls (it only refuses nested batches, `NoNestingCallFilter`, subtensor
+      `923fd1f`). Chutes' watcher reads every event in the block, so the transfer inside the batch is
+      credited as before. **Confirm on the real-funds run**: Chutes credits it, and the extrinsic
+      shows the remark.
+    - *Counting them:* `npm run usage:chutes -- --from <block>` (`chutes_usage.mjs`, read-only). It
+      reads each block's raw `System.Events` in batched JSON-RPC calls (50 blocks a call), searches
+      the bytes for the tag hash, and decodes only matching blocks (`src/topups.js`: the Remarked
+      event, the Transfer from the same sender in the same extrinsic, ExtrinsicSuccess). Totals count
+      completed top-ups at or above 0.01 TAO, with payer wallets and Chutes accounts. Progress and
+      finds are kept in `tools/stake/.chutes-usage.json` (gitignored), so later runs read only new
+      blocks; the first run needs `--from`, the block the feature went live at. Defaults to
+      `https://archive.chain.opentensor.ai`, since old blocks' events need an archive node (the lite
+      node prunes them); `--rpc` overrides. Waits out 429s. Tests: `test/topups.test.mjs` (in
+      `npm test`). **Never run against a real node yet** (the building session had no network): the
+      first real run should be checked against the real-funds top-up's block.
+    - *Checks:* SS58 with checksum, not the wallet's own address, at least 0.01 TAO, at most the free
+      balance less the 0.01 TAO reserve, and the live network fee must fit. The page cannot know an
+      address is Chutes'; it says so, and the send button stays shut until that is acknowledged.
+    - *Tests:* `test/payments.test.mjs` (in `npm test`; resumes never pay twice, pending transfers are
+      finished not re-signed, dust/over-balance/own-address refused before signing, a failed dispatch
+      is reported as not made). `test/page.test.mjs` run F now covers the panel up to an enabled
+      send (not confirmed). The page test was first run on 25 Sep 2026, when this merged into
+      `main`: runs A–E passed, and run F (28 checks, the panel included) passed after its payee
+      address was corrected (it had copied `derive.test`'s deliberate checksum typo, `…KutQZ`).
+    - *Before `chutesLive: true`:* one small real-funds top-up (≥0.01 TAO, say 0.02) to a real Chutes
+      account from the live page, confirming Chutes credits it, with Craig's approval. Then flip the
+      flag, build, deploy.
+
+19. **Staking is the front page; plainer wording (24 Sep 2026, not deployed).** After the product roast
+    ("the product is hidden behind a warning"): `soltao.xyz/` now answers 302 → `/stake/` (nginx
+    `location = /`; `_redirects` for Cloudflare/Netlify; the root `index.html` is a meta-refresh fallback
+    for GitHub Pages), and the board moved to `/board/` (`board/index.html`, assets via `../`, `app.js`
+    fetches `pairs.json` relative to itself, `tools/fallback.js` and the Dockerfile follow it, canonical
+    and `og:url` now `/board/`). The stake page itself did not move, so its relative asset paths and the
+    SIWS message (`uri: https://soltao.xyz/stake/`, unchanged) are untouched: **every user's derived
+    wallet is the same as before.** Copy: each step says one short thing; the long explanations are kept,
+    lightly reworded in places, behind `<details class="info">` toggles (an "i" icon, native HTML, no script), and
+    the trust section is collapsed. Every element id is unchanged. Checked: the real nginx config serves
+    `/` 302 (query kept), `/board` 301, `/board/`, `/stake/`, `/pairs.json` 200; headless loads of
+    `/`, `/stake/` (desktop and phone) and `/board/` show no errors, and the board loads `pairs.json`.
+    `test/live.test.mjs` now checks the redirect and the board at `/board/`.
 
 ## Link previews and SEO
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Regenerates the no-JavaScript fallback markup in index.html from pairs.json.
+/* Regenerates the no-JavaScript fallback markup in board/index.html from pairs.json.
 
    The page renders the look-alike list and the TAO-quoted book from pairs.json
    at runtime. With JavaScript off — or with a failed registry fetch — those two
@@ -22,7 +22,7 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
-const HTML = path.join(ROOT, 'index.html');
+const HTML = path.join(ROOT, 'board', 'index.html');
 const REG = path.join(ROOT, 'pairs.json');
 const DASH = '—';
 
