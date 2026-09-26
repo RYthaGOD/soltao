@@ -146,6 +146,7 @@ if (want("A")) {
   expect("connect shows the wallet and a TAO balance", (await text(page, "#tao-balance")) === "0 TAO", await text(page, "#tao-balance"));
   const swap = await page.$eval("#connect-note a", (a) => a.href).catch(() => "");
   expect("a wallet with no TAO is pointed at a SOL→canonical TAO swap, by mint", swap === `https://jup.ag/swap/So11111111111111111111111111111111111111112-${CONFIG.taoMint}` && /Check again/.test(await text(page, "#connect-note")), swap);
+  expect("…and told how much it needs to stake, before buying", /To stake, you need at least 0\.0\d+ TAO/.test(await text(page, "#connect-note")), await text(page, "#connect-note"));
 
   await page.click("#derive");
   await waitText(page, "#coldkey-out", /^5/);
@@ -226,6 +227,8 @@ if (want("B")) {
   await page.waitForFunction(() => document.querySelector("#derive")?.textContent === "Signed", { timeout: 60_000 });
   expect("an empty transit account shows no unfinished route", await hidden(page, "#resume"));
   await clickEl(page, "#phrase-ack");
+  await waitText(page, "#amount-hint", /Staking needs/, 30_000);
+  expect("step 3 states the staking minimum before an amount is typed", /^Staking needs at least 0\.0\d+ TAO( \(about \$[\d.,]+\))? at today's gas price\. Less can only be delivered unstaked\.$/.test(await text(page, "#amount-hint")), await text(page, "#amount-hint"));
 
   await page.type("#amount", "0.03");
   await page.waitForFunction(() => /Staking needs at least/.test(document.querySelector("#amount-note")?.textContent || ""), { timeout: 30_000 });
@@ -310,6 +313,20 @@ if (want("C")) {
   await clickEl(page, "#review-ack-check");
   await page.waitForFunction(() => !document.querySelector("#sign").disabled, { timeout: 30_000 });
   expect("sign is enabled for a funded wallet once live", true);
+
+  // A tiny delivery: the flat fees are most of it, so signing waits for an explicit acknowledgement.
+  await page.$eval("#amount", (el) => { el.value = ""; });
+  await page.type("#amount", "0.01");
+  await page.waitForFunction(() => !document.querySelector("#share-ack-box").hidden || /price feed unavailable/.test(document.querySelector("#r-usd").textContent), { timeout: 60_000 });
+  const tiny = { share: await text(page, "#r-share"), note: await text(page, "#share-note"), tone: await attr(page, "#share-note", "data-tone"), sign: await page.$eval("#sign", (b) => b.disabled) };
+  expect("fees over 25% of the amount are stated in money, with the amount where they fall under 10%, and signing stays shut", !(await hidden(page, "#share-ack-box")) && tiny.tone === "bad" && /^Fees would take about \d+% of this amount: about \$[\d.,]+ in fees to move \$[\d.,]+\. From about [\d.]+ TAO, the same fees would be under 10%\.$/.test(tiny.note) && tiny.sign, `${tiny.share} · ${tiny.note}`);
+  await clickEl(page, "#share-ack");
+  await page.waitForFunction(() => !document.querySelector("#sign").disabled, { timeout: 30_000 }).catch(() => {});
+  expect("…and opens once those fees are accepted", !(await page.$eval("#sign", (b) => b.disabled)));
+  await page.$eval("#amount", (el) => { el.value = ""; });
+  await page.type("#amount", "0.1");
+  await page.waitForFunction(() => document.querySelector("#share-ack-box").hidden && !document.querySelector("#sign").disabled, { timeout: 60_000 }).catch(() => {});
+  expect("a larger amount needs no such acknowledgement", (await hidden(page, "#share-ack-box")) && !(await page.$eval("#sign", (b) => b.disabled)), await text(page, "#r-share"));
 
   await clickEl(page, "#sign");
   await page.waitForFunction(() => window.__sent || /failed|Could not/i.test(document.querySelector("#sign-note")?.textContent || ""), { timeout: 90_000 });
@@ -541,6 +558,9 @@ if (want("F")) {
   expect("…from the free TAO, keeping 0.01 TAO for fees", (await text(page, "#move-title")).startsWith("Stake free TAO on subnet 1 to 5HCFWv") && (await page.$eval("#move-amount", (el) => el.value)) === "1.99", await page.$eval("#move-amount", (el) => el.value));
   await setFieldE(page, "#move-amount", "3");
   expect("…and refuses more than that", /More than the 1\.99 available/.test(await text(page, "#move-quote")) && (await page.$eval("#move-go", (b) => b.disabled)), await text(page, "#move-quote"));
+  await setFieldE(page, "#move-amount", "0.01");
+  await waitText(page, "#move-quote", /Staking needs at least|Buys about|Stakes/, 30_000);
+  expect("…and less than the staking minimum", /^Staking needs at least 0\.02 TAO\.$/.test(await text(page, "#move-quote")) && (await page.$eval("#move-go", (b) => b.disabled)), await text(page, "#move-quote"));
   await clickEl(page, "#move-cancel");
   // Top up Chutes (not confirmed: nothing is signed or sent).
   await page.$eval("#holdings-body tr:first-child button:nth-of-type(2)", (b) => b.click());

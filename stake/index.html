@@ -27,7 +27,7 @@
 <link rel="apple-touch-icon" href="../logo.png">
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="stake.css">
-<script src="stake.js?v=35871e5e" defer></script>
+<script src="stake.js?v=9ee0e7dc" defer></script>
 </head>
 <body>
 <a class="skip" href="#steps">Skip to the steps</a>
@@ -308,6 +308,7 @@
       </span>
     </label>
     <span class="step-note" id="amount-note" role="status"></span>
+    <p class="step-note amount-hint" id="amount-hint"></p>
 
     <fieldset class="choice dir-fwd">
       <legend class="sr">On arrival</legend>
@@ -399,6 +400,10 @@
       <div class="kv-total dir-rev" hidden><dt>Arrives in your Solana wallet</dt><dd class="num" id="r-receive">—</dd></div>
     </dl>
     <p class="step-note" id="share-note" role="status"></p>
+    <label class="ack" id="share-ack-box" hidden>
+      <input type="checkbox" id="share-ack">
+      <span id="share-ack-text">I accept these fees.</span>
+    </label>
     <details class="info"><summary><span class="info-i" aria-hidden="true">i</span><span class="info-l">About these fees</span></summary><div class="info-body"><p class="dir-fwd">The bridge fee (LayerZero's) includes 0.001 TAO dropped on your transit account to pay for its first
       Bittensor transaction; what it does not use comes back to you. The Solana network fee is added by
       your wallet. The transaction is simulated against mainnet before your wallet asks you to sign.</p>

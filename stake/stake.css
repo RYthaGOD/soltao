@@ -46,6 +46,9 @@
 .step-note[data-tone="bad"] { color: var(--red); }
 .step-note[data-tone="warn"] { color: var(--amber-txt); }
 .step-note a { color: var(--green-txt); }
+.amount-hint { margin: 6px 0 0; }
+.amount-hint:empty { display: none; }
+#share-ack-box { margin: 4px 0 12px; }
 
 .kv { margin: 14px 0 0; display: grid; gap: 8px; }
 .kv > div { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; border-bottom: 1px solid var(--line); padding-bottom: 9px; }

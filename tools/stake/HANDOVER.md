@@ -548,6 +548,39 @@ This is **not** git-push-triggered. Steps, in order, every time:
       but the actual proof is a live stake move or Chutes top-up settling through this path). Do that
       alongside the next real-funds test.
 
+23. **The first route from a new wallet fell under the staking minimum, 25-26 Sep 2026 (built, not
+    deployed).** At 15:12 UTC on 25 Sep, `GfoFSMtQ3oYbY529swRJ84KdGhesC84VKfCRRySFXFP9` (not one of
+    Craig's two known wallets; ownership unconfirmed) bought TAO on Jupiter at 15:08 and sent 0.01661 TAO
+    (about $5.02) with "Just deliver it": Solana `2iWArJQT…`, LayerZero delivered at 15:13, transit
+    `0xc3e0f4f1…64c2` unwrapped (nonce 0) and swept with `transferAll(coldkey, true)` (nonce 1, the
+    first real-chain run of item 20's keep-alive sweep). Coldkey `5D5CVnJdhiBFPuZcmPWGUdM4DAs4pRQ9BoSgGrYPQuZtXVbK`
+    holds 0.017198 TAO free, no stake. It paid about $2.25 of fees (45%). The staking minimum (about
+    0.044 TAO) only appeared after an amount was typed. `npm run usage` now counts 4 routes from 3 wallets.
+    Craig (26 Sep): GfoFSM is **not his**; it belongs to someone he has been talking to, and he sent
+    them the funds to use the route (at least 0.033 SOL from `3hfdqA…` at 02:16 UTC on 26 Sep;
+    `5PsB7jYt…` also sent 0.03 TAO and 0.05 SOL at 01:35). So this is the first route by someone other
+    than Craig, but a hand-held, Craig-funded one: evidence that another person can complete the flow,
+    not of demand or of anyone paying their own way. By 02:20 GfoFSM held 0.040509 TAO, just under the
+    0.044 minimum at the default 0.01 reserve; no second route had landed.
+    Craig also tried to stake and ran into not having enough. Fixed:
+    - *The minimum up front.* `stakeMinRao()` (the route's `minStakeAmount` at today's gas price and the
+      reserve on screen). Connecting a wallet with no TAO now says how much staking needs (with USD) next
+      to the Jupiter link; a wallet holding less than that is told so, with the link and "Check again";
+      step 3 states it (`#amount-hint`) before anything is typed. The gas price is read on connect for this.
+    - *A stronger fee warning.* `showShare()` now says the fees and the amount in money (forward) or TAO
+      (return), and from what amount the same fees fall under 10%. From 25% (`SHARE_ACK_PCT`) it turns
+      red and signing stays shut until "I accept fees of about N% of what I send" is ticked, which holds
+      only for that exact amount (`state.shareAckAmount`); `send()` refuses while it is not. The forward
+      quote now awaits the prices before it opens signing. A failed price feed does not block.
+    - *Small balances in the holdings view.* Free TAO under 0.03 (0.02 to stake plus 0.01 kept for fees)
+      gets a line saying what staking here needs, that later routes land in the same wallet, and that it
+      can go back to Solana. A holdings stake under 0.02 TAO is now refused before signing (it was not).
+    - `minStakeRao`'s comment corrected: the chain's `NominatorMinRequiredStake` read 0.01 TAO on 26 Sep,
+      so 0.02 is twice it, not equal to it.
+    - Tests: page-test runs A (the minimum in the no-TAO note), B (the step 3 hint), C (0.01 TAO: 73%,
+      signing shut, opens on accepting, 0.1 TAO needs nothing), F (a holdings stake under 0.02 refused).
+      The small-free holdings line has no page test (run F's wallet holds 2 TAO).
+
 ## Link previews and SEO
 
 `index.html` and `stake/index.html` each carry their own `og:`/`twitter:` block; they are hand-

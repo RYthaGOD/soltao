@@ -29,7 +29,19 @@ const state = {
   running: false, unfinished: null, transitRead: false, direction: "forward",
   chutesPrefill: null, // a Chutes payment address from a ?chutes= link
   ret: { free: null, quote: null }, // the return direction: coldkey free TAO (rao), the current quote
+  shareBlocks: false, shareAckAmount: null, // fees too large a share of the amount, until acknowledged for that amount
 };
+// The last USD prices read, for hints that should not wait on the feed; display only.
+let lastUsd = null;
+const readUsd = () => usdPrices().then((p) => { if (p) lastUsd = p; return p; }).catch(() => null);
+
+/** The smallest amount that still stakes, at today's gas price and the reserve on screen (default if unreadable). */
+function stakeMinRao() {
+  if (state.gasPrice === null) return null;
+  return minStakeAmount({ reserveRao: state.reserveRao >= 0n ? state.reserveRao : CONFIG.defaultReserveRao, gasPriceWei: state.gasPrice });
+}
+const usdOf = (rao) => (lastUsd?.tao ? ` (about ${fmtUsd((Number(rao) / 1e9) * lastUsd.tao)})` : "");
+const jupiterLink = () => link(`https://jup.ag/swap/So11111111111111111111111111111111111111112-${CONFIG.taoMint}`, "Swap SOL for it on Jupiter ↗");
 
 // ── formatting ──────────────────────────────────────────────────────────────
 function fmtUnits(value, decimals, maxFrac = 6) {
@@ -127,6 +139,11 @@ async function refreshBalances() {
     clients.connection.getBalance(new PublicKey(state.user)).then(BigInt).catch(() => null),
   ]);
   state.taoLd = taoBal ?? 0n; state.lamports = lamports ?? 0n;
+  // The staking minimum depends on Bittensor's gas price; read it now so the note below can state it.
+  if (state.gasPrice === null) state.gasPrice = await getGasPrice().catch(() => null);
+  await readUsd();
+  const min = stakeMinRao();
+  const minText = min === null ? "" : `To stake, you need at least ${tao(min)}${usdOf(min)} of it, plus some SOL for fees (step 4 shows them before you sign). Less can only be delivered unstaked. `;
   $("tao-balance").textContent = taoBal === null ? "unavailable" : tao(taoBal);
   $("sol-balance").textContent = lamports === null ? "unavailable" : sol(lamports);
   if (taoBal === null) note("connect-note", "Could not read your TAO balance from Solana. Try again in a moment.", "bad");
@@ -135,9 +152,16 @@ async function refreshBalances() {
     const again = Object.assign(document.createElement("button"), { type: "button", className: "btn btn-ghost btn-sm", textContent: "Check again" });
     again.addEventListener("click", () => { again.disabled = true; refreshBalances(); });
     noteHtml("connect-note", [
-      text("This wallet holds no canonical Solana TAO yet. "),
-      link(`https://jup.ag/swap/So11111111111111111111111111111111111111112-${CONFIG.taoMint}`, "Swap SOL for it on Jupiter ↗"),
+      text(`This wallet holds no canonical Solana TAO yet. ${minText}`),
+      jupiterLink(),
       text(`, check the mint is ${CONFIG.taoMint.slice(0, 6)}…${CONFIG.taoMint.slice(-4)}, then come back. `), again,
+    ], "warn");
+  } else if (state.direction === "forward" && min !== null && taoBal < min) {
+    const again = Object.assign(document.createElement("button"), { type: "button", className: "btn btn-ghost btn-sm", textContent: "Check again" });
+    again.addEventListener("click", () => { again.disabled = true; refreshBalances(); });
+    noteHtml("connect-note", [
+      text(`This wallet holds ${tao(taoBal)}, less than the ${tao(min)}${usdOf(min)} staking needs at today's gas price. You can still deliver it unstaked, but the fees are mostly flat, so on a small amount they take a large share. `),
+      jupiterLink(), text(" for more, then "), again,
     ], "warn");
   } else note("connect-note", "");
   gate();
@@ -614,6 +638,9 @@ function gate() {
   const blocked = keysReady && Boolean(u) && (!reverse || u.wtao > 0n || u.stake > 0n || (u.pending && !u.holds));
   setStep("step-plan", keysReady && !blocked ? "active" : "locked");
   note("amount-note", blocked ? "Finish the route in step 2 first." : amountErr, amountErr || blocked ? "bad" : null);
+  // Stated before anything is typed, so people know how much to buy or send.
+  const min = stakeMinRao();
+  note("amount-hint", !reverse && state.plan === "stake" && min !== null && !amountErr ? `Staking needs at least ${tao(min)}${usdOf(min)} at today's gas price. Less can only be delivered unstaked.` : "");
   const acked = $("review-ack-check").checked;
   const forwardReady = state.plan === "deliver" || Boolean(state.hotkey);
   const ready = keysReady && !blocked && state.amountLd > 0n && !amountErr;
@@ -790,13 +817,18 @@ async function showHoldings() {
     const worths = positions.map(worthOf), total = worths.includes(null) ? null : worths.reduce((a, w) => a + w, free + owedTotal);
     const inAll = total === null ? "" : ` Worth about ${tao(total)} in all${usd?.tao ? ` (${fmtUsd((Number(total) / 1e9) * usd.tao)})` : ""}, at each pool's current price${owedTotal ? ", counting rewards still to claim" : ""}.`;
     const changed = before && positions.some((p) => { const was = before.pos?.[`${p.netuid}:${p.hotkey}`]; return was !== undefined && BigInt(was) !== p.stake; });
+    // A small free balance cannot be staked from here: say what it takes, and the ways on from there.
+    const stakeNeeds = CONFIG.minStakeRao + CONFIG.defaultReserveRao;
+    const smallFree = free > 0n && free < stakeNeeds
+      ? ` The ${tao(free)} free is less than the ${tao(stakeNeeds)} staking from here needs (${tao(CONFIG.minStakeRao)} to stake, ${tao(CONFIG.defaultReserveRao)} kept for fees). TAO you send from Solana later lands in this same wallet, so once it reaches ${tao(stakeNeeds)} you can stake it here${RETURN_OPEN ? `; or bring it back to Solana with "Back to Solana" above, where the bridge fee is paid from it` : ""}.`
+      : "";
     // Where the yield shows: a subnet stake collects it in the stake itself; root rewards wait with the
     // validator until claimed, and a claim adds them to the root stake.
     const yieldNote = rewards === null
       ? (rootHotkeys.size ? " Could not read the root rewards waiting to be claimed; try again in a minute." : "")
       : owedTotal ? ` Root rewards do not add to the stake on their own: ${tao(owedTotal)} is waiting to be claimed, and "Claim" adds it to your root stake. Each claim pays a Bittensor fee (about 0.008 TAO on 25 Sep 2026), so it only pays off once more than that has built up.`
       : rootHotkeys.size ? " Root rewards wait with the validator until claimed, and each claim pays a Bittensor fee (about 0.008 TAO on 25 Sep 2026); none is waiting yet." : "";
-    note("holdings-note", `Read ${new Date().toISOString().slice(11, 16)} UTC. ${positions.length ? `${positions.length} stake position${positions.length === 1 ? "" : "s"}. Subnet stakes are in that subnet's Alpha and collect their rewards in the stake itself; root stakes are in TAO.` : "No stake positions."}${yieldNote}${inAll}${changed ? " Changes since you last looked here include rewards and anything added or taken out elsewhere." : ""}`);
+    note("holdings-note", `Read ${new Date().toISOString().slice(11, 16)} UTC. ${positions.length ? `${positions.length} stake position${positions.length === 1 ? "" : "s"}. Subnet stakes are in that subnet's Alpha and collect their rewards in the stake itself; root stakes are in TAO.` : "No stake positions."}${yieldNote}${inAll}${changed ? " Changes since you last looked here include rewards and anything added or taken out elsewhere." : ""}${smallFree}`);
   } catch (e) {
     if (seq === holdingsSeq) note("holdings-note", `Could not read it from Bittensor: ${e.message}`, "bad");
   } finally {
@@ -878,6 +910,8 @@ async function quoteMove() {
   const amt = parseTao($("move-amount").value), seq = ++moveQuoteSeq;
   if (amt === null || amt <= 0n) { note("move-quote", "Enter an amount like 0.5", "bad"); $("move-go").disabled = true; return; }
   if (amt > move.max) { note("move-quote", `More than the ${fmtUnits(move.max, 9)} available${move.kind === "stake" ? ` (${tao(CONFIG.defaultReserveRao)} stays free for fees)` : ""}`, "bad"); $("move-go").disabled = true; return; }
+  // The route's own floor: under it the chain may clear the stake back to free TAO, after charging for it.
+  if (move.kind === "stake" && amt < CONFIG.minStakeRao) { note("move-quote", `Staking needs at least ${tao(CONFIG.minStakeRao)}.`, "bad"); $("move-go").disabled = true; return; }
   $("move-go").disabled = false;
   if (move.netuid === 0 && !(move.kind === "unstake" && $("move-then").checked)) { note("move-quote", move.kind === "stake" ? `Stakes ${tao(amt)} on root.` : `Unstakes ${tao(amt)} from root into free TAO.`); return; }
   const then = move.kind === "unstake" && $("move-then").checked;
@@ -1128,14 +1162,15 @@ function requestReturnQuote() {
       $("r-cost").textContent = tao(plan.fundingRao + fq.feeRao);
       $("r-receive").textContent = `${fmtUnits(q.solanaAmountLd, 9)} canonical TAO`;
       // The bridge fee and the funding transfer's fee, both in TAO; unused gas stays the user's, so it is left out.
-      showShare(state.amountLd > 0n ? Number(q.nativeFee / RAO + fq.feeRao) / Number(state.amountLd) : NaN);
+      const feeRao = q.nativeFee / RAO + fq.feeRao;
+      showShare(state.amountLd > 0n ? Number(feeRao) / Number(state.amountLd) : NaN, { cost: `${tao(feeRao)} in fees to move ${tao(state.amountLd)}`, tenPctRao: feeRao * 10n });
       if (fq.remainingRao < 0n) {
         note("sign-note", `Not enough free TAO: this return needs ${tao(plan.fundingRao + fq.feeRao)} including fees, and the wallet has ${tao(state.ret.free ?? 0n)}.`, "bad");
         $("sign").disabled = true;
         return;
       }
       if (!loadReturn(w)) note("sign-note", "");
-      $("sign").disabled = state.running;
+      $("sign").disabled = state.running || state.shareBlocks;
     } catch (e) {
       if (seq === state.quoteSeq) { $("r-lzfee").textContent = "unavailable"; note("sign-note", `Could not quote the return: ${e.message}`, "bad"); }
     }
@@ -1223,16 +1258,31 @@ async function showUsd(seq, totalLamports) {
   ].filter(Boolean);
   $("r-usd").textContent = `${parts.join(", ")} (Dexscreener, ${new Date(p.at).toISOString().slice(11, 16)} UTC)`;
   // SOL fees against TAO sent needs both prices; the gas drop's unused part comes back, so this is an upper bound.
-  if (p.tao !== null && p.sol !== null && state.amountLd > 0n) showShare(((Number(totalLamports) / 1e9) * p.sol) / ((Number(state.amountLd) / 1e9) * p.tao));
+  if (p.tao !== null && p.sol !== null && state.amountLd > 0n) {
+    const feeUsd = (Number(totalLamports) / 1e9) * p.sol, sentUsd = (Number(state.amountLd) / 1e9) * p.tao;
+    showShare(feeUsd / sentUsd, { cost: `about ${fmtUsd(feeUsd)} in fees to move ${fmtUsd(sentUsd)}`, tenPctRao: BigInt(Math.ceil(((feeUsd * 10) / p.tao) * 1e9)) });
+  }
 }
 
-/** Fees as a share of the amount, with a plain warning when they eat a large part of a small route. */
-function showShare(frac) {
-  if (!(frac >= 0)) { $("r-share").textContent = "—"; note("share-note", ""); return; }
+/** From this share of the amount, sending needs an explicit acknowledgement for that exact amount. */
+const SHARE_ACK_PCT = 25;
+/**
+ * Fees as a share of the amount, with a plain warning from 10% (saying from what amount they would fall
+ * under 10%), and from 25% a stronger one that keeps signing shut until it is acknowledged for this
+ * amount. `cost` says the fees and the amount in words; `tenPctRao` is where the same fees are 10%.
+ */
+function showShare(frac, { cost = "", tenPctRao = null } = {}) {
+  const box = $("share-ack-box");
+  if (!(frac >= 0)) { $("r-share").textContent = "—"; note("share-note", ""); box.hidden = true; state.shareBlocks = false; return; }
   const pct = frac * 100;
   const shown = pct < 1 ? "under 1%" : `about ${pct < 10 ? pct.toFixed(1) : Math.round(pct)}%`;
   $("r-share").textContent = shown;
-  note("share-note", pct >= 10 ? `Fees are ${shown} of this amount. They are mostly flat, so the same fees weigh far less on a larger amount.` : "", pct >= 10 ? "warn" : null);
+  const high = pct >= SHARE_ACK_PCT, acked = state.shareAckAmount === state.amountLd;
+  const under10 = tenPctRao ? ` From about ${tao(tenPctRao)}, the same fees would be under 10%.` : " They are mostly flat, so the same fees weigh far less on a larger amount.";
+  note("share-note", pct < 10 ? "" : `${high ? "Fees would take" : "Fees are"} ${shown} of this amount${cost ? `: ${cost}` : ""}.${under10}`, high ? "bad" : pct >= 10 ? "warn" : null);
+  box.hidden = !high;
+  if (high) { $("share-ack-text").textContent = `I accept fees of ${shown} of what I send.`; $("share-ack").checked = acked; }
+  state.shareBlocks = high && !acked;
 }
 
 function requestQuote() {
@@ -1252,12 +1302,13 @@ function requestQuote() {
       const prio = priorityFeeLamports(priority);
       const total = fee + prio + BigInt(CONFIG.fee.lamports ?? 0n);
       $("r-lzfee").textContent = sol(fee); $("r-prio").textContent = sol(prio); $("r-total").textContent = sol(total);
-      showUsd(seq, total);
+      await showUsd(seq, total); // settles the fee share, which can keep signing shut
+      if (seq !== state.quoteSeq) return;
       const lacking = state.lamports < total + 100_000n;
       if (!LIVE) note("sign-note", "The quote is live; sending opens once the route goes live.", "warn");
       else if (lacking) note("sign-note", `Not enough SOL: you need about ${sol(total + 100_000n)} including the transaction fee.`, "bad");
       else note("sign-note", "");
-      $("sign").disabled = !LIVE || lacking || state.running || !$("review-ack-check").checked;
+      $("sign").disabled = !LIVE || lacking || state.running || !$("review-ack-check").checked || state.shareBlocks;
     } catch (e) {
       if (seq === state.quoteSeq) { $("r-lzfee").textContent = "unavailable"; note("sign-note", `Could not quote the bridge fee: ${e.message}`, "bad"); }
     }
@@ -1273,6 +1324,7 @@ function resetTrack(plan) {
 }
 
 async function send() {
+  if (state.shareBlocks) return;
   if (state.direction === "reverse") return runReturn();
   if (!LIVE || state.running || state.unfinished) return;
   const w = state.signed.wallet;
@@ -1472,6 +1524,10 @@ function init() {
   $("pay-go").addEventListener("click", runPay);
   $("pay-cancel").addEventListener("click", () => { if (!state.running) { pay = null; $("pay-panel").hidden = true; } });
   $("sign").addEventListener("click", send);
+  $("share-ack").addEventListener("change", () => {
+    state.shareAckAmount = $("share-ack").checked ? state.amountLd : null;
+    gate();
+  });
   getGasPrice().then((p) => { state.gasPrice = p; gate(); }).catch(() => {});
   addEventListener("beforeunload", (e) => { if (state.running) { e.preventDefault(); e.returnValue = ""; } });
   // Keys live only in memory; drop them when the page goes away.

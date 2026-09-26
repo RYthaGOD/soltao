@@ -66,6 +66,7 @@ export const CONFIG = {
 
   // Kept unstaked in the user's wallet so they can pay for their own unstake later.
   defaultReserveRao: 10_000_000n, // 0.01 TAO
-  // Subtensor's nominator minimum; smaller stakes can be swept back to free balance.
+  // Twice subtensor's nominator minimum (NominatorMinRequiredStake, 0.01 TAO read 26 Sep 2026): smaller
+  // stakes can be swept back to free balance, so this leaves room for the Alpha price to move.
   minStakeRao: 20_000_000n, // 0.02 TAO
 };
