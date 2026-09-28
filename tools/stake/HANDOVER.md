@@ -4,8 +4,7 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-09-28. **Built and tested locally, not committed or deployed:** items 24 (SOLTAO swap,
-gated off), 25 (subnet profiles and charts), 26 (alpha trading: exact quotes and Move) and 27 (validators'
+Last updated: 2026-09-28. **Built and tested locally, not committed or deployed:** items 25 (subnet profiles and charts), 26 (alpha trading: exact quotes and Move) and 27 (validators'
 30-day record, directory changes, the review's Alpha quote). Everything below
 this paragraph about the last deploy is still true of production. As of 2026-09-25: **Live in production, nothing unreleased on `main`.** Latest deploy (25 Sep,
 Craig's go-ahead after a review of it): commit `d50a180`, `stake.js?v=d20813dc`, which ships item 21
@@ -98,9 +97,6 @@ main "Solana TAO Board" page which stays no-wallet-connect).
 - `tools/stake/src/payments.js` — "Top up Chutes" (item 18): free TAO from the coldkey to a pasted
   Chutes payment address, signed, sealed (label "chutes-pay") and settled like a stake move. Gated by
   `CONFIG.chutesLive` (false) on soltao.xyz; open on local hosts.
-- `tools/stake/src/soltao_swap.js` — "Swap your SOLTAO for TAO" in step 1 (item 24): one wallet
-  transaction into SOLTAO's own Raydium CPMM pool, quoted with Raydium's own math. Gated by
-  `CONFIG.soltaoSwapLive` (false) on soltao.xyz; open on local hosts.
 - `tools/stake/src/subnet_profile.js` — the arithmetic behind a subnet profile (item 25): ranges, changes,
   deregistration standing, chart geometry. `stake/subnet-profiles.json` holds the summaries and
   `stake/history/` the daily history (`npm run history`).
@@ -592,50 +588,10 @@ This is **not** git-push-triggered. Steps, in order, every time:
       signing shut, opens on accepting, 0.1 TAO needs nothing), F (a holdings stake under 0.02 refused).
       The small-free holdings line has no page test (run F's wallet holds 2 TAO).
 
-24. **Swap SOLTAO for TAO in step 1, 28 Sep 2026 (built, not deployed, gated off in production:
-    `CONFIG.soltaoSwapLive: false`).** Craig's call, after an outside proposal to make SOLTAO a way to
-    pay for Bittensor services (Chutes first). It is opt-in and only for wallets that already hold
-    SOLTAO. It is not a demand mechanism, and it isn't marketed as yield.
-    - *What it does:* a wallet holding SOLTAO sees its SOLTAO beside its TAO and SOL, plus a "Swap your
-      SOLTAO for TAO" panel. The swap is one transaction the user's wallet signs: compute budget,
-      `CreateIdempotent` for the wallet's canonical TAO account, then Raydium CPMM `swap_base_input`
-      into the pool pinned in `CONFIG.soltao.pool`. There is no soltao fee on it (checked by a test)
-      and no aggregator. The TAO it delivers is used by the normal route afterwards.
-    - *The pool, read from chain on 28 Sep:* `H56x9EzR…UrFXo`, owned by `CPMMoo8L…qKP1C`. Token 0 is
-      canonical TAO (SPL Token) and token 1 is SOLTAO (Token-2022, 6 decimals, a 1% transfer tax). The
-      fees are 0.25% trade plus a 1% creator fee taken from the TAO side (`creator_fee_on` = OnlyToken0).
-      The creator fee is collected by the pool creator `5CEbueQn…SPAG`, a system-owned wallet with
-      about 229 SOL that runs `CollectCreatorFee` across many pools every second. So it is not soltao's.
-      **Still open: does any of SOLTAO's trading fees reach Craig** (StonkFun creator rewards, say)? If
-      so, the panel has to say so before `soltaoSwapLive`.
-    - *The quote:* Raydium's code, copied from `raydium-io/raydium-cp-swap` at `59fb845` (fees.rs
-      ceil/floor rounding, calculator.rs both creator-fee branches, pool.rs reserves net of fees owed,
-      and the creator-fee direction) plus Token-2022's `calculate_epoch_fee`. The live test simulates
-      the real transaction from a real holder, and the TAO it delivers **equals the quote to the
-      unit**. The offline test holds a captured fixture (`test/fixtures/soltao_pool.json`) with the
-      simulated output from that same state. The panel shows TAO out, the minimum (the quote less
-      `slippageBps`, 1%), the cost against the pool's price before fees (about 2.26% on a small swap:
-      1% tax, 1.25% pool fees, impact), "Paying with TAO you already hold costs none of this", the SOL
-      fees including the 0.001488 SOL deposit for a first TAO account, and a warning when the TAO
-      after the swap is still under the staking minimum.
-    - *Safety:* every account apart from the pinned pool is read from the pool's state and checked. That
-      covers owner program, Anchor discriminators, the mint pair and token programs, the authority PDA
-      and bump, the swap status bit, `open_time`, a known creator-fee model, vault mints and owners, and
-      only known Token-2022 extensions (a transfer hook would switch it off). Before signing, the pool
-      is read again, and the swap is refused if it already gives less than the minimum shown. The
-      transaction carries that minimum, so a worse fill fails whole with `ExceededSlippage` (the live
-      test proves the pool enforces it).
-    - *Measured:* 44,702 CU with an existing TAO account (the limit is 120,000) and 718 bytes.
-    - *Tests:* `test/soltao_swap.test.mjs` (in `npm test`) and `npm run test:soltao:live`
-      (`test/soltao_swap_live.test.mjs`, read-only). Page-test run G opens the page as a real SOLTAO
-      holder, checks the quote, and decodes the transaction handed to the wallet: exact amount, the
-      minimum shown, nothing but the pool, and no fee wallet. Run A checks a wallet without SOLTAO sees
-      no panel. On 28 Sep, run F failed on a Bittensor RPC "Failed to fetch" after runs D and E; this
-      change does not touch Bittensor, but rerun F before deploying.
-    - *Before `soltaoSwapLive: true`:* answer the creator-fee question above, then do one small
-      real-funds swap. It needs no sign-in, so it can run on localhost (`npm run serve`) with a real
-      wallet. Then flip the flag, build and deploy. The Colosseum packet says the route "does not need,
-      use or reward" SOLTAO; that stays true of the route, but mention the swap if it is live by then.
+24. **A SOLTAO → TAO swap in step 1: built, then removed on 28 Sep 2026 at Craig's request** ("remove
+    soltao token payments"). It swapped straight against SOLTAO's Raydium CPMM pool, and its quote matched the
+    program to the unit. The code is in commit `0db1758` if it is ever wanted again. The page no longer
+    mentions SOLTAO outside the footer disclosure and the header note.
 
 25. **Subnet profiles: what a subnet does, its price chart, the numbers, the risks, 28 Sep 2026 (built,
     not deployed).** Craig asked that people "see everything so they can make informed decisions when

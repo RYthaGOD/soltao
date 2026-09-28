@@ -27,7 +27,7 @@
 <link rel="apple-touch-icon" href="../logo.png">
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="stake.css">
-<script src="stake.js?v=b324b918" defer></script>
+<script src="stake.js?v=711ffa21" defer></script>
 </head>
 <body>
 <a class="skip" href="#steps">Skip to the steps</a>
@@ -143,27 +143,9 @@
       <div><dt>Wallet</dt><dd class="num" id="sol-address"></dd></div>
       <div><dt>TAO on Solana</dt><dd class="num" id="tao-balance"><span class="skel"></span></dd></div>
       <div><dt>SOL</dt><dd class="num" id="sol-balance"><span class="skel"></span></dd></div>
-      <div id="soltao-row" hidden><dt>SOLTAO</dt><dd class="num" id="soltao-balance"></dd></div>
       <div class="dir-rev" hidden><dt>Staked on Bittensor</dt><dd class="num" id="tao-staked"><span class="skel"></span></dd></div>
       <div class="dir-rev" hidden><dt>Unstaked on Bittensor</dt><dd class="num" id="tao-free"><span class="skel"></span></dd></div>
     </dl>
-    <div class="move-panel swap-panel" id="swap-panel" hidden>
-      <h3>Swap your SOLTAO for TAO</h3>
-      <p class="step-note">This wallet holds SOLTAO. You can swap it for canonical TAO here, then use that TAO in the steps below. The route doesn't need SOLTAO, and paying with TAO you already hold is always cheaper.</p>
-      <details class="info"><summary><span class="info-i" aria-hidden="true">i</span><span class="info-l">What is this, and what does it cost?</span></summary><div class="info-body"><p>SOLTAO is the coin launched by the person who runs this page (see the disclosure at the bottom). The swap is one transaction from your wallet into SOLTAO's own pool on Raydium, <code>H56x…UrFXo</code>, against canonical TAO. soltao adds no fee to it. It costs SOLTAO's 1% transfer tax, the pool's 0.25% trading fee, a 1% creator fee the pool takes from the TAO side, and price impact. The quote shows the total before you sign. If the price moves more than 1% before it lands, the swap fails and nothing moves.</p></div></details>
-      <label class="field field-sm">
-        <span>SOLTAO to swap</span>
-        <span class="field-row">
-          <input type="text" id="swap-amount" inputmode="decimal" autocomplete="off">
-          <button type="button" class="btn btn-ghost" id="swap-max">all</button>
-        </span>
-      </label>
-      <p class="step-note" id="swap-quote" role="status"></p>
-      <div class="step-row">
-        <button type="button" class="btn btn-primary" id="swap-go" disabled>Swap in my wallet</button>
-        <span class="step-note" id="swap-note" role="status"></span>
-      </div>
-    </div>
   </li>
 
   <!-- 2 ───────────────────────────────────────────────────────── -->
@@ -533,8 +515,7 @@
   </p>
   <p class="foot-dis">
     <strong>Disclosure:</strong> the person who runs this page also launched the SOLTAO coin on StonkFun. You
-    do not need it to use this route, and nothing here is a recommendation to buy it. A wallet that already
-    holds SOLTAO is offered a swap to TAO in step 1, with its cost shown and no soltao fee.
+    do not need it to use this route, and nothing here is a recommendation to buy it.
   </p>
   <p class="foot-dis">
     Not affiliated with Bittensor, the Opentensor Foundation, Sunrise, LayerZero or any validator. Crossing a

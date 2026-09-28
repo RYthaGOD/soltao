@@ -19,8 +19,6 @@ import { CONFIG } from "../src/config.js";
 import { sealRoute } from "../src/pending.js";
 import { selector } from "../src/bittensor.js";
 import { ss58Decode } from "../src/derive.js";
-import { createClients } from "../src/solana.js";
-import { findSoltaoHolder } from "./soltao_holder.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const CHROME = process.env.CHROME || "C:/Program Files/Google/Chrome/Application/chrome.exe";
@@ -146,7 +144,6 @@ if (want("A")) {
   await page.click("#connect");
   await waitText(page, "#tao-balance", /TAO/);
   expect("connect shows the wallet and a TAO balance", (await text(page, "#tao-balance")) === "0 TAO", await text(page, "#tao-balance"));
-  expect("a wallet with no SOLTAO is offered no SOLTAO swap, and no SOLTAO row", (await hidden(page, "#swap-panel")) && (await hidden(page, "#soltao-row")));
   const swap = await page.$eval("#connect-note a", (a) => a.href).catch(() => "");
   expect("a wallet with no TAO is pointed at a SOL→canonical TAO swap, by mint", swap === `https://jup.ag/swap/So11111111111111111111111111111111111111112-${CONFIG.taoMint}` && /Check again/.test(await text(page, "#connect-note")), swap);
   expect("…and told how much it needs to stake, before buying", /To stake, you need at least 0\.0\d+ TAO/.test(await text(page, "#connect-note")), await text(page, "#connect-note"));
@@ -672,52 +669,6 @@ if (want("H")) {
   expect("root has no profile: choosing it closes the box", await hidden(page, "#plan-profile-box"));
   await clean(page, problems, "run H");
   await page.close();
-}
-
-// ── Run G: a wallet holding SOLTAO is offered the swap to TAO in step 1 (declined at the wallet) ──
-// Local hosts open the swap (SWAP_OPEN), so it shows here whatever CONFIG.soltaoSwapLive says.
-if (want("G")) {
-  const conn = createClients().connection;
-  const soltaoHolder = await findSoltaoHolder(conn, 200_000_000_000n);
-  expect("found a real SOLTAO holder (with SOL) to open the page as", Boolean(soltaoHolder));
-  if (soltaoHolder) {
-    const { page, problems } = await openWith({ pubkey: soltaoHolder, secret: ed25519.utils.randomPrivateKey(), base: live.base });
-    await page.click("#connect");
-    await waitText(page, "#soltao-balance", /SOLTAO/);
-    expect("the wallet's SOLTAO is shown beside its TAO and SOL", !(await hidden(page, "#soltao-row")), await text(page, "#soltao-balance"));
-    expect("…with the swap panel, which names the conflict", !(await hidden(page, "#swap-panel")) && /launched by the person who runs this page/.test(await page.$eval("#swap-panel", (el) => el.textContent)));
-    await page.type("#swap-amount", "999999999999");
-    await waitText(page, "#swap-quote", /more than/);
-    expect("more than the wallet holds is refused before any quote", (await attr(page, "#swap-quote", "data-tone")) === "bad" && (await page.$eval("#swap-go", (b) => b.disabled)));
-    await page.$eval("#swap-amount", (el) => { el.value = ""; });
-    await page.type("#swap-amount", "100000");
-    await waitText(page, "#swap-quote", /You get about/);
-    const quote = await text(page, "#swap-quote");
-    expect("the quote states TAO out, the minimum, the cost against paying in TAO, and that soltao charges nothing", /You get about [\d.]+ TAO/.test(quote) && /at least [\d.]+ TAO/.test(quote) && /the swap costs 2\.\d\d%/.test(quote) && /soltao charges nothing on the swap/.test(quote), quote);
-    await page.waitForFunction(() => !document.querySelector("#swap-go").disabled, { timeout: 30_000 }).catch(() => {});
-    expect("the swap button opens once quoted", !(await page.$eval("#swap-go", (b) => b.disabled)));
-    // The page shows TAO to 6 decimals; the minimum it signs has 9.
-    const [w, f = ""] = quote.match(/at least ([\d.]+) TAO/)[1].split(".");
-    const shownMin = BigInt(w) * 1_000_000_000n + BigInt((f + "000000000").slice(0, 9));
-    await clickEl(page, "#swap-go");
-    await page.waitForFunction(() => window.__sent || /failed/i.test(document.querySelector("#swap-note")?.textContent || ""), { timeout: 90_000 });
-    const sent = await page.evaluate(() => window.__sent);
-    expect("the page simulates the swap, then hands the wallet a transaction", Boolean(sent), await text(page, "#swap-note"));
-    if (sent) {
-      const tx = VersionedTransaction.deserialize(Uint8Array.from(sent));
-      const keys = tx.message.staticAccountKeys.map((k) => k.toBase58());
-      const programs = tx.message.compiledInstructions.map((ix) => keys[ix.programIdIndex]);
-      expect("it is the compute budget, the TAO account and the swap into SOLTAO's pinned pool, and nothing else", programs.join() === ["ComputeBudget111111111111111111111111111111", "ComputeBudget111111111111111111111111111111", "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL", CONFIG.soltao.program].join() && keys.includes(CONFIG.soltao.pool), programs.join());
-      expect("no soltao fee rides on it", !keys.includes(FEE_WALLET));
-      const data = Buffer.from(tx.message.compiledInstructions[3].data);
-      const signedMin = data.readBigUInt64LE(16);
-      expect("it swaps exactly the 100,000 SOLTAO typed, for at least the minimum shown", data.readBigUInt64LE(8) === 100_000_000_000n && signedMin >= shownMin && signedMin - shownMin < 1000n, `${data.readBigUInt64LE(8)} / ${signedMin} vs shown ${shownMin}`);
-    }
-    await page.waitForFunction(() => document.querySelector("#swap-note")?.textContent === "", { timeout: 10_000 }).catch(() => {});
-    expect("declining leaves the swap ready to try again", (await text(page, "#swap-note")) === "" && !(await page.$eval("#swap-amount", (el) => el.disabled)));
-    await clean(page, problems, "run G");
-    await page.close();
-  }
 }
 
 await browser.close();

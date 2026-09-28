@@ -64,23 +64,6 @@ export const CONFIG = {
   // Chutes; local hosts open it for testing.
   chutesLive: false,
 
-  // SOLTAO, the coin launched by the person who runs this page (disclosed in the footer), and its one
-  // pool: Raydium CPMM against canonical TAO. Read from chain on 28 Sep 2026: the pool is owned by the
-  // CPMM program, token 0 is canonical TAO (SPL Token), token 1 is SOLTAO (Token-2022, 6 decimals, a
-  // 1% transfer tax). Fees: 0.25% trade and 1% creator (taken from the TAO side). A wallet holding
-  // SOLTAO can swap it for TAO here (src/soltao_swap.js) before the route; nothing else uses it.
-  soltao: {
-    mint: "8P1XmDhzU8qR3oiXHd2YfmBpB92Rn4hwunMsMGdghvCn",
-    pool: "H56x9EzRFiMgfvXYwyE927qjJuG4QnFGh45tDN7UrFXo",
-    program: "CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C",
-    // The swap refuses to fill for less than the quote minus this, in case other trades land first.
-    slippageBps: 100n, // 1%
-    computeUnits: 120_000,
-  },
-  // The SOLTAO swap stays shut on soltao.xyz until one small real-funds swap has landed; local hosts
-  // open it for testing (the swap needs no sign-in, so a real wallet works on localhost).
-  soltaoSwapLive: false,
-
   // Kept unstaked in the user's wallet so they can pay for their own unstake later.
   defaultReserveRao: 10_000_000n, // 0.01 TAO
   // Twice subtensor's nominator minimum (NominatorMinRequiredStake, 0.01 TAO read 26 Sep 2026): smaller

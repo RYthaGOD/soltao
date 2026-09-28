@@ -340,14 +340,6 @@ saying what was actually read on-chain and what was not; on 20 Sep 2026 that was
 fee accrual read from sampled mainnet transactions, but not the pro-rata payout itself, which is
 taken from StonkFun's published model exactly as it is for every other row.
 
-The stake page has one more place the coin appears (built 28 Sep 2026, switched off on soltao.xyz
-until a real-funds test): a wallet that **already holds** SOLTAO is offered a swap of it to canonical
-TAO in step 1, into the coin's own pool. The same rules hold there. The panel names the conflict
-first. It prices the swap against paying in TAO (about 2.3% more on a small swap, from the 1%
-transfer tax, the pool's 1.25% fees and price impact) and says paying in TAO costs none of that. soltao
-adds no fee to the swap. A wallet without SOLTAO is never shown it, so the page never nudges anyone
-to buy the coin.
-
 ## Accuracy notes
 
 - **The slippage table is an upper bound, and a loose one.** `impact = size ÷ quote-side

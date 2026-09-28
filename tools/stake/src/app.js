@@ -7,14 +7,13 @@ import { PublicKey } from "@solana/web3.js";
 import { ed25519 } from "@noble/curves/ed25519";
 import { CONFIG } from "./config.js";
 import { derivationMessage, signInFields, walletFromSignature, ss58Decode, ss58Encode, toHex } from "./derive.js";
-import { createClients, getTaoBalance, quoteNativeFee, quotePriorityFee, priorityFeeLamports, buildRouteTransaction, removeDust, taoTokenAccount } from "./solana.js";
+import { createClients, getTaoBalance, quoteNativeFee, quotePriorityFee, priorityFeeLamports, buildRouteTransaction, removeDust } from "./solana.js";
 import { findOnSubnet, getDelegate, getFreeBalance, getUidCount, subnetValidators } from "./bittensor.js";
 import { getGasPrice } from "./evm.js";
 import { usdPrices, fmtUsd } from "./prices.js";
 import { fitReturnAmount } from "./fit.js";
 import { sealRoute, readRoute, untrustedPlan, sealRecord, openRecord } from "./pending.js";
 import { finishRoute, transitState, minStakeAmount, stakeGasReserve, sweepFloor } from "./route.js";
-import { readSwapState, quoteSwap, minimumOut, buildSwapTransaction, getSoltaoBalance } from "./soltao_swap.js";
 import { rangeSeries, changeBps, priceDaysAgo, coversRange, dateText, deregStanding, blockTime, chartGeometry, nearestPoint } from "./subnet_profile.js";
 
 const $ = (id) => document.getElementById(id);
@@ -32,8 +31,6 @@ const state = {
   chutesPrefill: null, // a Chutes payment address from a ?chutes= link
   ret: { free: null, quote: null }, // the return direction: coldkey free TAO (rao), the current quote
   shareBlocks: false, shareAckAmount: null, // fees too large a share of the amount, until acknowledged for that amount
-  soltao: 0n, // the wallet's SOLTAO (6 decimals), read only where the swap is open
-  swap: { seq: 0, quote: null, busy: false, done: false }, // the SOLTAO → TAO swap in step 1
 };
 // The last USD prices read, for hints that should not wait on the feed; display only.
 let lastUsd = null;
@@ -139,13 +136,11 @@ async function connect() {
 }
 
 async function refreshBalances() {
-  const [taoBal, lamports, soltaoBal] = await Promise.all([
+  const [taoBal, lamports] = await Promise.all([
     getTaoBalance(clients.connection, state.user).catch(() => null),
     clients.connection.getBalance(new PublicKey(state.user)).then(BigInt).catch(() => null),
-    SWAP_OPEN ? getSoltaoBalance(clients.connection, state.user).catch(() => null) : null,
   ]);
-  state.taoLd = taoBal ?? 0n; state.lamports = lamports ?? 0n; state.soltao = soltaoBal ?? 0n;
-  showSwap();
+  state.taoLd = taoBal ?? 0n; state.lamports = lamports ?? 0n;
   // The staking minimum depends on Bittensor's gas price; read it now so the note below can state it.
   if (state.gasPrice === null) state.gasPrice = await getGasPrice().catch(() => null);
   await readUsd();
@@ -162,7 +157,6 @@ async function refreshBalances() {
       text(`This wallet holds no canonical Solana TAO yet. ${minText}`),
       jupiterLink(),
       text(`, check the mint is ${CONFIG.taoMint.slice(0, 6)}…${CONFIG.taoMint.slice(-4)}, then come back. `), again,
-      ...(!$("swap-panel").hidden ? [text(" Or swap the SOLTAO this wallet holds, below.")] : []),
     ], "warn");
   } else if (state.direction === "forward" && min !== null && taoBal < min) {
     const again = Object.assign(document.createElement("button"), { type: "button", className: "btn btn-ghost btn-sm", textContent: "Check again" });
@@ -173,117 +167,6 @@ async function refreshBalances() {
     ], "warn");
   } else note("connect-note", "");
   gate();
-}
-
-// ── step 1, optional: swap SOLTAO for TAO ───────────────────────────────────
-// Offered only to a wallet that already holds SOLTAO, where the swap is open (SWAP_OPEN). SOLTAO is
-// the coin launched by the person who runs this page: the panel says so, prices the swap against
-// paying in TAO, and adds no soltao fee. One wallet transaction into the coin's own pool
-// (src/soltao_swap.js); the TAO it delivers is then used by the steps below like any other.
-const soltaoText = (v) => `${fmtUnits(v, 6)} SOLTAO`;
-const pctText = (bps) => `${(Number(bps) / 100).toFixed(2)}%`;
-function showSwap() {
-  const holds = SWAP_OPEN && state.soltao > 0n;
-  $("soltao-row").hidden = !holds;
-  $("soltao-balance").textContent = soltaoText(state.soltao);
-  // Stays open after a swap that used it all, so its result can be read.
-  const show = SWAP_OPEN && state.direction === "forward" && (holds || state.swap.done);
-  $("swap-panel").hidden = !show;
-  if (show && !state.swap.busy) quoteSwapUi();
-}
-
-let swapTimer = null;
-function onSwapAmount() {
-  clearTimeout(swapTimer);
-  state.swap.quote = null; $("swap-go").disabled = true;
-  swapTimer = setTimeout(quoteSwapUi, 350);
-}
-
-async function quoteSwapUi() {
-  const seq = ++state.swap.seq;
-  state.swap.quote = null; $("swap-go").disabled = true;
-  const raw = $("swap-amount").value;
-  if (!raw.trim()) { note("swap-quote", ""); return; }
-  const amount = parseUnits(raw, 6);
-  if (amount === null || amount <= 0n) { note("swap-quote", "Enter an amount of SOLTAO, like 250000 (up to 6 decimals).", "bad"); return; }
-  if (amount > state.soltao) { note("swap-quote", `That is more than the ${soltaoText(state.soltao)} this wallet holds.`, "bad"); return; }
-  note("swap-quote", "reading the pool…");
-  try {
-    const [s, micro, taoAccount, rent] = await Promise.all([
-      readSwapState(clients.connection),
-      quotePriorityFee(clients.connection, [CONFIG.soltao.pool]).catch(() => CONFIG.priorityFee.minMicroLamports),
-      clients.connection.getAccountInfo(taoTokenAccount(state.user)),
-      clients.connection.getMinimumBalanceForRentExemption(165),
-      readUsd(),
-    ]);
-    if (seq !== state.swap.seq) return;
-    const q = quoteSwap(s, amount), minOut = minimumOut(q.out);
-    // Solana's base fee for one signature, the priority fee, and the deposit for a TAO account if the
-    // wallet has none yet (the swap creates it; the deposit comes back if the account is ever closed).
-    const deposit = taoAccount ? 0n : BigInt(rent);
-    const solCost = 5_000n + priorityFeeLamports(micro, CONFIG.soltao.computeUnits) + deposit;
-    const parts = [
-      `You get about ${tao(q.out)}${usdOf(q.out)}, and at least ${tao(minOut)} if other trades land first.`,
-      `At the pool's price before costs this SOLTAO is worth ${tao(q.atSpot)}, so the swap costs ${pctText(q.costBps)}: SOLTAO's 1% transfer tax, the pool's 1.25% in fees, and price impact. Paying with TAO you already hold costs none of this.`,
-      `Solana fees: ${sol(solCost)}${deposit ? `, including a ${sol(deposit)} deposit to open this wallet's TAO account` : ""}. soltao charges nothing on the swap.`,
-    ];
-    const min = stakeMinRao(), after = state.taoLd + q.out;
-    if (min !== null && after < min) parts.push(`With it this wallet would hold ${tao(after)}, under the ${tao(min)} staking needs. Less can only be delivered unstaked, where the route's mostly flat fees take a large share.`);
-    if (state.lamports < solCost) {
-      note("swap-quote", `${parts.join(" ")} This wallet holds ${sol(state.lamports)}, not enough SOL for the fees.`, "bad");
-      return;
-    }
-    state.swap.quote = { amount, minOut, micro };
-    note("swap-quote", parts.join(" "));
-    $("swap-go").disabled = state.running || state.swap.busy;
-  } catch (e) {
-    if (seq !== state.swap.seq) return;
-    console.error("swap quote failed", e);
-    note("swap-quote", `Could not quote the swap: ${e.message || e}`, "bad");
-  }
-}
-
-async function runSwapUi() {
-  const agreed = state.swap.quote;
-  if (!agreed || state.swap.busy || state.running) return;
-  state.swap.busy = true;
-  for (const id of ["swap-go", "swap-amount", "swap-max"]) $(id).disabled = true;
-  note("swap-note", "building and simulating…");
-  let failed = false;
-  try {
-    // The pool again, as it is now: if it would already give less than the minimum shown, say so
-    // rather than send a transaction that can only fail. The transaction carries the minimum shown.
-    const s = await readSwapState(clients.connection);
-    if (quoteSwap(s, agreed.amount).out < agreed.minOut) throw new Error("the price moved past the minimum shown since the quote. Check the new quote, then swap again");
-    const { transaction, blockhash, lastValidBlockHeight } = await buildSwapTransaction(clients.connection, s, { user: state.user, amountIn: agreed.amount, minOut: agreed.minOut, priorityMicroLamports: agreed.micro });
-    const sim = await clients.connection.simulateTransaction(transaction, { sigVerify: false });
-    if (sim.value.err) {
-      const why = (sim.value.logs || []).filter((l) => /Error|failed|insufficient/i.test(l)).slice(-2).join(" · ");
-      throw new Error(`simulation failed, nothing was sent. ${why || JSON.stringify(sim.value.err)}`);
-    }
-    note("swap-note", "check your wallet…");
-    let signature;
-    if (state.provider.signAndSendTransaction) ({ signature } = await state.provider.signAndSendTransaction(transaction));
-    else signature = await clients.connection.sendRawTransaction((await state.provider.signTransaction(transaction)).serialize(), { skipPreflight: false });
-    noteHtml("swap-note", [text("sent, confirming… "), link(`https://solscan.io/tx/${signature}`, "Solscan ↗")]);
-    const confirmed = await confirm(signature, blockhash, lastValidBlockHeight);
-    if (!confirmed.ok) throw new Error(confirmed.why);
-    const before = state.taoLd;
-    state.swap.done = true; $("swap-amount").value = "";
-    await refreshBalances();
-    noteHtml("swap-note", [
-      text(state.taoLd > before ? `Swapped: ${tao(state.taoLd - before)} arrived, and this wallet now holds ${tao(state.taoLd)}. Carry on with step 2. ` : "Swapped. The TAO can take a moment to show in the balance above. "),
-      link(`https://solscan.io/tx/${signature}`, "Solscan ↗"),
-    ], "ok");
-  } catch (e) {
-    failed = true;
-    if (isRejection(e)) note("swap-note", "");
-    else { console.error("swap failed", e); note("swap-note", `Swap failed: ${e.message || e}`, "bad"); }
-  } finally {
-    state.swap.busy = false;
-    $("swap-amount").disabled = false; $("swap-max").disabled = false;
-    if (failed) quoteSwapUi();
-  }
 }
 
 // ── step 2: the Bittensor wallet and the transit account ────────────────────
@@ -1963,8 +1846,6 @@ const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])$/;
 const RETURN_OPEN = CONFIG.returnLive === true || LOCAL.test(location.hostname);
 // "Top up Chutes" stays shut on soltao.xyz until CONFIG.chutesLive; local hosts open it for testing.
 const CHUTES_OPEN = CONFIG.chutesLive === true || LOCAL.test(location.hostname);
-// The SOLTAO swap in step 1 stays shut on soltao.xyz until CONFIG.soltaoSwapLive; local hosts open it.
-const SWAP_OPEN = CONFIG.soltaoSwapLive === true || LOCAL.test(location.hostname);
 function onCanonicalHost() {
   if (location.hostname === CANONICAL || LOCAL.test(location.hostname)) return true;
   location.replace(`https://${CANONICAL}/stake/${location.search}${location.hash}`);
@@ -1983,7 +1864,6 @@ function setDirection(direction) {
     document.querySelector('input[name="ck-mode"][value="derive"]').checked = true; applyMode();
     refreshReturn();
   }
-  showSwap();
   gate();
 }
 
@@ -2033,9 +1913,6 @@ function init() {
   $("pay-go").addEventListener("click", runPay);
   $("pay-cancel").addEventListener("click", () => { if (!state.running) { pay = null; $("pay-panel").hidden = true; } });
   $("sign").addEventListener("click", send);
-  $("swap-amount").addEventListener("input", onSwapAmount);
-  $("swap-max").addEventListener("click", () => { $("swap-amount").value = fmtUnits(state.soltao, 6, 6).replace(/,/g, ""); onSwapAmount(); });
-  $("swap-go").addEventListener("click", runSwapUi);
   $("share-ack").addEventListener("change", () => {
     state.shareAckAmount = $("share-ack").checked ? state.amountLd : null;
     gate();
