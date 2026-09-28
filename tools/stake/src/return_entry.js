@@ -5,8 +5,8 @@
 
 import { finishFreeReturn } from "./return_route.js";
 import { quoteReturn, planReturnFunding, MIN_RETURN_RAO, RETURN_GAS_LIMIT, WEI_PER_RAO } from "./oft_return.js";
-import { quoteTransfer, freeBalance, stakePositions, alphaPriceRao, subnetDirectory, disconnectApi, rootRewards, rootClaimMinRao, quoteRootClaim } from "./substrate.js";
-import { runStakeMove, runRootClaim, limitPrice } from "./stake_moves.js";
+import { quoteTransfer, freeBalance, stakePositions, alphaPriceRao, subnetDirectory, chainInfo, simulateSwap, disconnectApi, rootRewards, rootClaimMinRao, quoteRootClaim } from "./substrate.js";
+import { runStakeMove, runStakeSwitch, runRootClaim, limitPrice, moveLimit } from "./stake_moves.js";
 import { runPayment, quotePayment, CHUTES_MIN_RAO } from "./payments.js";
 
-globalThis.__soltaoReturn = { finishFreeReturn, quoteReturn, planReturnFunding, quoteTransfer, freeBalance, stakePositions, alphaPriceRao, subnetDirectory, runStakeMove, runRootClaim, rootRewards, rootClaimMinRao, quoteRootClaim, limitPrice, runPayment, quotePayment, CHUTES_MIN_RAO, disconnectApi, MIN_RETURN_RAO, RETURN_GAS_LIMIT, WEI_PER_RAO };
+globalThis.__soltaoReturn = { finishFreeReturn, quoteReturn, planReturnFunding, quoteTransfer, freeBalance, stakePositions, alphaPriceRao, subnetDirectory, chainInfo, simulateSwap, runStakeMove, runStakeSwitch, moveLimit, runRootClaim, rootRewards, rootClaimMinRao, quoteRootClaim, limitPrice, runPayment, quotePayment, CHUTES_MIN_RAO, disconnectApi, MIN_RETURN_RAO, RETURN_GAS_LIMIT, WEI_PER_RAO };

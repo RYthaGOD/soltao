@@ -4,7 +4,10 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-09-25. **Live in production, nothing unreleased on `main`.** Latest deploy (25 Sep,
+Last updated: 2026-09-28. **Built and tested locally, not committed or deployed:** items 24 (SOLTAO swap,
+gated off), 25 (subnet profiles and charts), 26 (alpha trading: exact quotes and Move) and 27 (validators'
+30-day record, directory changes, the review's Alpha quote). Everything below
+this paragraph about the last deploy is still true of production. As of 2026-09-25: **Live in production, nothing unreleased on `main`.** Latest deploy (25 Sep,
 Craig's go-ahead after a review of it): commit `d50a180`, `stake.js?v=d20813dc`, which ships item 21
 (claim root rewards, subnet pages) and `31cafeb` (board and stake-page polish: hero copy, subscript
 prices, SOLTAO row, footer, notes font). Served on the first poll; `npm test`, page-test runs A, E and
@@ -95,6 +98,12 @@ main "Solana TAO Board" page which stays no-wallet-connect).
 - `tools/stake/src/payments.js` — "Top up Chutes" (item 18): free TAO from the coldkey to a pasted
   Chutes payment address, signed, sealed (label "chutes-pay") and settled like a stake move. Gated by
   `CONFIG.chutesLive` (false) on soltao.xyz; open on local hosts.
+- `tools/stake/src/soltao_swap.js` — "Swap your SOLTAO for TAO" in step 1 (item 24): one wallet
+  transaction into SOLTAO's own Raydium CPMM pool, quoted with Raydium's own math. Gated by
+  `CONFIG.soltaoSwapLive` (false) on soltao.xyz; open on local hosts.
+- `tools/stake/src/subnet_profile.js` — the arithmetic behind a subnet profile (item 25): ranges, changes,
+  deregistration standing, chart geometry. `stake/subnet-profiles.json` holds the summaries and
+  `stake/history/` the daily history (`npm run history`).
 - `tools/stake/src/prices.js` — display-only USD prices from Dexscreener for the review.
 - `tools/stake/src/fit.js` — how much of an unstake's freed TAO a chained return can send (item 15).
 - `tools/stake/usage.mjs` — `npm run usage`: completed routes counted on-chain from the fee wallet.
@@ -156,6 +165,8 @@ behavior (gas limits, precompile responses, revert conditions).
 ## Deploy process
 
 This is **not** git-push-triggered. Steps, in order, every time:
+0. `cd tools/stake && npm run history` — refreshes the subnet charts' daily history in `stake/history/`
+   (item 25). Reads only the days since the last run.
 1. `cd tools/stake && npm run build` — rebuilds `stake/stake.js` and re-stamps the version hash in
    `stake/index.html`.
 2. `npm test` — full suite, should show all green, zero failures. (A `bigint: Failed to load
@@ -580,6 +591,165 @@ This is **not** git-push-triggered. Steps, in order, every time:
     - Tests: page-test runs A (the minimum in the no-TAO note), B (the step 3 hint), C (0.01 TAO: 73%,
       signing shut, opens on accepting, 0.1 TAO needs nothing), F (a holdings stake under 0.02 refused).
       The small-free holdings line has no page test (run F's wallet holds 2 TAO).
+
+24. **Swap SOLTAO for TAO in step 1, 28 Sep 2026 (built, not deployed, gated off in production:
+    `CONFIG.soltaoSwapLive: false`).** Craig's call, after an outside proposal to make SOLTAO a way to
+    pay for Bittensor services (Chutes first). It is opt-in and only for wallets that already hold
+    SOLTAO. It is not a demand mechanism, and it isn't marketed as yield.
+    - *What it does:* a wallet holding SOLTAO sees its SOLTAO beside its TAO and SOL, plus a "Swap your
+      SOLTAO for TAO" panel. The swap is one transaction the user's wallet signs: compute budget,
+      `CreateIdempotent` for the wallet's canonical TAO account, then Raydium CPMM `swap_base_input`
+      into the pool pinned in `CONFIG.soltao.pool`. There is no soltao fee on it (checked by a test)
+      and no aggregator. The TAO it delivers is used by the normal route afterwards.
+    - *The pool, read from chain on 28 Sep:* `H56x9EzR…UrFXo`, owned by `CPMMoo8L…qKP1C`. Token 0 is
+      canonical TAO (SPL Token) and token 1 is SOLTAO (Token-2022, 6 decimals, a 1% transfer tax). The
+      fees are 0.25% trade plus a 1% creator fee taken from the TAO side (`creator_fee_on` = OnlyToken0).
+      The creator fee is collected by the pool creator `5CEbueQn…SPAG`, a system-owned wallet with
+      about 229 SOL that runs `CollectCreatorFee` across many pools every second. So it is not soltao's.
+      **Still open: does any of SOLTAO's trading fees reach Craig** (StonkFun creator rewards, say)? If
+      so, the panel has to say so before `soltaoSwapLive`.
+    - *The quote:* Raydium's code, copied from `raydium-io/raydium-cp-swap` at `59fb845` (fees.rs
+      ceil/floor rounding, calculator.rs both creator-fee branches, pool.rs reserves net of fees owed,
+      and the creator-fee direction) plus Token-2022's `calculate_epoch_fee`. The live test simulates
+      the real transaction from a real holder, and the TAO it delivers **equals the quote to the
+      unit**. The offline test holds a captured fixture (`test/fixtures/soltao_pool.json`) with the
+      simulated output from that same state. The panel shows TAO out, the minimum (the quote less
+      `slippageBps`, 1%), the cost against the pool's price before fees (about 2.26% on a small swap:
+      1% tax, 1.25% pool fees, impact), "Paying with TAO you already hold costs none of this", the SOL
+      fees including the 0.001488 SOL deposit for a first TAO account, and a warning when the TAO
+      after the swap is still under the staking minimum.
+    - *Safety:* every account apart from the pinned pool is read from the pool's state and checked. That
+      covers owner program, Anchor discriminators, the mint pair and token programs, the authority PDA
+      and bump, the swap status bit, `open_time`, a known creator-fee model, vault mints and owners, and
+      only known Token-2022 extensions (a transfer hook would switch it off). Before signing, the pool
+      is read again, and the swap is refused if it already gives less than the minimum shown. The
+      transaction carries that minimum, so a worse fill fails whole with `ExceededSlippage` (the live
+      test proves the pool enforces it).
+    - *Measured:* 44,702 CU with an existing TAO account (the limit is 120,000) and 718 bytes.
+    - *Tests:* `test/soltao_swap.test.mjs` (in `npm test`) and `npm run test:soltao:live`
+      (`test/soltao_swap_live.test.mjs`, read-only). Page-test run G opens the page as a real SOLTAO
+      holder, checks the quote, and decodes the transaction handed to the wallet: exact amount, the
+      minimum shown, nothing but the pool, and no fee wallet. Run A checks a wallet without SOLTAO sees
+      no panel. On 28 Sep, run F failed on a Bittensor RPC "Failed to fetch" after runs D and E; this
+      change does not touch Bittensor, but rerun F before deploying.
+    - *Before `soltaoSwapLive: true`:* answer the creator-fee question above, then do one small
+      real-funds swap. It needs no sign-in, so it can run on localhost (`npm run serve`) with a real
+      wallet. Then flip the flag, build and deploy. The Colosseum packet says the route "does not need,
+      use or reward" SOLTAO; that stays true of the route, but mention the swap if it is live by then.
+
+25. **Subnet profiles: what a subnet does, its price chart, the numbers, the risks, 28 Sep 2026 (built,
+    not deployed).** Craig asked that people "see everything so they can make informed decisions when
+    trading alpha".
+    - *Where it shows:* on a subnet's page (`?netuid=N`, under the existing card) and in step 3 as soon as
+      a subnet is chosen ("About subnet N", a `<details>` open by default). Holdings positions get a
+      "Profile" button that opens it in step 3.
+    - *What it shows:*
+      - soltao's one- or two-sentence summary of what the subnet provides, with its source link and the
+        read date, and "soltao has not used or tested it". Where there is none, the owner's on-chain line
+        is shown, labelled as theirs.
+      - A price chart in TAO (7, 30 or 90 days; the change over the range; a crosshair by pointer or
+        arrow keys; the same prices in a table).
+      - Price changes over 7, 30 and 90 days.
+      - TAO traded in the pool over the last full day.
+      - All its Alpha at today's price.
+      - A 10 TAO buy quoted from the chain's own swap simulation, with fee and price impact.
+      - The registration date and age.
+      - Where it stands for deregistration.
+      - A risk box.
+    - *Summaries:* `stake/subnet-profiles.json` covers the 21 subnets with the most TAO in their pools on 28
+      Sep 2026, minus subnet 5 (Hone), whose sources disagree. Each was written from that subnet's own
+      registered site, docs or GitHub, read that day. It is served from soltao's origin and can be
+      edited without a build.
+    - *History:* `npm run history` (`history.mjs`) reads one block a day for 90 days (plus one earlier day
+      for volume) from `wss://archive.chain.opentensor.ai`.
+      - Each day is one `queryMulti` of SubnetTAO, SubnetAlphaIn, SubnetAlphaOut and SubnetVolume for every
+        netuid, plus the timestamp. Newest days are read first.
+      - It writes `stake/history/<netuid>.json` and `index.json`, cached in `.history-cache.json`
+        (gitignored), so a rerun reads only new days.
+      - The archive meters "historical work" (-32004 `budget_exhausted`). The script waits that out as
+        long as it takes and paces 1.5 s between days. The first full run took over an hour; later runs
+        are a few new days.
+      - `WRITE_ONLY=1` writes the files from the cache without reading.
+      - Points from before a netuid's current registration are dropped. The page also drops the lot if
+        the netuid re-registered since.
+    - *Facts behind the copy, all checked:*
+      - The price is the pool ratio, TAO in ÷ Alpha in. It equalled `swapRuntimeApi.currentAlphaPrice` to
+        the rao on six subnets on 28 Sep.
+      - Volume is SubnetVolume's daily change. It counts TAO in on buys plus TAO out on sells
+        (`staking/stake_utils.rs`, subtensor `c004ceb`).
+      - Deregistration removes the non-immune subnet with the lowest *moving* price; the earliest
+        registration loses a tie (`coinbase/root.rs get_network_to_prune`). The immunity period is
+        864,000 blocks (about 100 days). There are 128 slots, all taken on 28 Sep.
+      - On deregistration, stakers are paid from the pool's TAO, split by Alpha value, and newer subnets
+        also count Alpha in the pool (`staking/remove_stake.rs destroy_alpha_in_out_stakes`). Hence "can
+        be well under the Alpha's market value".
+    - *New reads (return bundle):* `chainInfo()` (head, immunity, subnet limit, total networks) and
+      `simulateSwap()` (`simSwapTaoForAlpha` / `simSwapAlphaForTao`). The directory rows now carry Alpha
+      in and out, the registration block, the moving price bits and Discord.
+    - *Chart:* inline SVG built with DOM calls. It is CSP-clean: classes only, plus CSSOM for the tooltip
+      position. It follows the dataviz rules: a 2px line with a 10% wash, an end dot ringed in the
+      surface colour, hairline grid, no legend for one series, text in ink tokens, a table view and
+      keyboard readout. The line colour, `--green` on `--panel`, passes the 3:1 contrast check.
+    - *Tests:* `test/subnet_profile.test.mjs` (in `npm test`) and page-test run H. Run H covers the
+      summary with its source, the ranges, the aria label, every stat, the simulated buy, the keyboard
+      readout, the table, no overflow at 320 and 768px, and the step 3 box opening for 51 and closing
+      for root.
+    - *Deploy step added:* run `npm run history` before `npm run build` and commit `stake/history/`, or the
+      charts show old history; the page says when it is over 3 days old.
+
+26. **Alpha trading from the holdings view, 28 Sep 2026 (built, not deployed; gated with the return).**
+    - *Exact quotes:* Stake (buy) and Unstake (sell) are now quoted from the chain's own swap simulation:
+      what it gets, the pool fee and the price impact, instead of spot price × amount.
+    - *Size warning:* from 1% simulated impact the quote warns that the chain may refuse the trade at
+      the 2% limit, since a trade moves the pool's price about twice its average impact. On 28 Sep,
+      moving a real 273,906 Alpha subnet-1 position showed 7.33%.
+    - *Move:* a new button on every position moves it to step 3's checked subnet and validator in one
+      extrinsic (`runStakeSwitch` in `src/stake_moves.js`).
+      - On the same subnet it is `move_stake`: a validator switch, no swap and no limit.
+      - Across subnets it is `move_stake_limit(origin_hotkey, destination_hotkey, origin_netuid,
+        destination_netuid, amount, limit, false)`. The limit is the origin price ÷ destination price in
+        rao, less 2%, which is the ratio `get_max_amount_move` compares (`staking/move_stake.rs`). Root
+        counts as 1 TAO.
+      - The chain charges one pool fee on a move; the destination leg's fee is waived.
+      - A move of less than 0.02 TAO worth is refused before signing, because the chain would leave it as
+        free TAO rather than restake it.
+      - Signed, sealed, submitted and settled like a stake move, with resume. The outcome is the
+        extrinsic's own event, or failing that the origin shrinking and the destination growing.
+    - *Verified:*
+      - Mocked chain (`test/stake_moves.test.mjs`): lands once, a price past the limit is refused whole,
+        a same-subnet move has no limit, bad inputs are refused before signing, a page closed after
+        submitting finishes on resume without a second move, and the no-event fallback works.
+      - Live runtime (`test:return:metadata`, `test:return:live`): the move calls' argument order, and
+        both signed moves decode to the intended call.
+      - Page-test run F: the Move button, the same-subnet quote, the move-to-root quote and the impact
+        warning.
+      - **Not yet with real funds.**
+
+27. **Validators' 30-day record, directory changes, and the review's Alpha quote, 28 Sep 2026 (built, not
+    deployed).**
+    - *What each validator paid its stakers.* `npm run history` now also reads every validator-permit
+      holder on every subnet (1,432 on 28 Sep) at the latest daily block and 30 days before. The measure
+      is one share of its stake pool: TotalHotkeyAlpha ÷ TotalHotkeySharesV2 (else V1), the vault
+      research's measure. The change is what it passed on after its take, in the subnet's Alpha. Adding
+      or removing stake mints or burns shares at the current value, so only earnings move it.
+      - A pool whose `AlphaSharePoolEpoch` changed in the window was reset and gets no figure. That
+        storage did not exist 30 days ago; it reads as 0 there.
+      - Output: `stake/history/validators/<netuid>.json`, `[hotkey, bps | null, stake in Alpha]`.
+      - On 28 Sep, 212 of 1,301 validators with stake paid their stakers nothing over 30 days, and 96 had
+        reset pools. Subnet 64's paid 2.3–2.8%.
+    - *Where it shows:*
+      - A "Paid stakers, 30 days" column in step 3's validator list, with its rule stated.
+      - A line on each subnet position in the holdings: "paid stakers X% in 30 days; the best here Y%".
+        The note adds that a same-subnet Move swaps nothing. This is the "validator hygiene" step agreed
+        on 28 Sep.
+      - A profile stat: the middle and best validator, and how many paid nothing.
+    - *Directory:* "Browse subnets" has 7-day and 30-day change columns (today's price against the daily
+      readings in `stake/history/summary.json`), a 30-day sparkline, and a sort by 7-day change with its
+      rule stated: "a past move says nothing about the next one".
+    - *Forward review:* a subnet stake from Solana now adds what it buys today from the chain's own
+      simulation ("Today that buys about X Alpha: a pool fee…"), plus the size warning when it applies.
+    - *Tests:* page-test runs E (picker column and rule; directory change columns, sparklines and sort),
+      F (holdings line) and H (profile stat), and run B (review quote).
 
 ## Link previews and SEO
 

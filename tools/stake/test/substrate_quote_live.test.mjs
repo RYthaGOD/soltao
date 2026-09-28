@@ -23,6 +23,7 @@ try {
 
   // Stake moves sign against the live runtime and decode back to exactly the intended call.
   const HOT = "5HCFWvRqzSHWRPecN7q8J6c7aKQnrCZTMHstPv39xL1wgDHh";
+  const VALIDATOR2 = "5CoZxgtfhcJKX2HmkwnsN18KbaT9aih9eF3b6qVPTgAUbifj"; // test data (page.test's VALIDATOR), not a pick
   const apiForDecode = await getApi();
   const price1 = await alphaPriceRao(1);
   if (price1 <= 0n || (await alphaPriceRao(0)) !== 1_000_000_000n) throw new Error("unexpected Alpha price read");
@@ -31,6 +32,9 @@ try {
     [{ kind: "stake", hotkey: HOT, netuid: 1, amount: 456n, limitRao: 1020n }, "subtensorModule.addStakeLimit", [HOT, "1", "456", "1020", "false"]],
     [{ kind: "unstake", hotkey: HOT, netuid: 0, amount: 789n, limitRao: 0n }, "subtensorModule.removeStake", [HOT, "0", "789"]],
     [{ kind: "stake", hotkey: HOT, netuid: 0, amount: 1011n, limitRao: 0n }, "subtensorModule.addStake", [HOT, "0", "1011"]],
+    // Moves: another subnet with a ratio floor, all or nothing; another validator on the same subnet, plain.
+    [{ kind: "move", hotkey: HOT, netuid: 1, toHotkey: VALIDATOR2, toNetuid: 64, amount: 1213n, limitRao: 97_000_000n }, "subtensorModule.moveStakeLimit", [HOT, VALIDATOR2, "1", "64", "1213", "97000000", "false"]],
+    [{ kind: "move", hotkey: HOT, netuid: 1, toHotkey: VALIDATOR2, toNetuid: 1, amount: 1415n, limitRao: 0n }, "subtensorModule.moveStake", [HOT, VALIDATOR2, "1", "1", "1415"]],
   ];
   for (const [move, want, args] of moves) {
     const signed = await prepareStakeMove(mnemonic, move);
@@ -38,7 +42,7 @@ try {
     const got = `${call.section}.${call.method}`, gotArgs = call.args.map((a) => a.toString());
     if (got !== want || JSON.stringify(gotArgs) !== JSON.stringify(args)) throw new Error(`${move.kind} on ${move.netuid} built ${got}(${gotArgs}) not ${want}(${args})`);
   }
-  console.log(`PASS  stake moves sign and decode as removeStakeLimit / addStakeLimit on subnets and plain on root (subnet 1 Alpha price ${price1} rao); not submitted`);
+  console.log(`PASS  stake moves sign and decode as removeStakeLimit / addStakeLimit on subnets and plain on root, and moves as moveStakeLimit across subnets and moveStake within one (subnet 1 Alpha price ${price1} rao); not submitted`);
 
   // Resumable funding signs offline first, so its identity can be saved before it is submitted.
   let signedMsg = null;

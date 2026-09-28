@@ -88,10 +88,10 @@ export async function quoteNativeFee(clients, { user, transit, amountLd }) {
   return q.nativeFee;
 }
 
-/** A priority fee (micro-lamports per compute unit) from recent fees on the TAO program's accounts. */
-export async function quotePriorityFee(connection) {
+/** A priority fee (micro-lamports per compute unit) from recent fees on the given writable accounts (the TAO program's, by default). */
+export async function quotePriorityFee(connection, accounts = [CONFIG.taoMint, CONFIG.taoOftEscrow]) {
   const { minMicroLamports: lo, maxMicroLamports: hi } = CONFIG.priorityFee;
-  const recent = await connection.getRecentPrioritizationFees({ lockedWritableAccounts: [new PublicKey(CONFIG.taoMint), new PublicKey(CONFIG.taoOftEscrow)] });
+  const recent = await connection.getRecentPrioritizationFees({ lockedWritableAccounts: accounts.map((a) => new PublicKey(a)) });
   const paid = recent.map((f) => BigInt(f.prioritizationFee)).filter((x) => x > 0n).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   const p75 = paid.length ? paid[Math.floor(paid.length * 0.75)] : 0n;
   return p75 < lo ? lo : p75 > hi ? hi : p75;

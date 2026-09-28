@@ -27,7 +27,7 @@
 <link rel="apple-touch-icon" href="../logo.png">
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="stake.css">
-<script src="stake.js?v=9ee0e7dc" defer></script>
+<script src="stake.js?v=b324b918" defer></script>
 </head>
 <body>
 <a class="skip" href="#steps">Skip to the steps</a>
@@ -95,6 +95,7 @@
       <div><dt>TAO added to the pool per day</dt><dd class="num" id="subnet-day"><span class="skel"></span></dd></div>
       <div id="subnet-validator-row" hidden><dt>Validator in this link</dt><dd class="num" id="subnet-validator"></dd></div>
     </dl>
+    <div class="profile" id="subnet-card-profile"></div>
     <p class="subnet-links" id="subnet-links" hidden></p>
     <p class="step-note" id="subnet-note" role="status"></p>
   </div>
@@ -142,9 +143,27 @@
       <div><dt>Wallet</dt><dd class="num" id="sol-address"></dd></div>
       <div><dt>TAO on Solana</dt><dd class="num" id="tao-balance"><span class="skel"></span></dd></div>
       <div><dt>SOL</dt><dd class="num" id="sol-balance"><span class="skel"></span></dd></div>
+      <div id="soltao-row" hidden><dt>SOLTAO</dt><dd class="num" id="soltao-balance"></dd></div>
       <div class="dir-rev" hidden><dt>Staked on Bittensor</dt><dd class="num" id="tao-staked"><span class="skel"></span></dd></div>
       <div class="dir-rev" hidden><dt>Unstaked on Bittensor</dt><dd class="num" id="tao-free"><span class="skel"></span></dd></div>
     </dl>
+    <div class="move-panel swap-panel" id="swap-panel" hidden>
+      <h3>Swap your SOLTAO for TAO</h3>
+      <p class="step-note">This wallet holds SOLTAO. You can swap it for canonical TAO here, then use that TAO in the steps below. The route doesn't need SOLTAO, and paying with TAO you already hold is always cheaper.</p>
+      <details class="info"><summary><span class="info-i" aria-hidden="true">i</span><span class="info-l">What is this, and what does it cost?</span></summary><div class="info-body"><p>SOLTAO is the coin launched by the person who runs this page (see the disclosure at the bottom). The swap is one transaction from your wallet into SOLTAO's own pool on Raydium, <code>H56x…UrFXo</code>, against canonical TAO. soltao adds no fee to it. It costs SOLTAO's 1% transfer tax, the pool's 0.25% trading fee, a 1% creator fee the pool takes from the TAO side, and price impact. The quote shows the total before you sign. If the price moves more than 1% before it lands, the swap fails and nothing moves.</p></div></details>
+      <label class="field field-sm">
+        <span>SOLTAO to swap</span>
+        <span class="field-row">
+          <input type="text" id="swap-amount" inputmode="decimal" autocomplete="off">
+          <button type="button" class="btn btn-ghost" id="swap-max">all</button>
+        </span>
+      </label>
+      <p class="step-note" id="swap-quote" role="status"></p>
+      <div class="step-row">
+        <button type="button" class="btn btn-primary" id="swap-go" disabled>Swap in my wallet</button>
+        <span class="step-note" id="swap-note" role="status"></span>
+      </div>
+    </div>
   </li>
 
   <!-- 2 ───────────────────────────────────────────────────────── -->
@@ -331,6 +350,10 @@
         <input type="text" id="netuid-in" inputmode="numeric" autocomplete="off" spellcheck="false" value="0" placeholder="0 (Root)">
       </label>
       <span class="step-note" id="netuid-note" role="status">0 is Root, the default.</span>
+      <details class="profile-box" id="plan-profile-box" hidden open>
+        <summary id="plan-profile-h">About this subnet</summary>
+        <div class="profile" id="plan-profile"></div>
+      </details>
       <details class="info"><summary><span class="info-i" aria-hidden="true">i</span><span class="info-l">What's a subnet?</span></summary><div class="info-body"><p>Bittensor is made of subnets, each doing a different AI job. <b>Root (0)</b> stakes your TAO as TAO. Any other subnet converts your TAO into that subnet's own token (its Alpha) at the current price, so its value moves with that subnet.</p><p><b>Collecting rewards:</b> a subnet stake collects its rewards in the stake itself. Root rewards wait with the validator until you claim them from "Show what this wallet holds", and each claim pays a Bittensor fee (about 0.008 TAO on 25 Sep 2026). Small root stakes can take a long time to earn more than that, so root suits larger amounts.</p></div></details>
       <div class="picker">
         <button type="button" class="btn btn-ghost btn-sm" id="dir-btn">Browse subnets</button>
@@ -341,12 +364,13 @@
               <option value="netuid">By subnet number</option>
               <option value="pool">By TAO in the pool, most first</option>
               <option value="emission">By TAO added to the pool each day, most first</option>
+              <option value="change7">By 7-day price change, most risen first</option>
             </select>
           </div>
           <p class="step-note" id="dir-rule" role="status"></p>
           <div class="pick-scroll">
             <table class="pick">
-              <thead><tr><th scope="col">Subnet</th><th scope="col">Name</th><th scope="col">Price, TAO per Alpha</th><th scope="col">TAO in pool</th><th scope="col">TAO added per day</th><th scope="col"><span class="sr">Choose</span></th></tr></thead>
+              <thead><tr><th scope="col">Subnet</th><th scope="col">Name</th><th scope="col">Price, TAO per Alpha</th><th scope="col">TAO in pool</th><th scope="col">TAO added per day</th><th scope="col">7 days</th><th scope="col">30 days</th><th scope="col"><span class="sr">Choose</span></th></tr></thead>
               <tbody id="dir-body"></tbody>
             </table>
           </div>
@@ -364,7 +388,7 @@
           <p class="step-note" id="pick-rule" role="status"></p>
           <div class="pick-scroll">
             <table class="pick">
-              <thead><tr><th scope="col">uid</th><th scope="col">Address</th><th scope="col">Take</th><th scope="col">Dividend share, last epoch</th><th scope="col"><span class="sr">Choose</span></th></tr></thead>
+              <thead><tr><th scope="col">uid</th><th scope="col">Address</th><th scope="col">Take</th><th scope="col">Dividend share, last epoch</th><th scope="col">Paid stakers, 30 days</th><th scope="col"><span class="sr">Choose</span></th></tr></thead>
               <tbody id="pick-body"></tbody>
             </table>
           </div>
@@ -509,7 +533,8 @@
   </p>
   <p class="foot-dis">
     <strong>Disclosure:</strong> the person who runs this page also launched the SOLTAO coin on StonkFun. You
-    do not need it to use this route, and nothing here is a recommendation to buy it.
+    do not need it to use this route, and nothing here is a recommendation to buy it. A wallet that already
+    holds SOLTAO is offered a swap to TAO in step 1, with its cost shown and no soltao fee.
   </p>
   <p class="foot-dis">
     Not affiliated with Bittensor, the Opentensor Foundation, Sunrise, LayerZero or any validator. Crossing a

@@ -1,7 +1,7 @@
 // Stake moves from the coldkey (src/stake_moves.js) against a simulated Substrate account with a
 // transaction pool. Counts moves the chain APPLIED, since the danger is a second one landing.
 
-import { runStakeMove, runRootClaim, limitPrice } from "../src/stake_moves.js";
+import { runStakeMove, runStakeSwitch, runRootClaim, limitPrice, moveLimit } from "../src/stake_moves.js";
 import { fitReturnAmount } from "../src/fit.js";
 
 let failures = 0;
@@ -188,6 +188,99 @@ function claimChain({ rootStake = 100_000_000n, owed = 2_000_000n, minRao = 500_
   expect("nothing is returned when the fees would take it all", none === 0n, `${none}`);
   const stuck = await fitReturnAmount({ ...base, freed: 500_000_000n, free: 500_000_000n, leftAfter: async () => 0n });
   expect("a quote that never leaves the kept balance returns nothing rather than guessing", stuck === 0n, `${stuck}`);
+}
+
+// ── moves between positions (runStakeSwitch): one extrinsic, origin shrinks and destination grows ──
+// Positions keyed "hotkey:netuid". Prices in rao of TAO per Alpha; the move sells at the origin's price and
+// buys at the destination's, refused (all or nothing) when the ratio at dispatch is under the limit.
+function moveChain({ prices = { 0: 1_000_000_000n, 1: 6_818_232n, 64: 68_854_768n }, atDispatch = null, events = true } = {}) {
+  const s = { pos: new Map([["5Hot:1", 500_000_000_000n]]), nonce: 0n, pool: new Map(), signed: new Map(), applied: 0, submits: 0, result: new Map(), crashAfterSubmit: false };
+  const priceAt = (n) => (atDispatch?.[n] ?? prices[n]);
+  const include = () => {
+    for (const [k, tx] of [...s.pool]) {
+      s.pool.delete(k);
+      if (tx.nonce !== s.nonce) continue;
+      s.nonce++;
+      s.result.set(`0x${k}`, "failed");
+      const same = tx.netuid === tx.toNetuid;
+      const ratio = (priceAt(tx.netuid) * 1_000_000_000n) / priceAt(tx.toNetuid);
+      if (!same && ratio < tx.limitRao) continue; // below the floor: refused whole
+      const from = `${tx.hotkey}:${tx.netuid}`, to = `${tx.toHotkey}:${tx.toNetuid}`;
+      const got = same ? tx.amount : (((tx.amount * priceAt(tx.netuid)) / 1_000_000_000n) * 1_000_000_000n) / priceAt(tx.toNetuid);
+      s.pos.set(from, (s.pos.get(from) ?? 0n) - tx.amount);
+      s.pos.set(to, (s.pos.get(to) ?? 0n) + got);
+      s.applied++; s.result.set(`0x${k}`, "success");
+    }
+  };
+  const ops = {
+    signerAddress: () => "5Cold",
+    stakeOf: async (_c, hotkey, netuid) => s.pos.get(`${hotkey}:${Number(netuid)}`) ?? 0n,
+    alphaPrice: async (n) => prices[Number(n)],
+    prepare: async (_m, call) => {
+      const key = `signed-${s.signed.size}`;
+      s.signed.set(key, { key, ...call, netuid: Number(call.netuid), toNetuid: Number(call.toNetuid), amount: BigInt(call.amount), limitRao: BigInt(call.limitRao), nonce: s.nonce });
+      return { id: `0x${key}`, signed: key, nonce: String(s.nonce), address: "5Cold", fromBlock: "100" };
+    },
+    submit: async (signed) => {
+      const tx = s.signed.get(signed); s.submits++;
+      if (tx.nonce < s.nonce) return { state: "rejected", reason: "outdated" };
+      s.pool.set(signed, tx);
+      if (s.crashAfterSubmit) { s.crashAfterSubmit = false; throw new Error("page closed after submitting"); }
+      include();
+      return { state: "submitted" };
+    },
+    coldkeyNonce: async () => { include(); return s.nonce; },
+    outcome: async (id) => (events ? s.result.get(id) ?? null : null),
+  };
+  let last = {};
+  const run = (args, progress = last) => runStakeSwitch({ mnemonic: "words", ...args, progress, ops, waitMs: 0, pollMs: 0, onCheckpoint: (p) => { last = JSON.parse(JSON.stringify(p)); } });
+  return { s, run };
+}
+
+{
+  // 6,818,232 / 68,854,768 of a TAO: the ratio is 0.0990..., in rao 99,023,...; 2% under it is the floor.
+  expect("a move's floor is the origin price over the destination's, less 2%", moveLimit(6_818_232n, 68_854_768n, 200n) === (((6_818_232n * 1_000_000_000n) / 68_854_768n) * 9_800n) / 10_000n);
+  expect("…and root counts as 1 TAO, so root to a subnet is 1 over its price", moveLimit(1_000_000_000n, 500_000_000n, 0n) === 2_000_000_000n);
+}
+{
+  const { s, run } = moveChain();
+  const r = await run({ from: { hotkey: "5Hot", netuid: 1 }, to: { hotkey: "5Val", netuid: 64 }, amount: 200_000_000_000n });
+  const call = [...s.signed.values()][0];
+  expect("a move to another subnet is one move_stake_limit, carrying the floor", call.kind === "move" && call.netuid === 1 && call.toNetuid === 64 && call.toHotkey === "5Val" && call.limitRao === moveLimit(6_818_232n, 68_854_768n, 200n));
+  expect("it lands once: the origin shrinks by the amount and the destination grows", r.done && s.applied === 1 && s.pos.get("5Hot:1") === 300_000_000_000n && r.moved === 200_000_000_000n && r.received === s.pos.get("5Val:64") && r.received > 0n, JSON.stringify({ moved: String(r.moved), received: String(r.received) }));
+}
+{
+  // The destination's price jumps 5% before it lands: the ratio falls under the floor.
+  const { s, run } = moveChain({ atDispatch: { 64: (68_854_768n * 105n) / 100n } });
+  const r = await run({ from: { hotkey: "5Hot", netuid: 1 }, to: { hotkey: "5Val", netuid: 64 }, amount: 200_000_000_000n });
+  expect("a move whose prices move past the limit is refused whole, and reported so", r.refused && s.applied === 0 && s.pos.get("5Hot:1") === 500_000_000_000n);
+}
+{
+  const { s, run } = moveChain();
+  const r = await run({ from: { hotkey: "5Hot", netuid: 1 }, to: { hotkey: "5Val", netuid: 1 }, amount: 100_000_000_000n });
+  const call = [...s.signed.values()][0];
+  expect("a move to another validator on the same subnet swaps nothing and needs no limit", r.done && call.toNetuid === 1 && call.limitRao === 0n && s.pos.get("5Val:1") === 100_000_000_000n);
+}
+{
+  const { s, run } = moveChain();
+  let threw = false; try { await run({ from: { hotkey: "5Hot", netuid: 1 }, to: { hotkey: "5Hot", netuid: 1 }, amount: 1n }); } catch { threw = true; }
+  let over = false; try { await run({ from: { hotkey: "5Hot", netuid: 1 }, to: { hotkey: "5Val", netuid: 64 }, amount: 600_000_000_000n }, {}); } catch { over = true; }
+  expect("a move to where the stake already is, or of more than the position holds, is refused before signing", threw && over && s.signed.size === 0);
+}
+{
+  // The page closes right after the move is submitted; opening it again settles that move, never a second.
+  const { s, run } = moveChain();
+  s.crashAfterSubmit = true;
+  let crashed = false;
+  try { await run({ from: { hotkey: "5Hot", netuid: 1 }, to: { hotkey: "5Val", netuid: 64 }, amount: 200_000_000_000n }); } catch { crashed = true; }
+  const r = await run({ from: { hotkey: "5Hot", netuid: 1 }, to: { hotkey: "5Val", netuid: 64 }, amount: 200_000_000_000n });
+  expect("a move interrupted after submitting is finished on resume, and applied once", crashed && r.done && s.applied === 1 && s.signed.size === 1, JSON.stringify({ applied: s.applied, signed: s.signed.size }));
+}
+{
+  // Without the chain's event (old blocks pruned), both positions moving decide it.
+  const { s, run } = moveChain({ events: false });
+  const r = await run({ from: { hotkey: "5Hot", netuid: 1 }, to: { hotkey: "5Val", netuid: 64 }, amount: 200_000_000_000n });
+  expect("with no event to read, the origin shrinking and the destination growing decide it", r.done && s.applied === 1);
 }
 
 console.log(failures ? `\n${failures} failed` : "\nall passed");

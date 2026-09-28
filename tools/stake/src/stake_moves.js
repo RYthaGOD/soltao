@@ -91,6 +91,71 @@ export async function runStakeMove({
 }
 
 /**
+ * The worst price ratio a move between subnets accepts: the origin's price over the destination's, in rao
+ * (1e9 means equal), less the tolerance. move_stake_limit refuses a move that would fill below it, since
+ * it is sent all or nothing (subtensor staking/move_stake.rs get_max_amount_move, c004ceb). Root counts
+ * as a price of 1 TAO, which is how the chain treats it too.
+ */
+export function moveLimit(fromPriceRao, toPriceRao, toleranceBps) {
+  const ratio = (BigInt(fromPriceRao) * 1_000_000_000n) / BigInt(toPriceRao);
+  return (ratio * (10_000n - BigInt(toleranceBps))) / 10_000n;
+}
+
+/**
+ * Moves `amount` of one position (`from`: { hotkey, netuid }) to another validator and/or subnet (`to`),
+ * in one extrinsic from the coldkey: a plain `move_stake` on the same subnet (a validator switch, no
+ * swap), otherwise `move_stake_limit` (sell on one pool, buy on the other, within the tolerance). The
+ * chain's own event decides the outcome; failing that, the origin shrinking and the destination growing.
+ * Returns { done, refused, moved, received }; `progress` is the last checkpoint, pass it back to resume.
+ */
+export async function runStakeSwitch({
+  mnemonic, from, to, amount, toleranceBps = CONFIG.subnetPriceToleranceBps, progress = {},
+  onStep = () => {}, onCheckpoint = () => {}, waitMs = 2 * 60_000, pollMs = 4_000, ops = realOps,
+}) {
+  const coldkey = ops.signerAddress(mnemonic);
+  let saved = { ...progress };
+  const save = (patch) => { saved = { ...saved, ...patch }; onCheckpoint(saved); };
+  const outcome = async () => {
+    const [fromAfter, toAfter, event] = await Promise.all([ops.stakeOf(coldkey, saved.fromHotkey, saved.fromNetuid), ops.stakeOf(coldkey, saved.toHotkey, saved.toNetuid), dispatchResult(ops, saved.rec)]);
+    const moved = BigInt(saved.fromBefore) - fromAfter, received = toAfter - BigInt(saved.toBefore);
+    const landed = saved.rec?.status === "included" && (event ? event === "success" : moved > 0n && received > 0n);
+    save({ stage: landed ? "done" : "refused" });
+    onStep("move", landed ? "ok" : "bad", landed ? "done" : "Bittensor did not make this move (a price moved past the limit, or a rule refused it); nothing was spent but the transaction fee");
+    return { done: landed, refused: !landed, moved: landed && moved > 0n ? moved : 0n, received: landed && received > 0n ? received : 0n, fromAfter, toAfter };
+  };
+
+  // Resume: settle the saved extrinsic first; never sign a second one while the first could land.
+  if (saved.rec && saved.stage !== "done" && saved.stage !== "refused") {
+    if (saved.rec.status === "signed") {
+      onStep("move", "busy", "checking the earlier transaction");
+      save({ rec: { ...saved.rec, status: await settleSigned({ coldkeyNonce: ops.coldkeyNonce, submit: ops.submit }, saved.rec, { waitMs, pollMs, what: "move" }) } });
+    }
+    return outcome();
+  }
+  if (saved.stage === "done" || saved.stage === "refused") return { done: saved.stage === "done", refused: saved.stage === "refused", moved: 0n, received: 0n };
+
+  const fromNetuid = Number(from.netuid), toNetuid = Number(to.netuid);
+  if (from.hotkey === to.hotkey && fromNetuid === toNetuid) throw new Error("that is where this stake already is");
+  const [fromBefore, toBefore, fromPrice, toPrice] = await Promise.all([ops.stakeOf(coldkey, from.hotkey, fromNetuid), ops.stakeOf(coldkey, to.hotkey, toNetuid), ops.alphaPrice(fromNetuid), ops.alphaPrice(toNetuid)]);
+  const amt = BigInt(amount);
+  if (amt <= 0n) throw new Error("enter an amount above zero");
+  if (amt > fromBefore) throw new Error("that is more than this position holds");
+  const limitRao = fromNetuid === toNetuid ? 0n : moveLimit(fromPrice, toPrice, toleranceBps);
+  onStep("move", "busy", "signing");
+  const rec = await ops.prepare(mnemonic, { kind: "move", hotkey: from.hotkey, netuid: fromNetuid, toHotkey: to.hotkey, toNetuid, amount: amt, limitRao });
+  if (rec.address !== coldkey) throw new Error("the stake move was signed by a different coldkey");
+  save({
+    stage: "signed", kind: "move", fromHotkey: from.hotkey, fromNetuid: String(fromNetuid), toHotkey: to.hotkey, toNetuid: String(toNetuid), amount: String(amt),
+    fromBefore: String(fromBefore), toBefore: String(toBefore), fromPriceRao: String(fromPrice), toPriceRao: String(toPrice), limitRao: String(limitRao), rec: { ...str(rec), status: "signed" },
+  });
+  onStep("move", "busy", "sent to Bittensor");
+  const sub = await ops.submit(rec.signed);
+  const status = sub.state === "rejected" ? "dead" : await settleSigned({ coldkeyNonce: ops.coldkeyNonce, submit: ops.submit }, saved.rec, { waitMs, pollMs, what: "move" });
+  save({ rec: { ...saved.rec, status } });
+  return outcome();
+}
+
+/**
  * Claims the root rewards waiting with one validator (`claim_root_with_hotkey`). The chain sells the
  * coldkey's slice of that validator's basket and stakes the TAO on root under the same validator, and
  * root stake does not grow any other way under the basket model, so the outcome is judged by that root

@@ -31,6 +31,19 @@ async function main() {
     const minRao = BigInt((threshold.bits ?? threshold).toString()) >> 32n;
     if (minRao <= 0n || minRao > 1_000_000_000n) throw new Error(`implausible root claim minimum: ${minRao} rao`);
     console.log(`PASS  BetaBasketRuntimeApi reads answer (${rows.length} positions for an empty key); root claim minimum ${Number(minRao) / 1e9} TAO`);
+
+    // Moves between positions (src/stake_moves.js runStakeSwitch) and the profile's reads.
+    const moveStake = args(api.tx.subtensorModule.moveStake).join(", ");
+    const moveStakeLimit = args(api.tx.subtensorModule.moveStakeLimit).join(", ");
+    if (moveStake !== "originHotkey:AccountId32, destinationHotkey:AccountId32, originNetuid:u16, destinationNetuid:u16, alphaAmount:u64") throw new Error(`unexpected moveStake metadata: ${moveStake}`);
+    if (moveStakeLimit !== `${moveStake}, limitPrice:u64, allowPartial:bool`) throw new Error(`unexpected moveStakeLimit metadata: ${moveStakeLimit}`);
+    console.log(`PASS  subtensorModule.moveStakeLimit(${moveStakeLimit})`);
+    const sim = (await api.call.swapRuntimeApi.simSwapTaoForAlpha(64, 1_000_000_000n)).toJSON();
+    const back = (await api.call.swapRuntimeApi.simSwapAlphaForTao(64, 1_000_000_000n)).toJSON();
+    if (!(BigInt(sim.alphaAmount) > 0n && BigInt(sim.taoFee) > 0n && "alphaSlippage" in sim && BigInt(back.taoAmount) > 0n && "alphaFee" in back && "taoSlippage" in back)) throw new Error(`unexpected swap simulation shape: ${JSON.stringify({ sim, back })}`);
+    console.log(`PASS  swapRuntimeApi simulations answer: 1 TAO buys ${Number(sim.alphaAmount) / 1e9} Alpha on subnet 64, 1 Alpha sells for ${Number(back.taoAmount) / 1e9} TAO`);
+    for (const k of ["networkImmunityPeriod", "subnetLimit", "totalNetworks"]) if (!api.query.subtensorModule[k]) throw new Error(`storage ${k} is missing`);
+    console.log("PASS  networkImmunityPeriod, subnetLimit and totalNetworks are readable");
   } finally {
     await api.disconnect();
   }

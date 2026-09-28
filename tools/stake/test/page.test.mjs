@@ -19,6 +19,8 @@ import { CONFIG } from "../src/config.js";
 import { sealRoute } from "../src/pending.js";
 import { selector } from "../src/bittensor.js";
 import { ss58Decode } from "../src/derive.js";
+import { createClients } from "../src/solana.js";
+import { findSoltaoHolder } from "./soltao_holder.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const CHROME = process.env.CHROME || "C:/Program Files/Google/Chrome/Application/chrome.exe";
@@ -144,6 +146,7 @@ if (want("A")) {
   await page.click("#connect");
   await waitText(page, "#tao-balance", /TAO/);
   expect("connect shows the wallet and a TAO balance", (await text(page, "#tao-balance")) === "0 TAO", await text(page, "#tao-balance"));
+  expect("a wallet with no SOLTAO is offered no SOLTAO swap, and no SOLTAO row", (await hidden(page, "#swap-panel")) && (await hidden(page, "#soltao-row")));
   const swap = await page.$eval("#connect-note a", (a) => a.href).catch(() => "");
   expect("a wallet with no TAO is pointed at a SOL→canonical TAO swap, by mint", swap === `https://jup.ag/swap/So11111111111111111111111111111111111111112-${CONFIG.taoMint}` && /Check again/.test(await text(page, "#connect-note")), swap);
   expect("…and told how much it needs to stake, before buying", /To stake, you need at least 0\.0\d+ TAO/.test(await text(page, "#connect-note")), await text(page, "#connect-note"));
@@ -276,6 +279,8 @@ if (want("B")) {
   expect("a hotkey validating on the subnet passes, with its uid", /^Validator on subnet 1 · uid \d+/.test(await text(page, "#hotkey-note")), await text(page, "#hotkey-note"));
   await waitText(page, "#r-plan", /subnet 1/);
   expect("review states the TAO going in, the subnet, and the price limit", /^Stake about 0\.0\d+ TAO on subnet 1 to .*bought as its Alpha at the pool price\. If that price is more than 2% worse/.test(await text(page, "#r-plan")), await text(page, "#r-plan"));
+  await waitText(page, "#r-plan", /Today that buys about/, 60_000).catch(() => {});
+  expect("…and what that buys today, from the chain's own swap simulation", /Today that buys about [\d.,]+ Alpha: a pool fee of [\d.]+ TAO and [\d.]+% price impact, per the chain's own simulation\./.test(await text(page, "#r-plan")), await text(page, "#r-plan"));
   await setField("#netuid-in", "2");
   expect("changing the subnet drops the hotkey's approval at once, before any re-check", /^waiting to check it on subnet 2/.test(await text(page, "#hotkey-note")) && (await text(page, "#r-plan")) === "—", `${await text(page, "#hotkey-note")} · ${await text(page, "#r-plan")}`);
   await setField("#netuid-in", "");
@@ -409,6 +414,7 @@ if (want("E")) {
   const shares = rows.map((r) => parseFloat(r[3]));
   expect("it lists permit holders with uid, take and dividend share, and states its sort rule", rows.length > 0 && /sorted by share of its validator dividends at the last epoch/.test(await text(page, "#pick-rule")) && /not a recommendation/.test(await text(page, "#pick-rule")), `${rows.length} rows · ${rows[0]?.join(" | ")}`);
   expect("…in exactly that order", shares.every((x, i) => i === 0 || shares[i - 1] >= x), shares.join(","));
+  expect("…with what each paid its stakers over 30 days, and how that figure is made", rows.every((r) => /^([+−]?\d+\.\d%|—)$/.test(r[4])) && rows.some((r) => r[4] !== "—") && /"Paid stakers" is how much one share of each validator's stake pool grew, in the subnet's Alpha/.test(await text(page, "#pick-rule")), rows.map((r) => r[4]).join(","));
   expect("the validator already chosen is marked", (await page.$$eval('#pick-body tr[aria-current="true"]', (x) => x.length)) === 1);
   const pickUid = rows.at(-1)[0];
   await page.$$eval("#pick-body tr", (trs) => trs.at(-1).querySelector("button").click());
@@ -423,7 +429,7 @@ if (want("E")) {
   const dirRule = await text(page, "#dir-rule"), total = Number((dirRule.match(/of (\d+) subnets/) || [])[1]);
   const first = await page.$$eval("#dir-body tr", (trs) => trs.slice(0, 2).map((tr) => [...tr.children].map((td) => td.textContent.trim())));
   expect("the directory lists every subnet from the chain, root first, with name, price and pool", total > 100 && first[0][0] === "0" && first[0][2] === "1 (root)" && first[1][0] === "1" && first[1][1].length > 0 && parseFloat(first[1][2]) > 0 && parseFloat(first[1][3].replace(/,/g, "")) > 0, `${total} · ${first.map((r) => r.join(" | ")).join(" / ")}`);
-  expect("…and says its order, that names are not endorsements, and when it read them", /in subnet-number order\. "TAO added per day" is the TAO the chain put into that pool in the last block, times 7,200 blocks \(12 seconds each\); it moves from block to block\. Names are what each owner registered on-chain; a name is not an endorsement\. Read \d\d:\d\d UTC\./.test(dirRule), dirRule);
+  expect("…and says its order, that names are not endorsements, and when it read them", /in subnet-number order\. "TAO added per day" is the TAO the chain put into that pool in the last block, times 7,200 blocks \(12 seconds each\); it moves from block to block\. The 7 and 30 day changes compare today's price with soltao's daily readings to \d+ \w{3} \d{4}; a past move says nothing about the next one\. Names are what each owner registered on-chain; a name is not an endorsement\. Read \d\d:\d\d UTC\./.test(dirRule), dirRule);
   await setFieldE(page, "#dir-search", "7");
   expect("search by number finds that subnet", (await page.$$eval("#dir-body tr", (trs) => trs.map((tr) => tr.firstChild.textContent))).includes("7"));
   await setFieldE(page, "#dir-search", "");
@@ -433,6 +439,13 @@ if (want("E")) {
   await page.select("#dir-sort", "emission");
   const daily = await page.$$eval("#dir-body tr", (trs) => trs.map((tr) => [tr.children[0].textContent, parseFloat(tr.children[4].textContent.replace(/,/g, ""))]));
   expect("sorting by TAO added per day orders it so, leaves root out, and says so", daily.length > 100 && daily[0][1] > 0 && daily.every((p, i) => i === 0 || daily[i - 1][1] >= p[1]) && !daily.some((p) => p[0] === "0") && /sorted by TAO the chain adds to each subnet's pool per day, most first \(root is left out\)/.test(await text(page, "#dir-rule")), `${daily.slice(0, 3).map((p) => p.join(":")).join(" ")}`);
+  // 7 and 30 day changes from soltao's daily history, with a 30-day sparkline.
+  const pct = (s) => (s === "—" ? null : Number(s.replace("−", "-").replace(/[+%]/g, "")));
+  await page.select("#dir-sort", "change7");
+  const moves = await page.$$eval("#dir-body tr", (trs) => trs.map((tr) => [tr.children[0].textContent, tr.children[5].textContent.trim(), tr.children[6].textContent.trim(), Boolean(tr.children[6].querySelector("svg.spark"))]));
+  const ch = moves.map((m) => pct(m[1])).filter((v) => v !== null);
+  expect("each subnet shows its 7 and 30 day price change, with a 30-day sparkline", ch.length > 100 && moves.filter((m) => m[3]).length > 100 && moves.slice(0, 3).every((m) => /^[+−]?\d+\.\d%$/.test(m[1]) && /[+−]?\d+\.\d%$/.test(m[2])), moves.slice(0, 3).map((m) => m.join(":")).join(" "));
+  expect("sorting by 7-day change orders it so, leaves root out, and says a past move predicts nothing", ch.every((v, i) => i === 0 || ch[i - 1] >= v) && !moves.some((m) => m[0] === "0") && /most risen first/.test(await text(page, "#dir-rule")) && /a past move says nothing about the next one/.test(await text(page, "#dir-rule")), ch.slice(0, 3).join(", "));
   await page.select("#dir-sort", "pool");
   const pickNet = pools[0][0];
   await page.$$eval("#dir-body tr", (trs) => trs[0].querySelector("button").click());
@@ -517,7 +530,7 @@ if (want("F")) {
   await clickEl(page, "#holdings-btn");
   await waitText(page, "#holdings-note", /^Read \d\d:\d\d UTC|Could not/, 90_000);
   const holdings = await page.$$eval("#holdings-body tr", (trs) => trs.map((tr) => [...tr.children].map((td) => td.textContent.trim()).join(" | ")));
-  expect("holdings show free TAO and each stake position with its worth in TAO, read from the chain", holdings[0] === "Free | — | 2 TAO | 2 TAO | Stake Top up Chutes" && holdings.length === 4 && holdings.slice(1, 3).every((h) => /^Staked on subnet 1 \| 5\w+…\w+ \| [\d,.]+ Alpha \| ≈ [\d,.]+ TAO \| Unstake$/.test(h)) && /2 stake positions\. Subnet stakes are in that subnet's Alpha and collect their rewards in the stake itself; root stakes are in TAO\./.test(await text(page, "#holdings-note")), `${holdings.join(" / ")} · ${await text(page, "#holdings-note")}`);
+  expect("holdings show free TAO and each stake position with its worth in TAO, read from the chain", holdings[0] === "Free | — | 2 TAO | 2 TAO | Stake Top up Chutes" && holdings.length === 4 && holdings.slice(1, 3).every((h) => /^Staked on subnet 1 \| 5\w+…\w+(paid stakers [+−]?\d+\.\d% in 30 days; the best here [+−]?\d+\.\d%)? \| [\d,.]+ Alpha \| ≈ [\d,.]+ TAO \| Unstake Move Profile$/.test(h)) && /2 stake positions\. Subnet stakes are in that subnet's Alpha and collect their rewards in the stake itself; root stakes are in TAO\./.test(await text(page, "#holdings-note")), `${holdings.join(" / ")} · ${await text(page, "#holdings-note")}`);
   expect("root rewards waiting with a validator are listed with a Claim, and counted in the total", /^Root rewards \| 5\w+…\w+ \| —waiting to be claimed \| ≈ 0\.003 TAO \| Claim$/.test(holdings[3] || "") && /0\.003 TAO is waiting to be claimed, and "Claim" adds it to your root stake\. Each claim pays a Bittensor fee \(about 0\.008 TAO on 25 Sep 2026\), so it only pays off once more than that has built up\. Worth about [\d,.]+ TAO in all.*counting rewards still to claim/.test(await text(page, "#holdings-note")), `${holdings[3]} · ${await text(page, "#holdings-note")}`);
   await page.$eval("#holdings-body tr:nth-child(4) button", (b) => b.click());
   await waitText(page, "#move-quote", /^Claims about|Could not|The Bittensor fee/, 60_000);
@@ -539,7 +552,7 @@ if (want("F")) {
   // Unstake, then return: offered on an unstake, and priced (sale and bridge fee) before anything is signed.
   await page.$eval("#holdings-body tr:nth-child(3) button", (b) => b.click());
   await waitText(page, "#move-quote", /Sells for about|Could not/, 60_000);
-  expect("a position offers Unstake, quoted at today's price with the 2% floor", /^Sells for about [\d.,]+ TAO at today's pool price \([\d.]+ TAO per Alpha\)\. If the price is more than 2% lower when it lands, nothing is unstaked\.$/.test(await text(page, "#move-quote")) && (await text(page, "#move-title")).startsWith("Unstake from subnet 1"), await text(page, "#move-quote"));
+  expect("a position offers Unstake, quoted from the chain's own swap simulation, with the 2% floor", /^Sells for about [\d.,]+ TAO: a pool fee of [\d.]+ Alpha and [\d.]+% price impact, per the chain's own simulation\. If the price is more than 2% lower when it lands, nothing is unstaked\.$/.test(await text(page, "#move-quote")) && (await text(page, "#move-title")).startsWith("Unstake from subnet 1"), await text(page, "#move-quote"));
   expect("…with the choice to bring the TAO back to Solana, off by default", !(await page.$eval("#move-then-wrap", (el) => el.hidden)) && !(await page.$eval("#move-then", (el) => el.checked)));
   await clickEl(page, "#move-then");
   await waitText(page, "#move-quote", /LayerZero fee|Could not/, 60_000);
@@ -554,13 +567,29 @@ if (want("F")) {
   await waitText(page, "#hotkey-note", /Validator on subnet 1|Not on subnet|Could not reach/, 90_000);
   await page.$eval("#holdings-body tr:first-child button", (b) => b.click());
   await waitText(page, "#move-quote", /Buys about|Could not/, 60_000);
-  expect("…then quotes the Alpha it buys at today's price, with the 2% ceiling", /^Buys about [\d.,]+ Alpha at today's pool price \([\d.]+ TAO each\)\. If the price is more than 2% higher when it lands, nothing is staked\.$/.test(await text(page, "#move-quote")), await text(page, "#move-quote"));
+  expect("…then quotes the Alpha it buys from the chain's own swap simulation, with the 2% ceiling", /^Buys about [\d.,]+ Alpha: a pool fee of [\d.]+ TAO and [\d.]+% price impact, per the chain's own simulation\. If the price is more than 2% higher when it lands, nothing is staked\.$/.test(await text(page, "#move-quote")), await text(page, "#move-quote"));
   expect("…from the free TAO, keeping 0.01 TAO for fees", (await text(page, "#move-title")).startsWith("Stake free TAO on subnet 1 to 5HCFWv") && (await page.$eval("#move-amount", (el) => el.value)) === "1.99", await page.$eval("#move-amount", (el) => el.value));
   await setFieldE(page, "#move-amount", "3");
   expect("…and refuses more than that", /More than the 1\.99 available/.test(await text(page, "#move-quote")) && (await page.$eval("#move-go", (b) => b.disabled)), await text(page, "#move-quote"));
   await setFieldE(page, "#move-amount", "0.01");
   await waitText(page, "#move-quote", /Staking needs at least|Buys about|Stakes/, 30_000);
   expect("…and less than the staking minimum", /^Staking needs at least 0\.02 TAO\.$/.test(await text(page, "#move-quote")) && (await page.$eval("#move-go", (b) => b.disabled)), await text(page, "#move-quote"));
+  await clickEl(page, "#move-cancel");
+  // Move a position to step 3's choice (not confirmed: nothing is signed or sent). Subnet 1 is in step 3
+  // now, so a subnet 1 position either switches validator (no swap) or is already there.
+  await page.$eval("#holdings-body tr:nth-child(2) button:nth-of-type(2)", (b) => b.click());
+  await waitText(page, "#move-quote", /Nothing is sold|same subnet and validator|Could not/, 30_000);
+  expect("Move within a subnet swaps nothing, or says the stake is already there", /Nothing is sold or bought, so there is no price risk|Step 3 names this same subnet and validator/.test(await text(page, "#move-quote")), await text(page, "#move-quote"));
+  await clickEl(page, "#move-cancel");
+  await setFieldE(page, "#netuid-in", "0");
+  await setFieldE(page, "#hotkey-in", VALIDATOR);
+  await waitText(page, "#hotkey-note", /Registered validator|Could not reach/, 90_000);
+  await page.$eval("#holdings-body tr:nth-child(2) button:nth-of-type(2)", (b) => b.click());
+  await waitText(page, "#move-quote", /then stakes that TAO on root|Could not/, 60_000);
+  // The whole position is large for subnet 1's pool, so its price impact also draws the warning.
+  expect("Move to root is one transaction: it sells the Alpha (quoted by the chain's simulation) and stakes the TAO, within 2%", /^Sells [\d.,]+ Alpha on subnet 1 for about [\d.,]+ TAO \(a pool fee of [\d.]+ Alpha and [\d.]+% price impact, per the chain's own simulation\), then stakes that TAO on root, all in one Bittensor transaction to validator 5CoZxg…AUbifj\. If the two prices move more than 2% against you before it lands, nothing moves\.( At this size the price impact is large enough that the chain may refuse it at the limit, and only the network fee would be spent\. A smaller amount is more likely to go through\.)?$/.test(await text(page, "#move-quote")) && /^Move from subnet 1 \(5\w+…\w+\) to root \(5CoZxg…AUbifj\)$/.test(await text(page, "#move-title")), `${await text(page, "#move-title")} · ${await text(page, "#move-quote")}`);
+  const impact = Number((await text(page, "#move-quote")).match(/([\d.]+)% price impact/)?.[1] ?? 0);
+  expect("…and from 1% price impact it warns that the chain may refuse it at the limit", (impact >= 1) === /may refuse it at the limit/.test(await text(page, "#move-quote")) && (impact < 1 || (await attr(page, "#move-quote", "data-tone")) === "warn"), `${impact}%`);
   await clickEl(page, "#move-cancel");
   // Top up Chutes (not confirmed: nothing is signed or sent).
   await page.$eval("#holdings-body tr:first-child button:nth-of-type(2)", (b) => b.click());
@@ -597,6 +626,98 @@ if (want("F")) {
   expect("signing is open for the return once quoted", !(await page.$eval("#sign", (b) => b.disabled)), await text(page, "#sign-note"));
   await clean(page, problems, "run F");
   await page.close();
+}
+
+// ── Run H: a subnet's profile: what it does, its price chart, the numbers and the risks ──
+if (want("H")) {
+  const { page, problems } = await openWith({ pubkey: HOLDER, secret: ed25519.utils.randomPrivateKey(), base: `${plain.base}?netuid=64` });
+  await page.waitForSelector("#subnet-card-profile .chart svg", { timeout: 90_000 });
+  const card = await page.$eval("#subnet-card-profile", (el) => el.textContent);
+  expect("a subnet page shows soltao's summary of what it does, with its source", /Serverless AI compute/.test(card) && /In soltao's words, from chutes\.ai, read 28 Sep 2026/.test(card), card.slice(0, 200));
+  expect("…a price chart with 7, 30 and 90 day ranges, 30 by default", (await page.$$eval("#subnet-card-profile .range button", (bs) => bs.map((b) => `${b.textContent}:${b.getAttribute("aria-pressed")}`).join())) === "7 days:false,30 days:true,90 days:false");
+  expect("…the chart says what it plots, for screen readers", /Alpha price in TAO, last 30 days/.test(await page.$eval("#subnet-card-profile .chart svg", (s) => s.getAttribute("aria-label"))));
+  expect("…the changes, what traded, all its Alpha at today's price, registration and deregistration", ["Price change: 7, 30 and 90 days", "TAO traded in its pool, last full day", "All its Alpha at today's price", "Registered", "Deregistration"].every((t) => card.includes(t)), card);
+  expect("…and the risks before buying", /Before you buy: Alpha's price moves against TAO/.test(card) && /deregistered/.test(card));
+  expect("…and what its validators paid their stakers over 30 days: the middle one and the best", /What its validators paid stakers, \d+ \w{3} to \d+ \w{3}[+−]?\d+\.\d% for the middle one of \d+ with stake, [+−]?\d+\.\d% for the best/.test(card), (card.match(/What its validators paid[^.]*\./) || [""])[0]);
+  await page.waitForFunction(() => /Alpha: a fee of [\d.]+ TAO, and price impact of [\d.]+%/.test(document.querySelector("#subnet-card-profile").textContent) || /could not ask the chain/.test(document.querySelector("#subnet-card-profile").textContent), { timeout: 60_000 });
+  const buy = await page.$eval("#subnet-card-profile", (el) => (el.textContent.match(/Buying 10 TAO of it now(about [\d.,]+ Alpha: a fee of [\d.]+ TAO, and price impact of [\d.]+%)/) || ["", ""])[1]);
+  expect("an example 10 TAO buy is quoted from the chain's own swap simulation, fee and price impact included", Boolean(buy), buy);
+  await page.click("#subnet-card-profile .range button[data-days='7']");
+  expect("choosing 7 days redraws the chart for 7 days", /last 7 days/.test(await page.$eval("#subnet-card-profile .chart svg", (s) => s.getAttribute("aria-label"))));
+  await page.$eval("#subnet-card-profile .chart svg", (s) => s.focus()); // an SVG element: puppeteer's focus() wants HTML
+  await page.keyboard.press("ArrowLeft");
+  const tip = await page.$eval("#subnet-card-profile .chart-tip", (t) => ({ hidden: t.hidden, text: t.textContent }));
+  expect("the arrow keys move a readout along the chart, value first", !tip.hidden && /^[\d.]+ TAO/.test(tip.text), JSON.stringify(tip));
+  const rows = await page.$$eval("#subnet-card-profile table tbody tr", (trs) => trs.length);
+  expect("the same prices are in a table, for anyone who can't use the chart", rows >= 2, String(rows));
+  for (const width of [320, 768]) {
+    await page.setViewport({ width, height: 900 });
+    await new Promise((r) => setTimeout(r, 300));
+    const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(`the profile fits at ${width}px`, over <= 0, `${over}px`);
+  }
+
+  // Choosing a subnet in step 3 puts the same profile beside the choice.
+  await page.click("#connect");
+  await page.click("#derive");
+  await page.waitForFunction(() => document.querySelector("#derive")?.textContent === "Signed", { timeout: 60_000 });
+  await clickEl(page, "#phrase-ack");
+  await page.$eval("#netuid-in", (el) => { el.value = ""; });
+  await page.type("#netuid-in", "51");
+  await page.waitForSelector("#plan-profile .chart svg", { timeout: 90_000 });
+  expect("choosing a subnet in step 3 opens its profile there", !(await hidden(page, "#plan-profile-box")) && (await text(page, "#plan-profile-h")) === "About subnet 51" && /GPU rental marketplace/.test(await text(page, "#plan-profile")));
+  await page.$eval("#netuid-in", (el) => { el.value = ""; });
+  await page.type("#netuid-in", "0");
+  await page.waitForFunction(() => document.querySelector("#plan-profile-box").hidden, { timeout: 10_000 }).catch(() => {});
+  expect("root has no profile: choosing it closes the box", await hidden(page, "#plan-profile-box"));
+  await clean(page, problems, "run H");
+  await page.close();
+}
+
+// ── Run G: a wallet holding SOLTAO is offered the swap to TAO in step 1 (declined at the wallet) ──
+// Local hosts open the swap (SWAP_OPEN), so it shows here whatever CONFIG.soltaoSwapLive says.
+if (want("G")) {
+  const conn = createClients().connection;
+  const soltaoHolder = await findSoltaoHolder(conn, 200_000_000_000n);
+  expect("found a real SOLTAO holder (with SOL) to open the page as", Boolean(soltaoHolder));
+  if (soltaoHolder) {
+    const { page, problems } = await openWith({ pubkey: soltaoHolder, secret: ed25519.utils.randomPrivateKey(), base: live.base });
+    await page.click("#connect");
+    await waitText(page, "#soltao-balance", /SOLTAO/);
+    expect("the wallet's SOLTAO is shown beside its TAO and SOL", !(await hidden(page, "#soltao-row")), await text(page, "#soltao-balance"));
+    expect("…with the swap panel, which names the conflict", !(await hidden(page, "#swap-panel")) && /launched by the person who runs this page/.test(await page.$eval("#swap-panel", (el) => el.textContent)));
+    await page.type("#swap-amount", "999999999999");
+    await waitText(page, "#swap-quote", /more than/);
+    expect("more than the wallet holds is refused before any quote", (await attr(page, "#swap-quote", "data-tone")) === "bad" && (await page.$eval("#swap-go", (b) => b.disabled)));
+    await page.$eval("#swap-amount", (el) => { el.value = ""; });
+    await page.type("#swap-amount", "100000");
+    await waitText(page, "#swap-quote", /You get about/);
+    const quote = await text(page, "#swap-quote");
+    expect("the quote states TAO out, the minimum, the cost against paying in TAO, and that soltao charges nothing", /You get about [\d.]+ TAO/.test(quote) && /at least [\d.]+ TAO/.test(quote) && /the swap costs 2\.\d\d%/.test(quote) && /soltao charges nothing on the swap/.test(quote), quote);
+    await page.waitForFunction(() => !document.querySelector("#swap-go").disabled, { timeout: 30_000 }).catch(() => {});
+    expect("the swap button opens once quoted", !(await page.$eval("#swap-go", (b) => b.disabled)));
+    // The page shows TAO to 6 decimals; the minimum it signs has 9.
+    const [w, f = ""] = quote.match(/at least ([\d.]+) TAO/)[1].split(".");
+    const shownMin = BigInt(w) * 1_000_000_000n + BigInt((f + "000000000").slice(0, 9));
+    await clickEl(page, "#swap-go");
+    await page.waitForFunction(() => window.__sent || /failed/i.test(document.querySelector("#swap-note")?.textContent || ""), { timeout: 90_000 });
+    const sent = await page.evaluate(() => window.__sent);
+    expect("the page simulates the swap, then hands the wallet a transaction", Boolean(sent), await text(page, "#swap-note"));
+    if (sent) {
+      const tx = VersionedTransaction.deserialize(Uint8Array.from(sent));
+      const keys = tx.message.staticAccountKeys.map((k) => k.toBase58());
+      const programs = tx.message.compiledInstructions.map((ix) => keys[ix.programIdIndex]);
+      expect("it is the compute budget, the TAO account and the swap into SOLTAO's pinned pool, and nothing else", programs.join() === ["ComputeBudget111111111111111111111111111111", "ComputeBudget111111111111111111111111111111", "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL", CONFIG.soltao.program].join() && keys.includes(CONFIG.soltao.pool), programs.join());
+      expect("no soltao fee rides on it", !keys.includes(FEE_WALLET));
+      const data = Buffer.from(tx.message.compiledInstructions[3].data);
+      const signedMin = data.readBigUInt64LE(16);
+      expect("it swaps exactly the 100,000 SOLTAO typed, for at least the minimum shown", data.readBigUInt64LE(8) === 100_000_000_000n && signedMin >= shownMin && signedMin - shownMin < 1000n, `${data.readBigUInt64LE(8)} / ${signedMin} vs shown ${shownMin}`);
+    }
+    await page.waitForFunction(() => document.querySelector("#swap-note")?.textContent === "", { timeout: 10_000 }).catch(() => {});
+    expect("declining leaves the swap ready to try again", (await text(page, "#swap-note")) === "" && !(await page.$eval("#swap-amount", (el) => el.disabled)));
+    await clean(page, problems, "run G");
+    await page.close();
+  }
 }
 
 await browser.close();

@@ -134,12 +134,15 @@ export const prepareTransfer = (mnemonic, toAddress, amountRao, opts) =>
  * fill: `limitRao` is the worst price accepted in rao of TAO per Alpha (a ceiling when buying, a floor
  * when selling). Argument order is the live runtime's (test/polkadot.test.mjs, 24 Sep 2026).
  */
-export function prepareStakeMove(mnemonic, { kind, hotkey, netuid, amount, limitRao }) {
+export function prepareStakeMove(mnemonic, { kind, hotkey, netuid, amount, limitRao, toHotkey, toNetuid }) {
   const n = Number(netuid), amt = BigInt(amount);
   return prepareCall(mnemonic, (api) => {
     const m = api.tx.subtensorModule;
     if (kind === "stake") return n === 0 ? m.addStake(hotkey, 0, amt) : m.addStakeLimit(hotkey, n, amt, BigInt(limitRao), false);
     if (kind === "unstake") return n === 0 ? m.removeStake(hotkey, 0, amt) : m.removeStakeLimit(hotkey, n, amt, BigInt(limitRao), false);
+    // A move to another validator on the same subnet swaps nothing, so it needs no limit. Between subnets
+    // it sells on one pool and buys on the other, limited by the ratio of their prices, all or nothing.
+    if (kind === "move") return n === Number(toNetuid) ? m.moveStake(hotkey, toHotkey, n, n, amt) : m.moveStakeLimit(hotkey, toHotkey, n, Number(toNetuid), amt, BigInt(limitRao), false);
     throw new Error(`unknown stake move ${kind}`);
   });
 }
@@ -173,11 +176,45 @@ export async function subnetDirectory() {
       description: identity ? text(identity.description) : "",
       url: identity ? text(identity.subnetUrl) : "",
       github: identity ? text(identity.githubRepo) : "",
+      discord: identity ? text(identity.discord) : "",
       taoInRao: taoIn,
+      alphaInRao: alphaIn,
+      alphaOutRao: BigInt(d.alphaOut.toString()), // Alpha held in stakes, outside the pool
       taoPerBlockRao: d.taoInEmission === undefined ? null : BigInt(d.taoInEmission.toString()),
       priceRao: netuid === 0 ? 1_000_000_000n : alphaIn > 0n ? (taoIn * 1_000_000_000n) / alphaIn : null,
+      registeredAt: Number(d.networkRegisteredAt.toString()),
+      // The chain's moving average of the price (fixed point, 32 fractional bits): what deregistration
+      // ranks subnets by (coinbase/root.rs get_network_to_prune). Only compared, never shown as a price.
+      movingPriceBits: BigInt((d.movingPrice?.bits ?? d.movingPrice ?? 0).toString()),
     };
   }).sort((a, b) => a.netuid - b.netuid);
+}
+
+/**
+ * The chain facts a subnet profile needs beside the directory: the current block, how long a new subnet
+ * is immune from deregistration, and the subnet cap.
+ */
+export async function chainInfo() {
+  const api = await getApi();
+  const q = api.query.subtensorModule;
+  const [header, immunity, limit, total] = await Promise.all([api.rpc.chain.getHeader(), q.networkImmunityPeriod(), q.subnetLimit(), q.totalNetworks()]);
+  return { head: header.number.toNumber(), immunityBlocks: Number(immunity.toString()), subnetLimit: Number(limit.toString()), totalNetworks: Number(total.toString()) };
+}
+
+/**
+ * What the chain's own swap simulation says a buy (`taoRao` of TAO into the pool) or a sell (`alphaRao`
+ * of Alpha) gets now: the amount out, the swap fee, and what price impact takes (swapRuntimeApi, read
+ * only; nothing is signed). All in rao; the fee is in the currency paid in.
+ */
+export async function simulateSwap(netuid, { taoRao = null, alphaRao = null }) {
+  const api = await getApi();
+  const r = (taoRao !== null
+    ? await api.call.swapRuntimeApi.simSwapTaoForAlpha(Number(netuid), BigInt(taoRao))
+    : await api.call.swapRuntimeApi.simSwapAlphaForTao(Number(netuid), BigInt(alphaRao))).toJSON();
+  const big = (v) => BigInt(v ?? 0);
+  return taoRao !== null
+    ? { in: BigInt(taoRao), out: big(r.alphaAmount), fee: big(r.taoFee), impact: big(r.alphaSlippage) }
+    : { in: BigInt(alphaRao), out: big(r.taoAmount), fee: big(r.alphaFee), impact: big(r.taoSlippage) };
 }
 
 /** A subnet's Alpha price in rao of TAO per Alpha, from the chain's swap runtime API. Root is 1 TAO. */

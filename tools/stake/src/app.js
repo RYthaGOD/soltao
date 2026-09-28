@@ -7,13 +7,15 @@ import { PublicKey } from "@solana/web3.js";
 import { ed25519 } from "@noble/curves/ed25519";
 import { CONFIG } from "./config.js";
 import { derivationMessage, signInFields, walletFromSignature, ss58Decode, ss58Encode, toHex } from "./derive.js";
-import { createClients, getTaoBalance, quoteNativeFee, quotePriorityFee, priorityFeeLamports, buildRouteTransaction, removeDust } from "./solana.js";
+import { createClients, getTaoBalance, quoteNativeFee, quotePriorityFee, priorityFeeLamports, buildRouteTransaction, removeDust, taoTokenAccount } from "./solana.js";
 import { findOnSubnet, getDelegate, getFreeBalance, getUidCount, subnetValidators } from "./bittensor.js";
 import { getGasPrice } from "./evm.js";
 import { usdPrices, fmtUsd } from "./prices.js";
 import { fitReturnAmount } from "./fit.js";
 import { sealRoute, readRoute, untrustedPlan, sealRecord, openRecord } from "./pending.js";
 import { finishRoute, transitState, minStakeAmount, stakeGasReserve, sweepFloor } from "./route.js";
+import { readSwapState, quoteSwap, minimumOut, buildSwapTransaction, getSoltaoBalance } from "./soltao_swap.js";
+import { rangeSeries, changeBps, priceDaysAgo, coversRange, dateText, deregStanding, blockTime, chartGeometry, nearestPoint } from "./subnet_profile.js";
 
 const $ = (id) => document.getElementById(id);
 const clients = createClients();
@@ -30,6 +32,8 @@ const state = {
   chutesPrefill: null, // a Chutes payment address from a ?chutes= link
   ret: { free: null, quote: null }, // the return direction: coldkey free TAO (rao), the current quote
   shareBlocks: false, shareAckAmount: null, // fees too large a share of the amount, until acknowledged for that amount
+  soltao: 0n, // the wallet's SOLTAO (6 decimals), read only where the swap is open
+  swap: { seq: 0, quote: null, busy: false, done: false }, // the SOLTAO → TAO swap in step 1
 };
 // The last USD prices read, for hints that should not wait on the feed; display only.
 let lastUsd = null;
@@ -57,14 +61,15 @@ const sol = (lamports) => `${fmtUnits(BigInt(lamports), 9)} SOL`;
 const short = (s, n = 4) => (s.length > n * 2 + 3 ? `${s.slice(0, n)}…${s.slice(-n)}` : s);
 const fromHex = (h) => Uint8Array.from(h.replace(/^0x/, "").match(/.{2}/g), (x) => parseInt(x, 16));
 
-/** "1.25" → 1250000000n (9 decimals). Returns null for anything that is not a plain decimal. */
-function parseTao(input) {
+/** "1.25" → 1250000000n at 9 decimals. Returns null for anything that is not a plain decimal. */
+function parseUnits(input, decimals) {
   const s = String(input).trim();
   if (!/^\d*(\.\d*)?$/.test(s) || s === "" || s === ".") return null;
   const [w, f = ""] = s.split(".");
-  if (f.length > 9) return null;
-  return BigInt(w || "0") * RAO + BigInt((f + "000000000").slice(0, 9));
+  if (f.length > decimals) return null;
+  return BigInt(w || "0") * 10n ** BigInt(decimals) + BigInt((f + "0".repeat(decimals)).slice(0, decimals));
 }
+const parseTao = (input) => parseUnits(input, 9);
 
 function note(id, text, tone) {
   const el = $(id); el.textContent = text || ""; if (tone) el.dataset.tone = tone; else delete el.dataset.tone;
@@ -134,11 +139,13 @@ async function connect() {
 }
 
 async function refreshBalances() {
-  const [taoBal, lamports] = await Promise.all([
+  const [taoBal, lamports, soltaoBal] = await Promise.all([
     getTaoBalance(clients.connection, state.user).catch(() => null),
     clients.connection.getBalance(new PublicKey(state.user)).then(BigInt).catch(() => null),
+    SWAP_OPEN ? getSoltaoBalance(clients.connection, state.user).catch(() => null) : null,
   ]);
-  state.taoLd = taoBal ?? 0n; state.lamports = lamports ?? 0n;
+  state.taoLd = taoBal ?? 0n; state.lamports = lamports ?? 0n; state.soltao = soltaoBal ?? 0n;
+  showSwap();
   // The staking minimum depends on Bittensor's gas price; read it now so the note below can state it.
   if (state.gasPrice === null) state.gasPrice = await getGasPrice().catch(() => null);
   await readUsd();
@@ -155,6 +162,7 @@ async function refreshBalances() {
       text(`This wallet holds no canonical Solana TAO yet. ${minText}`),
       jupiterLink(),
       text(`, check the mint is ${CONFIG.taoMint.slice(0, 6)}…${CONFIG.taoMint.slice(-4)}, then come back. `), again,
+      ...(!$("swap-panel").hidden ? [text(" Or swap the SOLTAO this wallet holds, below.")] : []),
     ], "warn");
   } else if (state.direction === "forward" && min !== null && taoBal < min) {
     const again = Object.assign(document.createElement("button"), { type: "button", className: "btn btn-ghost btn-sm", textContent: "Check again" });
@@ -165,6 +173,117 @@ async function refreshBalances() {
     ], "warn");
   } else note("connect-note", "");
   gate();
+}
+
+// ── step 1, optional: swap SOLTAO for TAO ───────────────────────────────────
+// Offered only to a wallet that already holds SOLTAO, where the swap is open (SWAP_OPEN). SOLTAO is
+// the coin launched by the person who runs this page: the panel says so, prices the swap against
+// paying in TAO, and adds no soltao fee. One wallet transaction into the coin's own pool
+// (src/soltao_swap.js); the TAO it delivers is then used by the steps below like any other.
+const soltaoText = (v) => `${fmtUnits(v, 6)} SOLTAO`;
+const pctText = (bps) => `${(Number(bps) / 100).toFixed(2)}%`;
+function showSwap() {
+  const holds = SWAP_OPEN && state.soltao > 0n;
+  $("soltao-row").hidden = !holds;
+  $("soltao-balance").textContent = soltaoText(state.soltao);
+  // Stays open after a swap that used it all, so its result can be read.
+  const show = SWAP_OPEN && state.direction === "forward" && (holds || state.swap.done);
+  $("swap-panel").hidden = !show;
+  if (show && !state.swap.busy) quoteSwapUi();
+}
+
+let swapTimer = null;
+function onSwapAmount() {
+  clearTimeout(swapTimer);
+  state.swap.quote = null; $("swap-go").disabled = true;
+  swapTimer = setTimeout(quoteSwapUi, 350);
+}
+
+async function quoteSwapUi() {
+  const seq = ++state.swap.seq;
+  state.swap.quote = null; $("swap-go").disabled = true;
+  const raw = $("swap-amount").value;
+  if (!raw.trim()) { note("swap-quote", ""); return; }
+  const amount = parseUnits(raw, 6);
+  if (amount === null || amount <= 0n) { note("swap-quote", "Enter an amount of SOLTAO, like 250000 (up to 6 decimals).", "bad"); return; }
+  if (amount > state.soltao) { note("swap-quote", `That is more than the ${soltaoText(state.soltao)} this wallet holds.`, "bad"); return; }
+  note("swap-quote", "reading the pool…");
+  try {
+    const [s, micro, taoAccount, rent] = await Promise.all([
+      readSwapState(clients.connection),
+      quotePriorityFee(clients.connection, [CONFIG.soltao.pool]).catch(() => CONFIG.priorityFee.minMicroLamports),
+      clients.connection.getAccountInfo(taoTokenAccount(state.user)),
+      clients.connection.getMinimumBalanceForRentExemption(165),
+      readUsd(),
+    ]);
+    if (seq !== state.swap.seq) return;
+    const q = quoteSwap(s, amount), minOut = minimumOut(q.out);
+    // Solana's base fee for one signature, the priority fee, and the deposit for a TAO account if the
+    // wallet has none yet (the swap creates it; the deposit comes back if the account is ever closed).
+    const deposit = taoAccount ? 0n : BigInt(rent);
+    const solCost = 5_000n + priorityFeeLamports(micro, CONFIG.soltao.computeUnits) + deposit;
+    const parts = [
+      `You get about ${tao(q.out)}${usdOf(q.out)}, and at least ${tao(minOut)} if other trades land first.`,
+      `At the pool's price before costs this SOLTAO is worth ${tao(q.atSpot)}, so the swap costs ${pctText(q.costBps)}: SOLTAO's 1% transfer tax, the pool's 1.25% in fees, and price impact. Paying with TAO you already hold costs none of this.`,
+      `Solana fees: ${sol(solCost)}${deposit ? `, including a ${sol(deposit)} deposit to open this wallet's TAO account` : ""}. soltao charges nothing on the swap.`,
+    ];
+    const min = stakeMinRao(), after = state.taoLd + q.out;
+    if (min !== null && after < min) parts.push(`With it this wallet would hold ${tao(after)}, under the ${tao(min)} staking needs. Less can only be delivered unstaked, where the route's mostly flat fees take a large share.`);
+    if (state.lamports < solCost) {
+      note("swap-quote", `${parts.join(" ")} This wallet holds ${sol(state.lamports)}, not enough SOL for the fees.`, "bad");
+      return;
+    }
+    state.swap.quote = { amount, minOut, micro };
+    note("swap-quote", parts.join(" "));
+    $("swap-go").disabled = state.running || state.swap.busy;
+  } catch (e) {
+    if (seq !== state.swap.seq) return;
+    console.error("swap quote failed", e);
+    note("swap-quote", `Could not quote the swap: ${e.message || e}`, "bad");
+  }
+}
+
+async function runSwapUi() {
+  const agreed = state.swap.quote;
+  if (!agreed || state.swap.busy || state.running) return;
+  state.swap.busy = true;
+  for (const id of ["swap-go", "swap-amount", "swap-max"]) $(id).disabled = true;
+  note("swap-note", "building and simulating…");
+  let failed = false;
+  try {
+    // The pool again, as it is now: if it would already give less than the minimum shown, say so
+    // rather than send a transaction that can only fail. The transaction carries the minimum shown.
+    const s = await readSwapState(clients.connection);
+    if (quoteSwap(s, agreed.amount).out < agreed.minOut) throw new Error("the price moved past the minimum shown since the quote. Check the new quote, then swap again");
+    const { transaction, blockhash, lastValidBlockHeight } = await buildSwapTransaction(clients.connection, s, { user: state.user, amountIn: agreed.amount, minOut: agreed.minOut, priorityMicroLamports: agreed.micro });
+    const sim = await clients.connection.simulateTransaction(transaction, { sigVerify: false });
+    if (sim.value.err) {
+      const why = (sim.value.logs || []).filter((l) => /Error|failed|insufficient/i.test(l)).slice(-2).join(" · ");
+      throw new Error(`simulation failed, nothing was sent. ${why || JSON.stringify(sim.value.err)}`);
+    }
+    note("swap-note", "check your wallet…");
+    let signature;
+    if (state.provider.signAndSendTransaction) ({ signature } = await state.provider.signAndSendTransaction(transaction));
+    else signature = await clients.connection.sendRawTransaction((await state.provider.signTransaction(transaction)).serialize(), { skipPreflight: false });
+    noteHtml("swap-note", [text("sent, confirming… "), link(`https://solscan.io/tx/${signature}`, "Solscan ↗")]);
+    const confirmed = await confirm(signature, blockhash, lastValidBlockHeight);
+    if (!confirmed.ok) throw new Error(confirmed.why);
+    const before = state.taoLd;
+    state.swap.done = true; $("swap-amount").value = "";
+    await refreshBalances();
+    noteHtml("swap-note", [
+      text(state.taoLd > before ? `Swapped: ${tao(state.taoLd - before)} arrived, and this wallet now holds ${tao(state.taoLd)}. Carry on with step 2. ` : "Swapped. The TAO can take a moment to show in the balance above. "),
+      link(`https://solscan.io/tx/${signature}`, "Solscan ↗"),
+    ], "ok");
+  } catch (e) {
+    failed = true;
+    if (isRejection(e)) note("swap-note", "");
+    else { console.error("swap failed", e); note("swap-note", `Swap failed: ${e.message || e}`, "bad"); }
+  } finally {
+    state.swap.busy = false;
+    $("swap-amount").disabled = false; $("swap-max").disabled = false;
+    if (failed) quoteSwapUi();
+  }
 }
 
 // ── step 2: the Bittensor wallet and the transit account ────────────────────
@@ -344,6 +463,7 @@ async function onNetuid() {
   const recheckHotkey = () => { if ($("hotkey-in").value.trim()) onHotkey(); };
   if (/^\d+$/.test(v) && BigInt(v) <= 65535n) state.netuid = BigInt(v);
   resetPicker(); // a list belongs to one subnet; never leave another's on screen
+  hidePlanProfile();
   state.netuid = 0n;
   if (!v) {
     $("netuid-in").removeAttribute("aria-invalid");
@@ -385,6 +505,7 @@ async function onNetuid() {
       state.netuidValid = true;
       $("netuid-in").setAttribute("aria-invalid", "false");
       note("netuid-note", `Subnet ${state.netuid} · ${uids} registered hotkeys. Staking here mints its Alpha.`, "ok");
+      showPlanProfile(Number(state.netuid));
       recheckHotkey();
     }
   } catch (e) {
@@ -399,14 +520,23 @@ async function onNetuid() {
 // orders, both named on the page; nothing is ranked beyond them. Choosing a row only fills the field.
 let directory = null; // { at, rows }
 const BLOCKS_PER_DAY = 7_200n; // one block every 12 seconds
+const DIRECTORY_TTL_MS = 5 * 60_000;
+async function readDirectory() {
+  if (!directory || Date.now() - directory.at > DIRECTORY_TTL_MS) {
+    const lib = await loadReturnLib();
+    directory = { at: Date.now(), rows: await lib.subnetDirectory() };
+  }
+  return directory;
+}
+// Each subnet's last 31 daily prices, from soltao's own origin (`npm run history`), for the directory's
+// change columns and sparklines. A failed read only leaves those columns empty.
+let dirSummary = null;
 async function openDirectory() {
   $("dir-wrap").hidden = false; $("dir-btn").disabled = true;
   try {
-    if (!directory || Date.now() - directory.at > 5 * 60_000) {
-      note("dir-rule", "reading every subnet from Bittensor…");
-      const lib = await loadReturnLib();
-      directory = { at: Date.now(), rows: await lib.subnetDirectory() };
-    }
+    if (!directory || Date.now() - directory.at > DIRECTORY_TTL_MS) note("dir-rule", "reading every subnet from Bittensor…");
+    const [, summary] = await Promise.all([readDirectory(), dirSummary ? dirSummary : fetchJson("/stake/history/summary.json").catch(() => null)]);
+    dirSummary = summary;
     renderDirectory();
   } catch (e) {
     note("dir-rule", `Could not read the subnets from Bittensor: ${e.message}`, "bad");
@@ -417,17 +547,25 @@ async function openDirectory() {
 function renderDirectory() {
   if (!directory) return;
   const q = $("dir-search").value.trim().toLowerCase(), order = $("dir-sort").value;
-  let rows = directory.rows.filter((r) => !q || String(r.netuid) === q || r.name.toLowerCase().includes(q) || r.symbol.toLowerCase().includes(q));
+  const nowSec = Math.floor(Date.now() / 1000);
+  // Daily prices from the summary, only while the netuid still holds the subnet they were read for.
+  const daysOf = (r) => { const s = dirSummary?.prices?.[r.netuid]; return s && s.registeredAt === r.registeredAt ? s.days : []; };
+  const changeOf = (r, days) => (r.netuid === 0 || r.priceRao === null ? null : (() => { const p = priceDaysAgo(daysOf(r), days, nowSec); return p === null ? null : changeBps(p, Number(r.priceRao)); })());
+  let rows = directory.rows.filter((r) => !q || String(r.netuid) === q || r.name.toLowerCase().includes(q) || r.symbol.toLowerCase().includes(q))
+    .map((r) => ({ ...r, ch7: changeOf(r, 7), ch30: changeOf(r, 30) }));
   const most = (key) => (a, b) => ((b[key] ?? -1n) > (a[key] ?? -1n) ? 1 : (b[key] ?? -1n) < (a[key] ?? -1n) ? -1 : a.netuid - b.netuid);
   if (order === "pool") rows = rows.filter((r) => r.netuid !== 0).sort(most("taoInRao"));
   if (order === "emission") rows = rows.filter((r) => r.netuid !== 0).sort(most("taoPerBlockRao"));
+  if (order === "change7") rows = rows.filter((r) => r.netuid !== 0).sort((a, b) => (b.ch7 ?? -Infinity) - (a.ch7 ?? -Infinity) || a.netuid - b.netuid);
   const at = new Date(directory.at).toISOString().slice(11, 16);
   const rule = {
     netuid: "in subnet-number order",
     pool: "sorted by TAO in each subnet's pool, most first (root has no pool and is left out)",
     emission: "sorted by TAO the chain adds to each subnet's pool per day, most first (root is left out)",
+    change7: "sorted by the Alpha price's change over 7 days, most risen first; subnets without 7 days of history go last (root is left out)",
   }[order];
-  note("dir-rule", `${rows.length} of ${directory.rows.length} subnets, ${rule}. "TAO added per day" is the TAO the chain put into that pool in the last block, times 7,200 blocks (12 seconds each); it moves from block to block. Names are what each owner registered on-chain; a name is not an endorsement. Read ${at} UTC.`);
+  const hist = dirSummary?.lastTime ? ` The 7 and 30 day changes compare today's price with soltao's daily readings to ${dayText(dirSummary.lastTime)}; a past move says nothing about the next one.` : " The price history could not be read, so the change columns are empty.";
+  note("dir-rule", `${rows.length} of ${directory.rows.length} subnets, ${rule}. "TAO added per day" is the TAO the chain put into that pool in the last block, times 7,200 blocks (12 seconds each); it moves from block to block.${hist} Names are what each owner registered on-chain; a name is not an endorsement. Read ${at} UTC.`);
   const current = state.netuidValid ? Number(state.netuid) : null;
   $("dir-body").replaceChildren(...rows.map((r) => {
     const tr = document.createElement("tr");
@@ -442,10 +580,27 @@ function renderDirectory() {
       td(String(r.netuid), "num"), td(`${r.name}${r.symbol ? ` ${r.symbol}` : ""}`),
       td(r.netuid === 0 ? "1 (root)" : r.priceRao === null ? "—" : fmtUnits(r.priceRao, 9), "num"),
       td(r.netuid === 0 ? "no pool" : fmtUnits(r.taoInRao, 9, 0), "num"),
-      td(r.netuid === 0 || r.taoPerBlockRao === null ? "—" : fmtUnits(r.taoPerBlockRao * BLOCKS_PER_DAY, 9, 2), "num"), cell,
+      td(r.netuid === 0 || r.taoPerBlockRao === null ? "—" : fmtUnits(r.taoPerBlockRao * BLOCKS_PER_DAY, 9, 2), "num"),
+      changeCell(r.ch7), changeCell(r.ch30, r.netuid === 0 ? [] : [...daysOf(r), [nowSec, Number(r.priceRao ?? 0)]]), cell,
     );
     return tr;
   }));
+}
+/** A change figure, signed and coloured (the sign carries it without colour), with a 30-day sparkline. */
+function changeCell(bps, days = null) {
+  const td = el("td", "num dir-chg");
+  if (days && days.length > 2) td.append(sparkline(days.map((d) => d[1])), " ");
+  td.append(bpsNode(bps));
+  return td;
+}
+function sparkline(values) {
+  const w = 64, h = 18, lo = Math.min(...values), hi = Math.max(...values), span = hi - lo || 1;
+  const pts = values.map((v, i) => `${((i / (values.length - 1)) * (w - 4) + 2).toFixed(1)},${(h - 2 - ((v - lo) / span) * (h - 4)).toFixed(1)}`);
+  const svg = svgEl("svg", { class: "spark", viewBox: `0 0 ${w} ${h}`, width: w, height: h, "aria-hidden": "true", focusable: "false" });
+  svg.append(svgEl("polyline", { points: pts.join(" ") }));
+  const [x, y] = pts[pts.length - 1].split(",");
+  svg.append(svgEl("circle", { cx: x, cy: y, r: 2 }));
+  return svg;
 }
 
 // ── a subnet's own page ─────────────────────────────────────────────────────
@@ -465,10 +620,7 @@ async function showSubnetCard(netuid, hotkey) {
   note("subnet-note", "reading this subnet from Bittensor…");
   const blank = () => { for (const id of ["subnet-price", "subnet-pool", "subnet-day"]) $(id).textContent = "—"; };
   try {
-    if (!directory || Date.now() - directory.at > 5 * 60_000) {
-      const lib = await loadReturnLib();
-      directory = { at: Date.now(), rows: await lib.subnetDirectory() };
-    }
+    await readDirectory();
     const r = directory.rows.find((x) => x.netuid === netuid);
     if (!r) { blank(); note("subnet-note", `Bittensor has no subnet ${netuid} right now: check the number in the link.`, "bad"); return; }
     const h = $("subnet-card-h");
@@ -486,9 +638,266 @@ async function showSubnetCard(netuid, hotkey) {
     $("subnet-links").hidden = !links.length;
     const at = new Date(directory.at).toISOString().slice(11, 16);
     note("subnet-note", `The name, description and links are what this subnet's owner registered on Bittensor, read at ${at} UTC. soltao has not checked them and does not endorse this subnet. Staking here buys its Alpha at the pool price. "TAO added to the pool per day" is the last block's figure times 7,200.${hotkey ? " Step 3 checks that the validator in this link holds a permit on this subnet before anything can be sent." : " Step 3 lists this subnet's validators to choose from."}`);
+    renderProfile($("subnet-card-profile"), netuid);
   } catch (e) {
     blank();
     note("subnet-note", `Could not read this subnet from Bittensor: ${e.message}. The steps below still work.`, "bad");
+  }
+}
+
+// ── subnet profiles: what a subnet does, its price history, and what buying into it means ──
+// Shown on a subnet's page (above) and in step 3 once a subnet is chosen, so the facts sit beside the
+// choice. Read on request and cached: the directory row and chain facts (Bittensor), the daily history
+// soltao serves from its own origin (stake/history, made by `npm run history` from an archive node),
+// and short summaries in stake/subnet-profiles.json. Every figure says where it came from. Nothing here
+// ranks or recommends a subnet (src/subnet_profile.js holds the arithmetic).
+const PROFILE_BUY_RAO = 10n * RAO; // the example buy quoted from the chain's own swap simulation
+const profileData = { history: new Map(), index: null, profiles: null, chain: null };
+async function fetchJson(path) {
+  const r = await fetch(path, { cache: "no-cache" });
+  if (!r.ok) throw new Error(`${path} answered ${r.status}`);
+  return r.json();
+}
+async function readChainInfo() {
+  if (!profileData.chain || Date.now() - profileData.chain.at > DIRECTORY_TTL_MS) {
+    const lib = await loadReturnLib();
+    profileData.chain = { at: Date.now(), ...(await lib.chainInfo()) };
+  }
+  return profileData.chain;
+}
+async function readHistory(netuid) {
+  if (!profileData.history.has(netuid)) profileData.history.set(netuid, fetchJson(`/stake/history/${netuid}.json`).catch((e) => { profileData.history.delete(netuid); throw e; }));
+  return profileData.history.get(netuid);
+}
+// A subnet's validators and what each paid its stakers over 30 days (`npm run history`, validators/).
+const validatorRecords = new Map();
+function readValidatorRecord(netuid) {
+  if (!validatorRecords.has(netuid)) validatorRecords.set(netuid, fetchJson(`/stake/history/validators/${netuid}.json`).catch((e) => { validatorRecords.delete(netuid); throw e; }));
+  return validatorRecords.get(netuid);
+}
+/** How the "paid stakers" figures were made, for any list that shows them. */
+const paidRule = (rec) => `"Paid stakers" is how much one share of each validator's stake pool grew, in the subnet's Alpha, from ${dateText(rec.from)} to ${dateText(rec.to)}: what it passed on after its take. 0.0% means it paid its stakers nothing in that time; a dash means its pool was reset, so it can't be read. The Alpha's own price move comes on top.`;
+/** The typical and the best 30-day figure among a subnet's validators with some stake, or null. */
+function paidSpread(rec) {
+  const xs = (rec?.validators ?? []).filter(([, bps, stake]) => bps !== null && stake > 0).map(([, bps]) => bps).sort((a, b) => a - b);
+  if (!xs.length) return null;
+  return { median: xs[Math.floor((xs.length - 1) / 2)], best: xs[xs.length - 1], zero: xs.filter((b) => b <= 0).length, n: xs.length };
+}
+const readHistoryIndex = () => (profileData.index ??= fetchJson("/stake/history/index.json").catch((e) => { profileData.index = null; throw e; }));
+const readProfiles = () => (profileData.profiles ??= fetchJson("/stake/subnet-profiles.json").catch((e) => { profileData.profiles = null; throw e; }));
+
+const el = (tag, className, textValue) => { const n = document.createElement(tag); if (className) n.className = className; if (textValue !== undefined) n.textContent = textValue; return n; };
+const dayText = (sec) => dateText(sec);
+// Under 0.05% shows as 0.0%, unsigned and uncoloured, rather than "+0.0%" in the rise colour.
+const flat = (bps) => Math.abs(bps) < 5;
+const bpsText = (bps) => (bps === null ? "—" : flat(bps) ? "0.0%" : `${bps > 0 ? "+" : "−"}${(Math.abs(bps) / 100).toFixed(1)}%`);
+const bpsNode = (bps) => el("span", bps === null || flat(bps) ? "" : bps > 0 ? "up" : "down", bpsText(bps));
+const taoWhole = (tao) => `${Math.round(tao).toLocaleString("en-US")} TAO`;
+const usdOfTao = (taoAmount) => (lastUsd?.tao ? ` (about ${fmtUsd(taoAmount * lastUsd.tao)})` : "");
+
+function hidePlanProfile() { $("plan-profile-box").hidden = true; $("plan-profile").replaceChildren(); profileSeqs.set("plan-profile", (profileSeqs.get("plan-profile") || 0) + 1); }
+function showPlanProfile(netuid) {
+  $("plan-profile-box").hidden = false;
+  $("plan-profile-h").textContent = `About subnet ${netuid}`;
+  renderProfile($("plan-profile"), netuid, { full: true });
+}
+
+const profileSeqs = new Map();
+async function renderProfile(root, netuid, { full = false } = {}) {
+  const seq = (profileSeqs.get(root.id) || 0) + 1; profileSeqs.set(root.id, seq);
+  const current = () => profileSeqs.get(root.id) === seq;
+  root.replaceChildren(el("p", "step-note", `reading subnet ${netuid}…`));
+  const [dirR, chainR, histR, idxR, profR, , valR] = await Promise.allSettled([readDirectory(), readChainInfo(), readHistory(netuid), readHistoryIndex(), readProfiles(), readUsd(), readValidatorRecord(netuid)]);
+  if (!current()) return;
+  const row = dirR.status === "fulfilled" ? dirR.value.rows.find((r) => r.netuid === netuid) : null;
+  if (!row) { root.replaceChildren(el("p", "step-note", dirR.status === "rejected" ? `Could not read this subnet from Bittensor: ${dirR.reason?.message}` : `Bittensor has no subnet ${netuid} right now.`)); return; }
+  const nowSec = Math.floor(Date.now() / 1000);
+  const hist = histR.status === "fulfilled" && histR.value.netuid === netuid ? histR.value : null;
+  // Points from before this netuid's current subnet registered belong to another subnet; the history
+  // file already drops them, and a re-registration since it was made drops the lot.
+  const points = hist && hist.registeredAt === row.registeredAt ? hist.points : [];
+  const nodes = [];
+  if (full) {
+    const h = el("p", "profile-what");
+    h.append(el("b", "", row.name || `Subnet ${netuid}`), document.createTextNode(row.symbol ? ` ${row.symbol}` : ""));
+    nodes.push(h);
+  }
+
+  // What it does: soltao's summary from a named source, or failing that the owner's own line.
+  const prof = profR.status === "fulfilled" ? profR.value.profiles?.[String(netuid)] : null;
+  if (prof) {
+    nodes.push(el("p", "profile-what", `${prof.what}${prof.extra ? ` ${prof.extra}` : ""}`));
+    const src = el("p", "step-note profile-src");
+    const u = safeLink(prof.source);
+    src.append(document.createTextNode("In soltao's words, from "), u ? Object.assign(el("a", "", `${u.host}${u.pathname === "/" ? "" : u.pathname}`), { href: u.href, rel: "noopener noreferrer nofollow", target: "_blank" }) : document.createTextNode("its own site"), document.createTextNode(`, read ${dayText(Date.parse(`${profR.value.checked}T00:00:00Z`) / 1000)}. soltao has not used or tested it.`));
+    nodes.push(src);
+  } else if (full && row.description) {
+    nodes.push(el("p", "subnet-desc", `In its owner's words: "${row.description}"`));
+  }
+
+  // The price chart: daily history, then today's live price.
+  const chart = el("div", "chart");
+  const tip = el("div", "chart-tip"); tip.hidden = true; tip.setAttribute("role", "status");
+  chart.append(tip);
+  const chg = el("span", "range-chg");
+  const range = el("div", "range"); range.setAttribute("role", "group"); range.setAttribute("aria-label", "Chart range");
+  const chartNote = el("p", "step-note");
+  const tbody = el("tbody");
+  const draw = (days) => {
+    for (const b of range.querySelectorAll("button")) b.setAttribute("aria-pressed", String(Number(b.dataset.days) === days));
+    const series = rangeSeries(points, { days, nowSec, livePriceRao: row.priceRao });
+    const bps = series.length > 1 ? changeBps(series[0].price, series[series.length - 1].price) : null;
+    // A history with a gap at the start of the range is labelled by its real start, not the range.
+    chg.replaceChildren(bpsNode(bps), document.createTextNode(bps === null ? "" : coversRange(series, days, nowSec) ? ` over ${days} days` : ` since ${dayText(series[0].t)}`));
+    drawChart(chart, tip, series, `${row.name || `Subnet ${netuid}`} Alpha price in TAO, last ${days} days${bps === null ? "" : `: ${bpsText(bps)}`}`);
+    tbody.replaceChildren(...series.slice().reverse().map((p) => {
+      const tr = el("tr");
+      tr.append(el("td", "", p.live ? "now (live)" : dayText(p.t)), el("td", "num", fmtUnits(BigInt(p.price), 9)));
+      return tr;
+    }));
+  };
+  for (const days of [7, 30, 90]) {
+    const b = el("button", "", `${days} days`); b.type = "button"; b.dataset.days = String(days);
+    b.addEventListener("click", () => draw(days));
+    range.append(b);
+  }
+  range.append(chg);
+  const table = el("details", "info");
+  const sum = el("summary"); sum.append(el("span", "info-l", "Show the prices as a table"));
+  const scroll = el("div", "pick-scroll"), tbl = el("table", "pick"), thead = el("thead"), htr = el("tr");
+  for (const [t, cls] of [["Day (UTC)", ""], ["Price, TAO per Alpha", "num"]]) { const th = el("th", cls, t); th.scope = "col"; htr.append(th); }
+  thead.append(htr); tbl.append(thead, tbody); scroll.append(tbl); table.append(sum, scroll);
+  const idx = idxR.status === "fulfilled" ? idxR.value : null;
+  if (!points.length) chartNote.textContent = histR.status === "rejected" || !hist ? "No price history is available for this subnet here yet; the chart shows today's price only." : "This subnet registered after the history was made; the chart shows today's price only.";
+  else {
+    const stale = Boolean(idx?.lastTime) && nowSec - idx.lastTime > 3 * 86_400;
+    chartNote.textContent = `Price is the pool's own: TAO in the pool ÷ Alpha in the pool. One reading a day to ${idx?.lastTime ? dayText(idx.lastTime) : "the last update"}, from a Bittensor archive node, then the live price now.${stale ? " The daily history is more than 3 days old." : ""}`;
+    if (stale) chartNote.dataset.tone = "warn";
+  }
+  nodes.push(range, chart, chartNote, table);
+
+  // The numbers.
+  const kv = el("dl", "kv subnet-kv profile-kv");
+  // A figure sits right in the number face; a sentence goes under its label in the text face.
+  const add = (label, value, { prose = false } = {}) => {
+    const d = el("div", prose ? "kv-prose" : ""), dd = el("dd", prose ? "" : "num");
+    if (typeof value === "string") dd.textContent = value; else dd.append(...[].concat(value));
+    d.append(el("dt", "", label), dd); kv.append(d); return dd;
+  };
+  const price = row.priceRao ?? 0n, priceTao = Number(price) / 1e9;
+  if (full) {
+    add("Alpha price", `${fmtUnits(price, 9)} TAO${usdOfTao(priceTao)}`);
+    add("TAO in its pool", taoWhole(Number(row.taoInRao) / 1e9));
+    add("TAO added to the pool per day", row.taoPerBlockRao === null ? "—" : `${fmtUnits(row.taoPerBlockRao * BLOCKS_PER_DAY, 9, 2)} TAO`);
+  }
+  const ago = (days) => { const p = priceDaysAgo(points, days, nowSec); return p === null ? null : changeBps(p, Number(price)); };
+  const changes = [7, 30, 90].map((d) => ago(d));
+  add("Price change: 7, 30 and 90 days", changes.flatMap((b, i) => [bpsNode(b), document.createTextNode(i < 2 ? " · " : "")]));
+  const lastVol = points.length ? points[points.length - 1][5] : null;
+  add("TAO traded in its pool, last full day", lastVol === null ? "—" : `${lastVol.toLocaleString("en-US", { maximumFractionDigits: 0 })} TAO${usdOfTao(lastVol)}`);
+  const allAlpha = (Number(row.alphaInRao + row.alphaOutRao) / 1e9) * priceTao;
+  add("All its Alpha at today's price", `${taoWhole(allAlpha)}${usdOfTao(allAlpha)}`);
+  const buy = add(`Buying ${fmtUnits(PROFILE_BUY_RAO, 9)} TAO of it now`, "asking the chain…", { prose: true });
+  const spread = valR.status === "fulfilled" ? paidSpread(valR.value) : null;
+  if (spread) add(`What its validators paid stakers, ${dateText(valR.value.from, { year: false })} to ${dateText(valR.value.to, { year: false })}`, `${bpsText(spread.median)} for the middle one of ${spread.n} with stake, ${bpsText(spread.best)} for the best${spread.zero ? `; ${spread.zero} paid nothing` : ""}. In the subnet's own Alpha, after each validator's take; step 3's validator list has each one's figure.`, { prose: true });
+  const chain = chainR.status === "fulfilled" ? chainR.value : null;
+  if (chain) {
+    const regSec = blockTime(row.registeredAt, chain.head, nowSec);
+    add("Registered", `${dayText(regSec)}, about ${Math.max(0, Math.round((nowSec - regSec) / 86_400)).toLocaleString("en-US")} days ago`);
+    const d = deregStanding(dirR.value.rows, netuid, chain);
+    const slotsFull = chain.totalNetworks - 1 >= chain.subnetLimit;
+    if (d) add("Deregistration", d.immune
+      ? `Protected until about ${dayText(blockTime(d.immuneUntilBlock, chain.head, nowSec))}: new subnets are immune for their first ${Math.round((chain.immunityBlocks * 12) / 86_400)} days.`
+      : `${d.rank === 1 ? `It is the lowest of the ${d.of} subnets that can be removed, by the chain's moving average price, so it would go first.` : `${d.rank - 1} of the ${d.of} subnets that can be removed sit below it, by the chain's moving average price; the lowest goes first.`} ${slotsFull ? `All ${chain.subnetLimit} subnet slots are taken, so each new registration removes one.` : "There are free slots now, so a new registration removes nobody."}`, { prose: true });
+  }
+  nodes.push(kv);
+
+  const risk = el("p", "step-note profile-risk");
+  risk.textContent = "Before you buy: Alpha's price moves against TAO, down as well as up. Selling takes the pool's price at the time, less its fee and price impact. If this subnet is deregistered, the chain pays its stakers from the TAO in its pool, split by the Alpha each holds, and that can be well under the Alpha's market value. Staking also goes through a validator, which step 3 checks on this subnet.";
+  nodes.push(risk);
+
+  if (full) {
+    const links = [["Website", safeLink(row.url)], ["GitHub", safeLink(row.github)], ["Discord", safeLink(row.discord)], ["taostats", safeLink(`https://taostats.io/subnets/${netuid}`)]].filter(([, u]) => u);
+    const p = el("p", "subnet-links");
+    p.append(...links.map(([label, u]) => Object.assign(el("a", "", `${label}: ${u.host}${u.pathname === "/" ? "" : u.pathname}`), { href: u.href, rel: "noopener noreferrer nofollow", target: "_blank" })));
+    nodes.push(p);
+  }
+  // The subnet page's own note (showSubnetCard) already says where its figures come from.
+  if (full) {
+    const at = new Date(dirR.value.at).toISOString().slice(11, 16);
+    nodes.push(el("p", "step-note", `Live figures read from Bittensor at ${at} UTC. The name, owner's description and links are what its owner registered on-chain; a listing here is not an endorsement.${lastUsd?.tao ? " Dollar figures use Dexscreener's TAO price." : ""}`));
+  }
+
+  root.replaceChildren(...nodes);
+  draw(30);
+  // The example buy, from the chain's own simulation of the swap (fee and price impact included).
+  try {
+    const lib = await loadReturnLib(), q = await lib.simulateSwap(netuid, { taoRao: PROFILE_BUY_RAO });
+    if (!current()) return;
+    buy.textContent = `about ${fmtUnits(q.out, 9, 3)} Alpha: a fee of ${fmtUnits(q.fee, 9)} TAO, and price impact of ${impactPct(q)}%`;
+  } catch (e) { if (current()) buy.textContent = `could not ask the chain: ${e.message}`; }
+}
+
+// A line chart of one price series: 2px line over a faint wash, an end dot, recessive grid, and a
+// crosshair that snaps to the nearest day, by pointer or arrow keys. Redrawn to the chart's width.
+const SVG_NS = "http://www.w3.org/2000/svg";
+const svgEl = (tag, attrs = {}) => { const n = document.createElementNS(SVG_NS, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v)); return n; };
+const chartObservers = new WeakMap(), chartRenders = new WeakMap();
+function drawChart(box, tip, series, label) {
+  box.querySelector("svg")?.remove(); tip.hidden = true;
+  if (!series.length) return;
+  const render = () => {
+    box.querySelector("svg")?.remove();
+    const w = Math.max(280, Math.round(box.clientWidth || 600)), h = 200;
+    const g = chartGeometry(series, { w, h });
+    const svg = svgEl("svg", { viewBox: `0 0 ${w} ${h}`, tabindex: 0, role: "img", "aria-label": `${label}. Use the arrow keys to read each day.` });
+    const decimals = (() => { const s = g.yTicks.length > 1 ? g.yTicks[1].v - g.yTicks[0].v : g.hi; return Math.min(6, Math.max(0, Math.ceil(-Math.log10(s)) + 1)); })();
+    for (const t of g.yTicks) {
+      svg.append(svgEl("line", { class: "ch-grid", x1: g.plot.left, x2: g.plot.right, y1: t.y.toFixed(1), y2: t.y.toFixed(1) }));
+      const tx = svgEl("text", { class: "ch-tick", x: g.plot.left - 8, y: (t.y + 4).toFixed(1), "text-anchor": "end" }); tx.textContent = t.v.toFixed(decimals); svg.append(tx);
+    }
+    for (const [i, t] of g.xTicks.entries()) {
+      // The end labels hang inward so a narrow chart never clips them.
+      const anchor = g.xTicks.length > 1 && i === g.xTicks.length - 1 ? "end" : i === 0 && g.xTicks.length > 1 ? "start" : "middle";
+      const tx = svgEl("text", { class: "ch-tick", x: t.x.toFixed(1), y: h - 6, "text-anchor": anchor });
+      tx.textContent = dateText(t.t, { year: false }); svg.append(tx);
+    }
+    if (g.area) svg.append(svgEl("path", { class: "ch-area", d: g.area }));
+    svg.append(svgEl("path", { class: "ch-line", d: g.line }));
+    const end = g.pts[g.pts.length - 1];
+    svg.append(svgEl("circle", { class: "ch-end", cx: end.x.toFixed(1), cy: end.y.toFixed(1), r: 4 }));
+    const cross = svgEl("line", { class: "ch-cross", y1: g.plot.top, y2: g.plot.bottom, visibility: "hidden" });
+    const dot = svgEl("circle", { class: "ch-focus", r: 4, visibility: "hidden" });
+    const hit = svgEl("rect", { class: "ch-hit", x: g.plot.left, y: 0, width: g.plot.right - g.plot.left, height: h });
+    svg.append(cross, dot, hit);
+    let at = g.pts.length - 1;
+    const show = (p) => {
+      at = g.pts.indexOf(p);
+      for (const [k, v] of [["x1", p.x], ["x2", p.x]]) cross.setAttribute(k, v.toFixed(1));
+      dot.setAttribute("cx", p.x.toFixed(1)); dot.setAttribute("cy", p.y.toFixed(1));
+      cross.setAttribute("visibility", "visible"); dot.setAttribute("visibility", "visible");
+      tip.replaceChildren(el("b", "", `${fmtUnits(BigInt(p.price), 9)} TAO`), el("span", "", p.live ? "now (live)" : dayText(p.t)));
+      tip.hidden = false;
+      tip.style.left = `${Math.min(Math.max(p.x, 70), w - 70)}px`; // CSSOM, which the page's CSP allows
+    };
+    const hide = () => { cross.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden"); tip.hidden = true; };
+    svg.addEventListener("pointermove", (e) => { const r = svg.getBoundingClientRect(); show(nearestPoint(g.pts, ((e.clientX - r.left) / r.width) * w)); });
+    svg.addEventListener("pointerleave", hide);
+    svg.addEventListener("blur", hide);
+    svg.addEventListener("focus", () => show(g.pts[at]));
+    svg.addEventListener("keydown", (e) => {
+      const i = { ArrowLeft: at - 1, ArrowRight: at + 1, Home: 0, End: g.pts.length - 1 }[e.key];
+      if (i === undefined) return;
+      e.preventDefault(); show(g.pts[Math.min(Math.max(i, 0), g.pts.length - 1)]);
+    });
+    box.prepend(svg);
+  };
+  render();
+  chartRenders.set(box, render);
+  if (typeof ResizeObserver === "function" && !chartObservers.has(box)) {
+    let lastW = box.clientWidth;
+    const ro = new ResizeObserver(() => { if (Math.abs(box.clientWidth - lastW) > 8) { lastW = box.clientWidth; chartRenders.get(box)?.(); } });
+    ro.observe(box); chartObservers.set(box, ro);
   }
 }
 
@@ -514,7 +923,10 @@ async function openPicker() {
     const at = new Date().toISOString().slice(11, 16);
     const where = netuid === 0n ? "root" : `subnet ${netuid}`;
     if (!list.length) { note("pick-rule", `No hotkey holds a validator permit on ${where} right now.`, "warn"); return; }
-    note("pick-rule", `${list.length} validators on ${where}, sorted by share of its validator dividends at the last epoch, highest first (read ${at} UTC). That share moves every epoch: it is a snapshot, not a forecast, and not a recommendation. Names are not on-chain, so check a hotkey on taostats before you choose.`);
+    const record = netuid === 0n ? null : await readValidatorRecord(Number(netuid)).catch(() => null);
+    if (seq !== pickSeq) return;
+    const paid = new Map((record?.validators ?? []).map(([hk, bps]) => [hk, bps]));
+    note("pick-rule", `${list.length} validators on ${where}, sorted by share of its validator dividends at the last epoch, highest first (read ${at} UTC). That share moves every epoch: it is a snapshot, not a forecast, and not a recommendation.${record ? ` ${paidRule(record)}` : netuid === 0n ? "" : " Their 30-day record could not be read here."} Names are not on-chain, so check a hotkey on taostats before you choose.`);
     const current = $("hotkey-in").value.trim();
     $("pick-body").replaceChildren(...list.map((v) => {
       const ss58 = ss58Encode(fromHex(v.hotkey));
@@ -530,7 +942,8 @@ async function openPicker() {
         onHotkey();
       });
       const cell = document.createElement("td"); cell.append(use);
-      tr.append(td(String(v.uid), "num"), td(short(ss58, 6)), td(v.takePct === null ? "not a delegate" : `${v.takePct.toFixed(2)}%`, "num"), td(`${(v.dividendShare * 100).toFixed(2)}%`, "num"), cell);
+      const paidCell = el("td", "num"); paidCell.append(record && paid.has(ss58) ? bpsNode(paid.get(ss58)) : "—");
+      tr.append(td(String(v.uid), "num"), td(short(ss58, 6)), td(v.takePct === null ? "not a delegate" : `${v.takePct.toFixed(2)}%`, "num"), td(`${(v.dividendShare * 100).toFixed(2)}%`, "num"), paidCell, cell);
       return tr;
     }));
   } catch (e) {
@@ -652,8 +1065,23 @@ function gate() {
   if (reviewReady) (reverse ? requestReturnQuote : requestQuote)(); else { state.nativeFee = null; state.ret.quote = null; $("sign").disabled = true; }
 }
 
+// The subnet buy the forward review describes, for quotePlanAlpha: { netuid, stakeRao } or null.
+let planQuote = null, planQuoteSeq = 0;
+/** Adds what the review's subnet stake buys today, from the chain's own swap simulation. */
+async function quotePlanAlpha() {
+  const q0 = planQuote, seq = ++planQuoteSeq;
+  if (!q0 || q0.stakeRao <= 0n || state.direction !== "forward" || state.plan !== "stake") return;
+  try {
+    const lib = await loadReturnLib(), q = await lib.simulateSwap(q0.netuid, { taoRao: q0.stakeRao });
+    if (seq !== planQuoteSeq || planQuote !== q0) return;
+    const big = bigImpact(Number(impactPct(q)));
+    $("r-plan").append(` Today that buys about ${fmtUnits(q.out, 9)} Alpha: ${swapCosts(q, "TAO")}.${big ? ` ${BIG_IMPACT_TEXT}` : ""}`);
+  } catch { /* the review stands without it */ }
+}
+
 function renderReview(ready) {
   const set = (id, v) => ($(id).textContent = ready ? v() : "—");
+  planQuote = null;
   if (state.direction === "reverse") {
     set("r-send", () => tao(state.amountLd));
     set("r-dest", () => `${state.user} (your Solana wallet)`);
@@ -670,8 +1098,10 @@ function renderReview(ready) {
     const stake = state.amountLd + drop - unwrap - state.reserveRao - stakeGasReserve(state.gasPrice) / RAO;
     const to = short(ss58Encode(state.hotkey), 6), rest = `Your ${tao(state.reserveRao)} reserve and the unused gas money arrive as free TAO`;
     if (state.netuid === 0n) return `Stake about ${tao(stake)} on root to ${to}. ${rest}`;
-    // What goes in is TAO; the Alpha it buys depends on the subnet's pool price when it lands.
+    // What goes in is TAO; the Alpha it buys depends on the subnet's pool price when it lands. The
+    // chain's simulation of that buy is added once it answers (quotePlanAlpha).
     const pct = Number(CONFIG.subnetPriceToleranceBps) / 100;
+    planQuote = { netuid: Number(state.netuid), stakeRao: stake };
     return `Stake about ${tao(stake)} on subnet ${state.netuid} to ${to}, bought as its Alpha at the pool price. If that price is more than ${pct}% worse when it lands, nothing is staked and the TAO arrives free. ${rest}`;
   });
   set("r-gas", () => { const g = bittensorGas(); return g === null ? "—" : `about ${tao(g)}`; });
@@ -753,10 +1183,12 @@ async function showHoldings() {
       lib.rootRewards(coldkey).catch(() => null), lib.rootClaimMinRao().catch(() => 0n),
     ]);
     // Each subnet's Alpha price once, and dollars if the feed answers; either failing only hides the worth.
+    // Each subnet's validator record too (what they paid stakers over 30 days), which only adds a line.
     const netuids = [...new Set(positions.map((p) => p.netuid))];
-    const [prices, usd] = await Promise.all([
+    const [prices, usd, records] = await Promise.all([
       Promise.all(netuids.map((n) => lib.alphaPriceRao(n).catch(() => null))).then((ps) => new Map(netuids.map((n, i) => [n, ps[i]]))),
       usdPrices().catch(() => null),
+      Promise.all(netuids.map((n) => (n === 0 ? null : readValidatorRecord(n).catch(() => null)))).then((rs) => new Map(netuids.map((n, i) => [n, rs[i]]))),
     ]);
     if (seq !== holdingsSeq || coldkey !== state.coldkeyAddress) return;
     const worthOf = (p) => (prices.get(p.netuid) == null ? null : (p.stake * prices.get(p.netuid)) / 1_000_000_000n);
@@ -789,13 +1221,25 @@ async function showHoldings() {
     };
     const rewardNote = (tr, payoutRao) => tr.children[2].append(Object.assign(document.createElement("span"), { className: "holdings-change", textContent: `+ ${tao(payoutRao)} in rewards to claim` }));
     const rootHotkeys = new Set(positions.filter((p) => p.netuid === 0).map((p) => p.hotkey));
+    let paidShown = null; // a validator record shown on some row, whose rule the note then states
     $("holdings-body").replaceChildren(
       freeRow,
       ...positions.map((p) => {
         const was = before?.pos?.[`${p.netuid}:${p.hotkey}`], worth = worthOf(p);
         const change = was !== undefined && BigInt(was) !== p.stake ? `${signed(p.stake - BigInt(was), p.netuid)} since ${new Date(before.at).toISOString().slice(5, 16).replace("T", " ")} UTC` : "";
         const tr = row(p.netuid === 0 ? "Staked on root" : `Staked on subnet ${p.netuid}`, short(p.hotkey, 6), stakeAmount(p.stake, p.netuid), worth === null ? "—" : `≈ ${tao(worth)}`, change);
+        // How this validator did for its stakers against the others here: the reason to Move, or not.
+        const rec = records.get(p.netuid), mine = rec?.validators.find(([hk]) => hk === p.hotkey), spread = paidSpread(rec);
+        if (mine && mine[1] !== null && spread) { paidShown = rec; tr.children[1].append(el("span", "holdings-change", `paid stakers ${bpsText(mine[1])} in ${rec.days} days; the best here ${bpsText(spread.best)}`)); }
         const td = action("Unstake", () => openMove({ kind: "unstake", hotkey: p.hotkey, netuid: p.netuid, max: p.stake }));
+        // Move: to step 3's subnet and validator (another subnet's Alpha, or a better validator here).
+        if (canMove()) { const b = Object.assign(document.createElement("button"), { type: "button", textContent: "Move" }); b.addEventListener("click", () => openMove({ kind: "move", hotkey: p.hotkey, netuid: p.netuid, max: p.stake })); td.append(" ", b); }
+        if (p.netuid !== 0) {
+          const b = Object.assign(document.createElement("button"), { type: "button", textContent: "Profile" });
+          b.setAttribute("aria-label", `Open subnet ${p.netuid}'s profile in step 3`);
+          b.addEventListener("click", () => { $("netuid-in").value = String(p.netuid); onNetuid(); $("netuid-in").scrollIntoView({ block: "center", behavior: "smooth" }); });
+          td.append(td.childNodes.length ? " " : "", b);
+        }
         const owed = p.netuid === 0 ? owedBy.get(p.hotkey) : undefined;
         if (owed) { rewardNote(tr, owed); claimButton(td, p.hotkey, owed); }
         tr.append(td);
@@ -828,7 +1272,8 @@ async function showHoldings() {
       ? (rootHotkeys.size ? " Could not read the root rewards waiting to be claimed; try again in a minute." : "")
       : owedTotal ? ` Root rewards do not add to the stake on their own: ${tao(owedTotal)} is waiting to be claimed, and "Claim" adds it to your root stake. Each claim pays a Bittensor fee (about 0.008 TAO on 25 Sep 2026), so it only pays off once more than that has built up.`
       : rootHotkeys.size ? " Root rewards wait with the validator until claimed, and each claim pays a Bittensor fee (about 0.008 TAO on 25 Sep 2026); none is waiting yet." : "";
-    note("holdings-note", `Read ${new Date().toISOString().slice(11, 16)} UTC. ${positions.length ? `${positions.length} stake position${positions.length === 1 ? "" : "s"}. Subnet stakes are in that subnet's Alpha and collect their rewards in the stake itself; root stakes are in TAO.` : "No stake positions."}${yieldNote}${inAll}${changed ? " Changes since you last looked here include rewards and anything added or taken out elsewhere." : ""}${smallFree}`);
+    const paidNote = paidShown ? ` ${paidRule(paidShown)} Moving to another validator on the same subnet swaps nothing: "Move" does it with the one chosen in step 3.` : "";
+    note("holdings-note", `Read ${new Date().toISOString().slice(11, 16)} UTC. ${positions.length ? `${positions.length} stake position${positions.length === 1 ? "" : "s"}. Subnet stakes are in that subnet's Alpha and collect their rewards in the stake itself; root stakes are in TAO.` : "No stake positions."}${yieldNote}${inAll}${changed ? " Changes since you last looked here include rewards and anything added or taken out elsewhere." : ""}${paidNote}${smallFree}`);
   } catch (e) {
     if (seq === holdingsSeq) note("holdings-note", `Could not read it from Bittensor: ${e.message}`, "bad");
   } finally {
@@ -870,11 +1315,23 @@ function openMove(m) {
     const reserve = CONFIG.defaultReserveRao; // left free to pay for later moves
     m = { ...m, hotkey: ss58Encode(state.hotkey), netuid: Number(state.netuid), max: m.free > reserve ? m.free - reserve : 0n };
   }
+  if (m.kind === "move") {
+    // A move goes to step 3's subnet and validator, which have passed the same on-chain checks as a stake.
+    const to = state.hotkey && state.netuidValid && !state.netuidChecking ? { hotkey: ss58Encode(state.hotkey), netuid: Number(state.netuid) } : null;
+    if (!to || (to.hotkey === m.hotkey && to.netuid === m.netuid)) {
+      $("move-panel").hidden = false; move = null; $("pay-panel").hidden = true; pay = null;
+      $("move-title").textContent = `Move this stake from ${m.netuid === 0 ? "root" : `subnet ${m.netuid}`}`;
+      note("move-quote", to ? "Step 3 names this same subnet and validator. Choose where to move it in step 3 (its profile opens there), then press Move again." : "Choose where to move it in step 3: a subnet (its profile opens there) and a checked validator. Then press Move again.", "warn");
+      $("move-then-wrap").hidden = true; $("move-go").disabled = true; return;
+    }
+    m = { ...m, to };
+  }
   move = m;
   $("pay-panel").hidden = true; pay = null;
   const where = m.netuid === 0 ? "root" : `subnet ${m.netuid}`;
-  $("move-title").textContent = m.kind === "stake" ? `Stake free TAO on ${where} to ${short(m.hotkey, 6)}` : `Unstake from ${where} (${short(m.hotkey, 6)})`;
-  $("move-amount-label").textContent = m.kind === "stake" ? "TAO to stake" : `${m.netuid === 0 ? "TAO" : "Alpha"} to unstake`;
+  const place = (netuid, hotkey) => `${netuid === 0 ? "root" : `subnet ${netuid}`} (${short(hotkey, 6)})`;
+  $("move-title").textContent = m.kind === "stake" ? `Stake free TAO on ${where} to ${short(m.hotkey, 6)}` : m.kind === "move" ? `Move from ${place(m.netuid, m.hotkey)} to ${place(m.to.netuid, m.to.hotkey)}` : `Unstake from ${where} (${short(m.hotkey, 6)})`;
+  $("move-amount-label").textContent = m.kind === "stake" ? "TAO to stake" : `${m.netuid === 0 ? "TAO" : "Alpha"} to ${m.kind === "move" ? "move" : "unstake"}`;
   $("move-amount").value = fmtUnits(m.max, 9, 9).replace(/,/g, "");
   $("move-go").textContent = "Confirm"; $("move-go").disabled = false; note("move-note", "");
   // Unstake-then-return: offered only when no earlier return is unfinished, which would come first.
@@ -913,22 +1370,64 @@ async function quoteMove() {
   // The route's own floor: under it the chain may clear the stake back to free TAO, after charging for it.
   if (move.kind === "stake" && amt < CONFIG.minStakeRao) { note("move-quote", `Staking needs at least ${tao(CONFIG.minStakeRao)}.`, "bad"); $("move-go").disabled = true; return; }
   $("move-go").disabled = false;
+  if (move.kind === "move") return quoteSwitch(amt, seq);
   if (move.netuid === 0 && !(move.kind === "unstake" && $("move-then").checked)) { note("move-quote", move.kind === "stake" ? `Stakes ${tao(amt)} on root.` : `Unstakes ${tao(amt)} from root into free TAO.`); return; }
   const then = move.kind === "unstake" && $("move-then").checked;
   try {
-    const lib = await loadReturnLib(), price = await lib.alphaPriceRao(move.netuid);
-    const proceeds = (amt * price) / RAO;
+    const lib = await loadReturnLib();
+    // The chain's own simulation of this exact swap: what it gets, the fee, and what price impact takes.
+    const q = move.netuid === 0 ? null : await lib.simulateSwap(move.netuid, move.kind === "stake" ? { taoRao: amt } : { alphaRao: amt });
+    const proceeds = q ? q.out : amt;
     // The bridge fee for a return of about that much, so the chained choice is priced before it is made.
     const lz = then ? (await lib.quoteReturn({ amountRao: removeDust(proceeds), solanaRecipient: solanaRecipient() })).nativeFee / RAO : null;
     if (seq !== moveQuoteSeq) return;
     const pct = Number(CONFIG.subnetPriceToleranceBps) / 100;
-    const sale = move.netuid === 0 ? `Unstakes ${tao(amt)} from root into free TAO.` : move.kind === "stake"
-      ? `Buys about ${fmtUnits((amt * RAO) / price, 9)} Alpha at today's pool price (${fmtUnits(price, 9)} TAO each). If the price is more than ${pct}% higher when it lands, nothing is staked.`
-      : `Sells for about ${tao(proceeds)} at today's pool price (${fmtUnits(price, 9)} TAO per Alpha). If the price is more than ${pct}% lower when it lands, nothing is unstaked.`;
-    note("move-quote", then
+    const sale = !q ? `Unstakes ${tao(amt)} from root into free TAO.` : move.kind === "stake"
+      ? `Buys about ${fmtUnits(q.out, 9)} Alpha: ${swapCosts(q, "TAO")}. If the price is more than ${pct}% higher when it lands, nothing is staked.`
+      : `Sells for about ${tao(q.out)}: ${swapCosts(q, "Alpha")}. If the price is more than ${pct}% lower when it lands, nothing is unstaked.`;
+    const big = q && bigImpact(Number(impactPct(q)));
+    note("move-quote", (then
       ? `${sale} Then that TAO goes to your Solana wallet as canonical TAO, less the LayerZero fee (about ${tao(lz)} today) and a little Bittensor gas; ${tao(RETURN_KEEP_RAO)} stays free for later fees. Both figures are read again before it is sent.`
-      : sale);
-  } catch (e) { if (seq === moveQuoteSeq) note("move-quote", `Could not read ${move.netuid === 0 ? "the bridge fee" : "the subnet's price"}: ${e.message}`, "bad"); }
+      : sale) + (big ? ` ${BIG_IMPACT_TEXT}` : ""), big ? "warn" : null);
+  } catch (e) { if (seq === moveQuoteSeq) note("move-quote", `Could not read ${move.netuid === 0 ? "the bridge fee" : "a quote from the subnet's pool"}: ${e.message}`, "bad"); }
+}
+// A trade moves the pool's price about twice as far as its average price impact, and the *Limit calls
+// refuse a fill past the 2% limit. So from about half the limit the chain may refuse it; say so first.
+const bigImpact = (pct) => pct >= Number(CONFIG.subnetPriceToleranceBps) / 200;
+const BIG_IMPACT_TEXT = "At this size the price impact is large enough that the chain may refuse it at the limit, and only the network fee would be spent. A smaller amount is more likely to go through.";
+/** Price impact as a percentage of what the swap would give at the pool's price, from a simulateSwap result. */
+const impactPct = (q) => { const spot = q.out + q.impact; return spot > 0n ? (Number((q.impact * 1_000_000n) / spot) / 10_000).toFixed(2) : "0.00"; };
+/** "a pool fee of 0.005 TAO and 0.06% price impact, …"; the fee is in what went in. */
+const swapCosts = (q, feeUnit) => `a pool fee of ${fmtUnits(q.fee, 9)} ${feeUnit} and ${impactPct(q)}% price impact, per the chain's own simulation`;
+// A move between subnets sells on the origin pool and buys on the destination pool in one extrinsic,
+// charging one pool fee (move_stake.rs); on the same subnet it swaps nothing. Quoted from the chain's own
+// simulation of both legs; the destination leg's fee is waived by the chain, so the quote is cautious.
+async function quoteSwitch(amt, seq) {
+  const m = move, to = m.to;
+  const place = (n) => (n === 0 ? "root" : `subnet ${n}`);
+  if (m.netuid === to.netuid) {
+    note("move-quote", `Moves ${stakeAmount(amt, m.netuid)} to validator ${short(to.hotkey, 6)} on ${place(m.netuid)}. Nothing is sold or bought, so there is no price risk; only a small Bittensor network fee.`);
+    return;
+  }
+  try {
+    const lib = await loadReturnLib();
+    const sell = m.netuid === 0 ? null : await lib.simulateSwap(m.netuid, { alphaRao: amt });
+    const tao1 = sell ? sell.out : amt;
+    const buy = to.netuid === 0 ? null : await lib.simulateSwap(to.netuid, { taoRao: tao1 });
+    if (seq !== moveQuoteSeq || move !== m) return;
+    const pct = Number(CONFIG.subnetPriceToleranceBps) / 100;
+    const parts = [
+      sell ? `Sells ${stakeAmount(amt, m.netuid)} on ${place(m.netuid)} for about ${tao(tao1)} (${swapCosts(sell, "Alpha")})` : `Takes ${tao(amt)} off root`,
+      buy ? `then buys about ${fmtUnits(buy.out, 9)} Alpha on ${place(to.netuid)} with it (${impactPct(buy)}% price impact; the chain waives this leg's fee)` : `then stakes that TAO on root`,
+    ];
+    const text = `${parts.join(", ")}, all in one Bittensor transaction to validator ${short(to.hotkey, 6)}. If the two prices move more than ${pct}% against you before it lands, nothing moves.`;
+    if (tao1 < CONFIG.minStakeRao) {
+      note("move-quote", `${text} That is under the ${tao(CONFIG.minStakeRao)} the chain needs to restake, so it would be left as free TAO instead. Move more, or unstake it.`, "bad");
+      $("move-go").disabled = true; return;
+    }
+    const big = bigImpact((sell ? Number(impactPct(sell)) : 0) + (buy ? Number(impactPct(buy)) : 0));
+    note("move-quote", big ? `${text} ${BIG_IMPACT_TEXT}` : text, big ? "warn" : null);
+  } catch (e) { if (seq === moveQuoteSeq) note("move-quote", `Could not read a quote from the subnets' pools: ${e.message}`, "bad"); }
 }
 function resumeMove() {
   const saved = state.signed && loadMove(state.signed.wallet);
@@ -943,6 +1442,7 @@ function resumeMove() {
   }
   $("move-amount-wrap").hidden = false;
   move = { kind: saved.kind, hotkey: saved.hotkey, netuid: Number(saved.netuid), max: BigInt(saved.amount), resume: saved };
+  if (saved.kind === "move") move.to = { hotkey: saved.toHotkey, netuid: Number(saved.toNetuid) };
   $("move-then").checked = Boolean(saved.thenReturn); $("move-then-wrap").hidden = !saved.thenReturn;
   $("move-title").textContent = `An earlier ${saved.kind} did not finish`;
   $("move-amount").value = fmtUnits(BigInt(saved.amount), 9, 9).replace(/,/g, "");
@@ -979,20 +1479,25 @@ async function runMove() {
   if (amount === null || amount <= 0n) return;
   state.running = true; $("move-go").disabled = true; $("move-cancel").disabled = true; gate();
   const thenReturn = m.kind === "unstake" && $("move-then").checked && !loadReturn(w);
-  const meta = { kind: m.kind, hotkey: m.hotkey, netuid: String(m.netuid), amount: String(amount), thenReturn };
+  const meta = { kind: m.kind, hotkey: m.hotkey, netuid: String(m.netuid), amount: String(amount), thenReturn, ...(m.to ? { toHotkey: m.to.hotkey, toNetuid: String(m.to.netuid) } : {}) };
+  const place = (n) => (n === 0 ? "root" : `subnet ${n}`);
   let chain = null;
   try {
     const lib = await loadReturnLib();
-    const res = await lib.runStakeMove({
-      mnemonic: w.mnemonic, kind: m.kind, hotkey: m.hotkey, netuid: m.netuid, amount,
-      progress: saved?.progress ?? {},
+    const common = {
+      mnemonic: w.mnemonic, amount, progress: saved?.progress ?? {},
       onStep: (_k, s, msg) => note("move-note", msg, s === "bad" ? "warn" : s === "ok" ? "ok" : null),
       onCheckpoint: (progress) => saveMove(w, { ...meta, progress }),
-    });
+    };
+    const res = m.kind === "move"
+      ? await lib.runStakeSwitch({ ...common, from: { hotkey: m.hotkey, netuid: m.netuid }, to: m.to })
+      : await lib.runStakeMove({ ...common, kind: m.kind, hotkey: m.hotkey, netuid: m.netuid });
     clearMove(w);
     if (res.done) note("move-note", m.kind === "unstake"
       ? `Done: ${stakeAmount(res.moved, m.netuid)} unstaked into free TAO.${thenReturn ? " Now bringing it to Solana: step 5, \"Where it is\", follows it." : ` "Bridge to Solana" can bring it home.`}`
-      : `Done: now ${stakeAmount(res.stakeAfter, m.netuid)} staked on ${m.netuid === 0 ? "root" : `subnet ${m.netuid}`}.`, "ok");
+      : m.kind === "move"
+        ? `Done: ${stakeAmount(res.moved, m.netuid)} left ${place(m.netuid)}, and ${stakeAmount(res.received, m.to.netuid)} arrived on ${place(m.to.netuid)} with validator ${short(m.to.hotkey, 6)}.`
+        : `Done: now ${stakeAmount(res.stakeAfter, m.netuid)} staked on ${place(m.netuid)}.`, "ok");
     else if (thenReturn) note("move-note", "The unstake did not happen, so nothing is being returned.", "warn");
     if (res.done && thenReturn && res.freed > 0n) chain = res.freed;
     move = null;
@@ -1291,6 +1796,7 @@ function requestQuote() {
   $("sign").disabled = true;
   quoteTimer = setTimeout(async () => {
     const seq = ++state.quoteSeq;
+    if (state.netuid !== 0n) quotePlanAlpha();
     try {
       const [fee, priority] = await Promise.all([
         quoteNativeFee(clients, { user: state.user, transit: state.signed.wallet.transitAddress, amountLd: state.amountLd }),
@@ -1457,6 +1963,8 @@ const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])$/;
 const RETURN_OPEN = CONFIG.returnLive === true || LOCAL.test(location.hostname);
 // "Top up Chutes" stays shut on soltao.xyz until CONFIG.chutesLive; local hosts open it for testing.
 const CHUTES_OPEN = CONFIG.chutesLive === true || LOCAL.test(location.hostname);
+// The SOLTAO swap in step 1 stays shut on soltao.xyz until CONFIG.soltaoSwapLive; local hosts open it.
+const SWAP_OPEN = CONFIG.soltaoSwapLive === true || LOCAL.test(location.hostname);
 function onCanonicalHost() {
   if (location.hostname === CANONICAL || LOCAL.test(location.hostname)) return true;
   location.replace(`https://${CANONICAL}/stake/${location.search}${location.hash}`);
@@ -1475,6 +1983,7 @@ function setDirection(direction) {
     document.querySelector('input[name="ck-mode"][value="derive"]').checked = true; applyMode();
     refreshReturn();
   }
+  showSwap();
   gate();
 }
 
@@ -1524,6 +2033,9 @@ function init() {
   $("pay-go").addEventListener("click", runPay);
   $("pay-cancel").addEventListener("click", () => { if (!state.running) { pay = null; $("pay-panel").hidden = true; } });
   $("sign").addEventListener("click", send);
+  $("swap-amount").addEventListener("input", onSwapAmount);
+  $("swap-max").addEventListener("click", () => { $("swap-amount").value = fmtUnits(state.soltao, 6, 6).replace(/,/g, ""); onSwapAmount(); });
+  $("swap-go").addEventListener("click", runSwapUi);
   $("share-ack").addEventListener("change", () => {
     state.shareAckAmount = $("share-ack").checked ? state.amountLd : null;
     gate();

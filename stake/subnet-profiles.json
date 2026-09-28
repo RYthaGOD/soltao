@@ -1,0 +1,87 @@
+{
+  "checked": "2026-09-28",
+  "about": "What each subnet says it provides, in soltao's words, from the source named. Written for the 21 subnets with the most TAO in their pools on 28 Sep 2026 (root left out), except subnet 5 (Hone): its registered site shows no description, and the other sources found disagree about what it does. soltao has not used or tested these products, and a summary is not a recommendation.",
+  "profiles": {
+    "64": {
+      "what": "Serverless AI compute. Developers run open-source models (text, image, video, speech and music) through an API, paying as they go or by subscription.",
+      "extra": "A Chutes account can also be topped up in TAO; soltao read Chutes' payment code on 24 Sep 2026.",
+      "source": "https://chutes.ai"
+    },
+    "51": {
+      "what": "A GPU rental marketplace. Miners supply GPUs, and renters use them for their own workloads.",
+      "source": "https://github.com/Datura-ai/lium-io"
+    },
+    "4": {
+      "what": "GPU and CPU compute for AI training and deployment, including confidential computing. Customers pay for the compute they use.",
+      "source": "https://targon.com"
+    },
+    "8": {
+      "what": "Funding for traders. Traders, quants and AI agents are scored on-chain on their trading performance and given access to capital on that basis.",
+      "source": "https://www.vantanetwork.io/"
+    },
+    "3": {
+      "what": "A king-of-the-hill competition to pretrain a language model. Miners submit model checkpoints, and the validator scores each one against the current best.",
+      "source": "https://github.com/unarbos/teutonic"
+    },
+    "120": {
+      "what": "A king-of-the-hill competition for open-weight language models. Miners submit fine-tuned models; the winner earns the subnet's emissions, and its weights are published and served openly.",
+      "source": "https://www.affine.io"
+    },
+    "44": {
+      "what": "Vision AI. It builds models that turn raw video into structured data, offered through its own console.",
+      "source": "https://www.wearescore.com/"
+    },
+    "9": {
+      "what": "Training infrastructure. It pools scattered, underused compute into one capacity that model developers and research teams can train on.",
+      "source": "https://iota.macrocosmos.ai/"
+    },
+    "56": {
+      "what": "Model training without AI expertise. Users pick a model and a dataset, and the network trains image or text models for them, through a website or an API.",
+      "source": "https://www.gradients.io/"
+    },
+    "68": {
+      "what": "AI drug discovery. A global network of researchers competes to find new therapeutic candidates.",
+      "source": "https://www.metanova-labs.ai"
+    },
+    "53": {
+      "what": "Verified inference. It serves open frontier models to AI apps and agents through an API, priced per token.",
+      "source": "https://engy.ai"
+    },
+    "34": {
+      "what": "Deepfake and AI-content detection, offered as an API with a free monthly allowance, browser extensions, apps and enterprise plans.",
+      "source": "https://www.bitmind.ai"
+    },
+    "75": {
+      "what": "Cloud storage, virtual machines and app hosting, recorded on its own blockchain. Customers pay per use with credits, bought with fiat or through Bittensor.",
+      "source": "https://hippius.com/"
+    },
+    "19": {
+      "what": "Blockchain RPC access. Node requests are served by competing suppliers, and failed requests are not billed.",
+      "source": "https://blockmachine.io"
+    },
+    "62": {
+      "what": "AI agents for software engineering, such as solving GitHub issues. Miners compete to build better agents.",
+      "source": "https://docs.ridges.ai/"
+    },
+    "95": {
+      "what": "Private AI inference on your own hardware. Machines can also pool their idle compute and be paid for it.",
+      "source": "https://actual.inc"
+    },
+    "17": {
+      "what": "3D models generated from text prompts, for games and AR/VR, through an app and plugins.",
+      "source": "https://www.404.xyz"
+    },
+    "14": {
+      "what": "A competition to write the fastest GPU kernels for running language models, scored against a baseline.",
+      "source": "https://cacheon.ai"
+    },
+    "93": {
+      "what": "Content marketing on YouTube and X. Creators earn the subnet's Alpha for content that draws verifiable attention to brands.",
+      "source": "https://bitcast.network/"
+    },
+    "1": {
+      "what": "Optimization challenges. Agents submit competing code, and the best are paid in the subnet's Alpha.",
+      "source": "https://apex.macrocosmos.ai"
+    }
+  }
+}
