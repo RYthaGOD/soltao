@@ -4,15 +4,16 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-09-29 (late). **Built, not yet on soltao.xyz:** `stake.js?v=629349d7`,
-`stake.css?v=77e376c9`, `return.js?v=3955c7bb`. Ships bug history item 29 (an unconfirmed Solana
-send must not unlock a second send) and the first-time / core-loop copy: hero and holdings name
-the way back, the review quotes how to exit, a subnet link is the way in and back, Jupiter is in
-step 1, the board no longer calls the fee "flat SOL". `npm test` all passed; page runs A, A2, C
-passed (including the new `#r-later` lines). Run B's subnet-1 swap quote still flakes on the public
-RPC. **Production until this deploys** is `bf510de` / `stake.js?v=1365725d`. **Still off:** Top up
-Chutes (`chutesLive: false`). **Not yet with real funds:** Move, the batched Bittensor fee,
-unstake, Chutes, and a subnet stake through the live page.
+Last updated: 2026-09-29 (late). **Live on soltao.xyz:** commit `830ac26`, `stake.js?v=629349d7`,
+`stake.css?v=77e376c9`, `return.js?v=3955c7bb`. Served on the first poll after `railway up --ci`.
+Ships bug history item 29 (an unconfirmed Solana send must not unlock a second send) and the
+first-time / core-loop copy: hero and holdings name the way back, the review quotes how to exit, a
+subnet link is the way in and back, Jupiter is in step 1, the board no longer calls the fee "flat
+SOL". `npm test` all passed; page runs A, A2, C passed (including `#r-later`). `test:live` matched
+the hash, CSP, return toggle, and subnet-1 checks; the two failures were Bittensor's public RPC
+busy on the subnet-64 directory card. **Still off:** Top up Chutes (`chutesLive: false`). **Not yet
+with real funds:** Move, the batched Bittensor fee, unstake, Chutes, and a subnet stake through
+the live page.
 
 As of 2026-09-25: **Live in production, nothing unreleased on `main`.** Latest deploy (25 Sep,
 Craig's go-ahead after a review of it): commit `d50a180`, `stake.js?v=d20813dc`, which ships item 21
@@ -43,9 +44,9 @@ who-runs-this line, USD in the review, holdings view); plus the redesign, subnet
 switch and link previews from before.
 
 **Shipped and on in production** (`CONFIG.returnLive` true since 24 Sep 2026): return to Solana
-(real-funds proof, item 17), unstake/re-stake/Move from the holdings view (no real-funds proof yet).
-**Still off:** Top up Chutes (`CONFIG.chutesLive` false). **This working tree, awaiting deploy:**
-item 29 plus the loop copy (`stake.js?v=629349d7`).
+(real-funds proof, item 17), unstake/re-stake/Move from the holdings view (no real-funds proof yet),
+item 29 (confirm race), and the loop copy (`stake.js?v=629349d7`).
+**Still off:** Top up Chutes (`CONFIG.chutesLive` false).
 
 An earlier version of this header warned about an unreleased CSP fix. That is resolved: the live
 CSP on both `/` and `/stake/` now includes the configured Helius origin, confirmed by simulating
@@ -849,9 +850,9 @@ Avoided: token-first thinking; the $SOLTAO gate was rejected and the conflict is
 
 ## Current state
 
-**As of 29 Sep 2026 late (this session).** Built `stake.js?v=629349d7` (item 29 + loop copy).
-Production until deploy is `bf510de` / `stake.js?v=1365725d`. `chutesLive` stays false. Do not
-treat `railway up --ci` exit as live — poll the script hash.
+**As of 29 Sep 2026 late (this session).** Production is `830ac26` / `stake.js?v=629349d7` (item 29
++ loop copy). `chutesLive` stays false. `railway up --ci` exits before rollout; this one appeared
+on the first live poll.
 
 ### What has real-funds proof
 - Wallet connect, SIWS, derivation, quotes, simulation.
