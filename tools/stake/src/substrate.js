@@ -11,7 +11,7 @@ import { ApiPromise, HttpProvider, Keyring } from "@polkadot/api";
 import { sign as srSign, getPublicKey } from "@scure/sr25519";
 import { blake2b } from "@noble/hashes/blake2b";
 import { coldkeySecret, ss58Encode } from "./derive.js";
-import { CONFIG } from "./config.js";
+import { CONFIG, bittensorRpcs } from "./config.js";
 
 /**
  * An action and soltao's fee (src/fees.js) as one all-or-nothing `utility.batchAll`: the fee is a keep-alive
@@ -28,23 +28,38 @@ export function withFee(api, call, soltaoFeeRao = 0n) {
 const API_START_MS = 30_000;
 let _api = null; // a promise of a ready api
 
-/**
- * The polkadot api, started once. If it cannot start (the RPC down, or rate-limiting: its 429s carry no
- * CORS header, so the browser just sees "Failed to fetch"), polkadot keeps retrying and never settles.
- * So startup is bounded: after 30 s it fails with a plain error and the next call starts afresh.
- */
-export function getApi() {
-  if (!_api) {
-    const provider = new HttpProvider("https://lite.chain.opentensor.ai");
+async function startApi() {
+  let last;
+  for (const url of bittensorRpcs()) {
+    const provider = new HttpProvider(url);
     // initWasm: false, so readiness never waits on WebAssembly the page CSP forbids; the return bundle
     // also swaps in polkadot's no-WebAssembly loader (build.mjs), leaving its pure-JS hashing in use.
     const api = new ApiPromise({ provider, noInitWarn: true, initWasm: false });
     let timer;
-    const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("could not reach Bittensor (its public RPC may be busy): try again in a minute")), API_START_MS); });
-    _api = Promise.race([api.isReadyOrError, timeout])
-      .then(() => api)
-      .catch((e) => { _api = null; api.disconnect().catch(() => {}); throw e; })
-      .finally(() => clearTimeout(timer));
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error("could not reach Bittensor (its public RPC may be busy): try again in a minute")), API_START_MS);
+    });
+    try {
+      await Promise.race([api.isReadyOrError, timeout]);
+      clearTimeout(timer);
+      return api;
+    } catch (e) {
+      clearTimeout(timer);
+      last = e;
+      api.disconnect().catch(() => {});
+    }
+  }
+  throw last || new Error("could not reach Bittensor (its public RPC may be busy): try again in a minute");
+}
+
+/**
+ * The polkadot api, started once. If it cannot start (the RPC down, or rate-limiting: its 429s carry no
+ * CORS header, so the browser just sees "Failed to fetch"), polkadot keeps retrying and never settles.
+ * So startup is bounded: after 30 s per URL it fails with a plain error and the next call starts afresh.
+ */
+export function getApi() {
+  if (!_api) {
+    _api = startApi().catch((e) => { _api = null; throw e; });
   }
   return _api;
 }

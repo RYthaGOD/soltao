@@ -4,7 +4,18 @@
 
 export const CONFIG = {
   solanaRpc: "https://solana-rpc.publicnode.com", // Helius (joell-lsu6ge) answers 403 since the plan lapsed, 25 Sep 2026
+  // Browser Origin: https://soltao.xyz, measured 29 Sep 2026. PublicNode's two hostnames both return
+  // 200; api.mainnet-beta.solana.com and Helius 403. Helius stays in both CSPs for a plan restore.
+  solanaRpcs: [
+    "https://solana-rpc.publicnode.com",
+    "https://solana.publicnode.com",
+  ],
   bittensorEvmRpc: "https://lite.chain.opentensor.ai",
+  // Lite first (what the page tests intercept); archive when lite 429s or times out.
+  bittensorEvmRpcs: [
+    "https://lite.chain.opentensor.ai",
+    "https://archive.chain.opentensor.ai",
+  ],
 
   // Canonical Solana TAO: LayerZero V2 OFT, SPL Token, 9 decimals, 6 shared.
   taoMint: "taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY",
@@ -82,3 +93,6 @@ export const CONFIG = {
   // stakes can be swept back to free balance, so this leaves room for the Alpha price to move.
   minStakeRao: 20_000_000n, // 0.02 TAO
 };
+
+export const solanaRpcs = () => CONFIG.solanaRpcs ?? [CONFIG.solanaRpc];
+export const bittensorRpcs = () => CONFIG.bittensorEvmRpcs ?? [CONFIG.bittensorEvmRpc];

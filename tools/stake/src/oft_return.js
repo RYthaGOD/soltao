@@ -105,3 +105,19 @@ export async function quoteReturn({ amountRao, solanaRecipient }) {
   const fee = decodeMessagingFee(await rpc("eth_call", [{ to: CONFIG.wtao, data }, "latest"]));
   return { ...fee, amountWei, amountRao: amountWei / WEI_PER_RAO, solanaAmountLd: solanaLdFromWei(amountWei) };
 }
+
+/** Token-account rent the wTAO OFT's enforced Solana options still carry (read 24 Sep 2026, re-checked 29 Sep). */
+export const RETURN_ATA_RENT_LAMPORTS = 2_039_280n;
+export const RETURN_LZ_RECEIVE_GAS = 200_000n;
+
+/** Fail if the wTAO contract no longer funds a first-time Solana token account on every return. */
+export async function assertReturnCreatesAta() {
+  const data = `0x${selector("enforcedOptions(uint32,uint16)")}${uintWord(SOLANA_EID)}${uintWord(1n)}`;
+  const hex = cleanHex(await rpc("eth_call", [{ to: CONFIG.wtao, data }, "latest"]));
+  const drop = RETURN_ATA_RENT_LAMPORTS.toString(16).padStart(8, "0");
+  const gas = RETURN_LZ_RECEIVE_GAS.toString(16).padStart(8, "0");
+  if (!hex.includes(drop) || !hex.includes(gas)) {
+    throw new Error("wTAO enforced options no longer carry token-account rent for Solana");
+  }
+  return { nativeDropLamports: RETURN_ATA_RENT_LAMPORTS, lzReceiveGas: RETURN_LZ_RECEIVE_GAS };
+}

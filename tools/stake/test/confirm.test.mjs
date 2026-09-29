@@ -63,6 +63,22 @@ function connection({ statuses, heights }) {
   expect("a lagging chain error after the deadline is failed", r.failed === true && !r.uncertain);
 }
 
+{
+  const r = await confirmSignature(connection({
+    statuses: [{ confirmationStatus: "processed" }, { confirmationStatus: "confirmed" }],
+    heights: [10, 10],
+  }), "sig", 20, { sleep });
+  expect("processed stays in-flight until confirmed or finalized", r.ok === true && !r.uncertain);
+}
+
+{
+  const r = await confirmSignature(connection({
+    statuses: [{ confirmationStatus: "processed" }],
+    heights: [10],
+  }), "sig", 20, { sleep, maxWaitMs: 0, now: () => 0 });
+  expect("a capped wait that never confirms is uncertain, not failed", r.uncertain === true && !r.ok && !r.failed && /Do not send again/.test(r.why));
+}
+
 expect("no signature may be forgotten", mayForgetPending({ holds: false, sig: null }) === true);
 expect("funds on transit may not be forgotten", mayForgetPending({ holds: true, sig: null }) === false);
 expect("a confirmed signature may not be forgotten", mayForgetPending({ holds: false, sig: "x", status: { confirmationStatus: "confirmed" } }) === false);

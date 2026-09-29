@@ -88,15 +88,18 @@ Remaining:
 
 - Done: the page persists sealed checkpoints before every broadcast and renders the free-return review
   and tracker. `CONFIG.returnLive` is true; a real-funds return landed 24 Sep 2026.
-- Done: arrival is tracked by the Solana wallet's TAO balance. First-time token accounts: the wTAO
-  contract's enforced options carry 2,039,280 lamports (one token account's rent) on every delivery,
-  and the Solana OFT's receive takes the Associated Token and System programs. Inferred, not yet
-  observed on a real delivery.
+- Done: arrival is tracked by watching the Solana wallet's TAO token-account balance. That is an
+  observed delta, not LayerZero's delivery record — LayerZero Scan is the record. First-time token
+  accounts: the wTAO contract's enforced options carry 2,039,280 lamports (one token account's rent)
+  on every delivery, and the Solana OFT's receive takes the Associated Token and System programs.
+  Inferred, not yet observed on a real delivery.
 - Done: polkadot ships in a separately loaded `stake/return.js` (~800 KB), with no WebAssembly, so the
   CSP is unchanged and the forward page never downloads it.
 - Done: every funding, wrap and send is reconciled on resume (mined / pending / dead), per the Codex
   review of 24 Sep 2026.
 - Open: unstake / Move / the batched Bittensor fee with real funds; first-time ATA rent path.
+  Holdings copy and the HANDOVER state this honestly; `assertReturnCreatesAta()` re-reads the
+  wTAO `enforcedOptions` rent drop so a contract change fails CI.
 
 ## Milestone 4: unstake and return
 

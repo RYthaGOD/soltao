@@ -6,7 +6,7 @@ import { ed25519 } from "@noble/curves/ed25519";
 import { ethers } from "ethers";
 import {
   derivationMessage, mnemonicFromSignature, publicKeyFromMnemonic, ss58Encode, ss58Decode, walletFromSignature, toHex,
-  transitKeyFromSignature, evmAddress,
+  transitKeyFromSignature, evmAddress, signInFields,
 } from "../src/derive.js";
 
 let failures = 0;
@@ -66,6 +66,9 @@ expect("rejects a signature that is not 64 bytes", threw);
   const msg = derivationMessage(solanaAddress);
   const bad = [...msg].filter((c) => c.charCodeAt(0) > 126 || (c.charCodeAt(0) < 32 && c !== "\n"));
   expect("the signed-in message is plain ASCII (no smart punctuation, no control characters)", bad.length === 0, JSON.stringify(bad));
+  const f = signInFields(solanaAddress);
+  expect("SIWS domain is frozen to soltao.xyz", f.domain === "soltao.xyz");
+  expect("SIWS URI is frozen to the live stake page", f.uri === "https://soltao.xyz/stake/");
 }
 
 console.log(failures ? `\n${failures} failed` : "\nall passed");

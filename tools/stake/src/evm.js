@@ -4,10 +4,26 @@
 
 import { secp256k1 } from "@noble/curves/secp256k1";
 import { keccak_256 } from "@noble/hashes/sha3";
-import { CONFIG } from "./config.js";
+import { bittensorRpcs } from "./config.js";
 import { evmAddress } from "./derive.js";
 
 const CHAIN_ID = 964n;
+const RPC_MS = 20_000;
+
+async function postRpc(url, body) {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), RPC_MS);
+  try {
+    const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: ac.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (e) {
+    if (e.name === "AbortError") throw new Error("Bittensor RPC timed out");
+    throw e;
+  } finally {
+    clearTimeout(t);
+  }
+}
 
 const hexToBytes = (h) => { const s = h.replace(/^0x/, ""); if (s.length % 2 || /[^0-9a-f]/i.test(s)) throw new Error(`not even-length hex: ${h}`); return Uint8Array.from(s.match(/.{2}/g) || [], (x) => parseInt(x, 16)); };
 const bytesToHex = (b) => "0x" + Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
@@ -38,15 +54,13 @@ export function signLegacyTx({ nonce, gasPrice, gasLimit, to, value = 0n, data =
   return bytesToHex(rlp([...fields, bigToBytes(v), bigToBytes(sig.r), bigToBytes(sig.s)]));
 }
 
-export async function rpc(method, params = [], url = CONFIG.bittensorEvmRpc) {
+export async function rpc(method, params = [], url = bittensorRpcs()) {
   let lastErr;
   const urls = Array.isArray(url) ? url : [url];
   for (let attempt = 0; attempt < 3; attempt++) {
     for (const u of urls) {
       try {
-        const res = await fetch(u, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const body = await res.json();
+        const body = await postRpc(u, { jsonrpc: "2.0", id: 1, method, params });
         if (body.error) throw new Error(body.error.message || `${method} failed`);
         return body.result;
       } catch (e) {
@@ -62,7 +76,7 @@ export async function rpc(method, params = [], url = CONFIG.bittensorEvmRpc) {
 export const BATCH_LIMIT = 50;
 
 /** Many calls in as few requests as the RPC allows, answered in order. Throws if any call fails. */
-export async function rpcBatch(calls, url = CONFIG.bittensorEvmRpc) {
+export async function rpcBatch(calls, url = bittensorRpcs()) {
   const urls = Array.isArray(url) ? url : [url];
   const results = [];
   for (let i = 0; i < calls.length; i += BATCH_LIMIT) {
@@ -71,9 +85,7 @@ export async function rpcBatch(calls, url = CONFIG.bittensorEvmRpc) {
     for (let attempt = 0; attempt < 3 && !got; attempt++) {
       for (const u of urls) {
         try {
-          const res = await fetch(u, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(chunk) });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const body = await res.json();
+          const body = await postRpc(u, chunk);
           if (!Array.isArray(body)) throw new Error(body?.error?.message || "batch refused");
           const byId = new Map(body.map((r) => [r.id, r]));
           got = chunk.map(({ id, method }) => {

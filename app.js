@@ -26,7 +26,10 @@ const YIELD_TTL = 600_000;   // 10 min
 // is not the bridged supply — dividing it by price gives roughly a quarter of
 // what the mint actually holds — so the one number that claims to be on-chain
 // truth is fetched from the chain.
-const RPC = 'https://solana-rpc.publicnode.com';
+const RPCS = [
+  'https://solana-rpc.publicnode.com',
+  'https://solana.publicnode.com',
+];
 const CHAIN_CACHE_KEY = 'soltao:v1:chain';
 const CHAIN_TTL = 600_000;   // 10 min; bridged supply moves slowly
 const SPL_TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
@@ -640,28 +643,34 @@ async function loadChain() {
     if (c && c.t && c.mint === mint && Date.now() - c.t < CHAIN_TTL) { renderChain(c.info); return; }
   } catch { /* private mode */ }
 
-  const res = await fetch(RPC, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      jsonrpc: '2.0', id: 1, method: 'getAccountInfo',
-      params: [mint, { encoding: 'jsonParsed' }],
-    }),
-  });
-  if (!res.ok) throw new Error('rpc ' + res.status);
+  let last = new Error('rpc');
+  for (const rpc of RPCS) {
+    try {
+      const res = await fetch(rpc, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0', id: 1, method: 'getAccountInfo',
+          params: [mint, { encoding: 'jsonParsed' }],
+        }),
+      });
+      if (!res.ok) throw new Error('rpc ' + res.status);
+      const j = await res.json();
+      const v = j && j.result && j.result.value;
+      const info = v && v.data && v.data.parsed && v.data.parsed.info;
+      if (!info || info.supply == null) throw new Error('rpc: no mint account');
 
-  const j = await res.json();
-  const v = j && j.result && j.result.value;
-  const info = v && v.data && v.data.parsed && v.data.parsed.info;
-  if (!info || info.supply == null) throw new Error('rpc: no mint account');
-
-  const facts = {
-    supply: Number(info.supply) / 10 ** info.decimals,
-    decimals: info.decimals,
-    program: v.owner === SPL_TOKEN_PROGRAM ? 'SPL Token' : v.owner,
-  };
-  try { localStorage.setItem(CHAIN_CACHE_KEY, JSON.stringify({ t: Date.now(), mint, info: facts })); } catch { /* private mode */ }
-  renderChain(facts);
+      const facts = {
+        supply: Number(info.supply) / 10 ** info.decimals,
+        decimals: info.decimals,
+        program: v.owner === SPL_TOKEN_PROGRAM ? 'SPL Token' : v.owner,
+      };
+      try { localStorage.setItem(CHAIN_CACHE_KEY, JSON.stringify({ t: Date.now(), mint, info: facts })); } catch { /* private mode */ }
+      renderChain(facts);
+      return;
+    } catch (e) { last = e; }
+  }
+  throw last;
 }
 
 function renderChain(f) {

@@ -268,7 +268,7 @@ script. The footer of /stake/ says the same.
 | `tools/stake/src/evm.js`, `bittensor.js` | Legacy EIP-155 signing, batched RPC, and the precompile reads it needs, including the subnet metagraph |
 | `tools/stake/src/config.js` | Every address, gas limit and the fee, with where each was measured |
 | `tools/stake/src/app.js` | The page controller |
-| `tools/stake/src/oft_return.js`, `return_route.js`, `substrate.js`, `return_entry.js` | Free TAO back to Solana. Built into its own `stake/return.js`, fetched only when that direction is opened. Open on local hosts only until `returnLive` is set after a real-funds return |
+| `tools/stake/src/oft_return.js`, `return_route.js`, `substrate.js`, `return_entry.js` | Free TAO back to Solana. Built into its own `stake/return.js`, fetched only when that direction is opened. Open in production (`returnLive` true since 24 Sep 2026) |
 | `tools/stake/src/pending.js` | Seals what the page saves in the browser (resume routes, return checkpoints) so edits are ignored |
 | `tools/stake/usage.mjs` | `npm run usage`: counts completed routes on-chain from the fee wallet |
 | `tools/stake/test/` | Derivation vectors, signing against ethers, the runner against a simulated chain, the Solana transaction simulated on mainnet, zero-cost mainnet replays, a headless-browser run under the production CSP, and a post-deploy check of the live domain |
@@ -302,9 +302,11 @@ that (78 of 78 Solana → Bittensor TAO messages delivered since 1 May 2026, med
 earlier native drops succeeded, each to a plain address like the transit account).
 
 The build fails if the bundle contains `eval` or `new Function`, so it can never need
-`'unsafe-eval'`. The page added two origins to `connect-src`: `https://lite.chain.opentensor.ai`
-(Bittensor) and the Helius Solana RPC set in `config.js`. They must be in **both** `_headers` and
-`deploy/nginx.conf.template`; the two drifting apart once shipped a CSP bug.
+`'unsafe-eval'`. `connect-src` must list every origin the page fetches: Dexscreener, DefiLlama,
+PublicNode (`solana-rpc` and `solana.publicnode.com`), Helius (kept for a plan restore; it 403s today),
+`lite.chain.opentensor.ai`, and `archive.chain.opentensor.ai`. They must be in **both** `_headers` and
+`deploy/nginx.conf.template`; the two drifting apart once shipped a CSP bug. `api.mainnet-beta.solana.com`
+403s browser Origin and is not listed.
 
 ### Status
 

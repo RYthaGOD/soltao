@@ -10,7 +10,7 @@ import puppeteer from "puppeteer-core";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { CONFIG } from "../src/config.js";
+import { CONFIG, solanaRpcs, bittensorRpcs } from "../src/config.js";
 
 const SITE = (process.env.SITE || "https://soltao.xyz").replace(/\/$/, "");
 const MIRRORS = SITE === "https://soltao.xyz" ? ["https://soltao-production.up.railway.app/stake/", "https://rythagod.github.io/soltao/stake/"] : [];
@@ -81,6 +81,17 @@ try {
     try { const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getHealth" }) }); return `${r.status} ${JSON.stringify((await r.json()).result)}`; } catch (e) { return `blocked: ${e.message}`; }
   }, CONFIG.solanaRpc);
   expect("Solana RPC reachable from the live page", /^200 /.test(solana), solana);
+  const solanaFallbacks = await page.evaluate(async (urls) => {
+    const out = [];
+    for (const url of urls) {
+      try {
+        const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getHealth" }) });
+        out.push(`${url} ${r.status}`);
+      } catch (e) { out.push(`${url} blocked: ${e.message}`); }
+    }
+    return out;
+  }, solanaRpcs());
+  expect("Solana fallback RPCs are allowed by the live CSP", solanaFallbacks.every((s) => !s.includes("blocked:")), solanaFallbacks.join(" | "));
   const batch = await page.evaluate(async (url) => {
     try {
       const body = [0, 1].map((id) => ({ jsonrpc: "2.0", id, method: "eth_chainId", params: [] }));
@@ -89,6 +100,17 @@ try {
     } catch (e) { return `blocked: ${e.message}`; }
   }, CONFIG.bittensorEvmRpc);
   expect("Bittensor RPC accepts a batched request from the live page", /^200 0x3c4,0x3c4$/.test(batch), batch);
+  const btFallbacks = await page.evaluate(async (urls) => {
+    const out = [];
+    for (const url of urls) {
+      try {
+        const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_chainId", params: [] }) });
+        out.push(`${url} ${r.status}`);
+      } catch (e) { out.push(`${url} blocked: ${e.message}`); }
+    }
+    return out;
+  }, bittensorRpcs());
+  expect("Bittensor fallback RPCs are allowed by the live CSP", btFallbacks.every((s) => !s.includes("blocked:")), btFallbacks.join(" | "));
 
   // The subnet-aware hotkey check, in the deployed bundle, against mainnet.
   await setField(page, "#netuid-in", "60000");
@@ -121,26 +143,43 @@ try {
   }
   expect("the plain stake page shows no subnet card", await page.$eval("#subnet-card", (el) => el.hidden));
   expect("the return direction is open (CONFIG.returnLive)", await page.evaluate(() => document.querySelector('input[name="direction"][value="reverse"]')?.disabled === false));
+  expect("holdings copy says Unstake/Move/Stake are not yet real-funds-proven", /checked against Bittensor's real runtime at zero cost/.test(await text(page, "#holdings-prompt")));
   const csp = await page.evaluate(() => window.__csp);
   expect("/stake/: no CSP violations", csp.length === 0, csp.join(" | "));
   expect("/stake/: no page or console errors", problems.length === 0, problems.join(" | "));
   await page.close();
 
   // A subnet's own page (bug history item 21): the deployed bundle reads subnet 64's on-chain identity
-  // and pool. "Chutes" is what its owner registered on 25 Sep 2026; a rename would fail this, not the page.
+  // and pool. Lite RPC 429s made this fail while the rest of the live check passed; retry a quiet pause.
   {
-    const { page, problems, status } = await open("/stake/?netuid=64");
-    await waitText(page, "#subnet-note", /registered on Bittensor|Could not read|has no subnet/, 90_000);
-    const h = await text(page, "#subnet-card-h"), note = await text(page, "#subnet-note");
-    expect("/stake/?netuid=64 opens subnet 64's page with its registered name and pool", status === 200 && !(await page.$eval("#subnet-card", (el) => el.hidden)) && h.startsWith("Chutes") && /^[\d,]+ TAO$/.test(await text(page, "#subnet-pool")) && /does not endorse this subnet/.test(note), `${h} · ${note}`);
-    // Its profile (item 25): the summary, the chart from the served history, the numbers and the risks.
-    await page.waitForSelector("#subnet-card-profile .chart svg", { timeout: 90_000 }).catch(() => {});
-    const profile = await text(page, "#subnet-card-profile");
-    expect("subnet 64's profile shows its summary, a price chart with daily history, and its stats", /Serverless AI compute/.test(profile) && (await page.$$eval("#subnet-card-profile table tbody tr", (r) => r.length)) > 20 && /Price change: 7, 30 and 90 days/.test(profile) && /What its validators paid stakers/.test(profile) && /Before you buy/.test(profile), profile.slice(0, 200));
-    const csp = await page.evaluate(() => window.__csp);
-    expect("subnet page: no CSP violations", csp.length === 0, csp.join(" | "));
-    expect("subnet page: no page or console errors", problems.length === 0, problems.join(" | "));
-    await page.close();
+    let last = "", okCard = false, okProfile = false, cspOk = false, pageOk = false;
+    for (let attempt = 0; attempt < 3 && !(okCard && okProfile); attempt++) {
+      if (attempt) await new Promise((r) => setTimeout(r, 20_000));
+      const { page, problems, status } = await open("/stake/?netuid=64");
+      try {
+        await waitText(page, "#subnet-note", /registered on Bittensor|Could not read|has no subnet/, 90_000);
+        const h = await text(page, "#subnet-card-h"), note = await text(page, "#subnet-note");
+        const pool = await text(page, "#subnet-pool");
+        okCard = status === 200 && !(await page.$eval("#subnet-card", (el) => el.hidden)) && h.startsWith("Chutes") && /^[\d,]+ TAO$/.test(pool) && /does not endorse this subnet/.test(note);
+        last = `${h} · ${note}`;
+        if (!okCard) continue;
+        await page.waitForSelector("#subnet-card-profile .chart svg", { timeout: 90_000 }).catch(() => {});
+        const profile = await text(page, "#subnet-card-profile");
+        okProfile = /Serverless AI compute/.test(profile) && (await page.$$eval("#subnet-card-profile table tbody tr", (r) => r.length)) > 20 && /Price change: 7, 30 and 90 days/.test(profile) && /What its validators paid stakers/.test(profile) && /Before you buy/.test(profile);
+        if (!okProfile) last = profile.slice(0, 200);
+        const csp = await page.evaluate(() => window.__csp);
+        cspOk = csp.length === 0;
+        pageOk = problems.length === 0;
+        if (!cspOk) last = csp.join(" | ");
+        if (!pageOk) last = problems.join(" | ");
+      } finally {
+        await page.close();
+      }
+    }
+    expect("/stake/?netuid=64 opens subnet 64's page with its registered name and pool", okCard, last);
+    expect("subnet 64's profile shows its summary, a price chart with daily history, and its stats", okProfile, last);
+    expect("subnet page: no CSP violations", cspOk, last);
+    expect("subnet page: no page or console errors", pageOk, last);
   }
 
   // What the profiles and directory read from soltao's own origin, as deployed (Dockerfile copies them).

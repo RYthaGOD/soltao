@@ -2,6 +2,7 @@ import { ethers } from "ethers";
 import {
   MIN_RETURN_RAO, encodeQuoteSend, encodeOftSend, decodeMessagingFee,
   quoteReturn, planReturnFunding, raoToWei, removeReturnDust, solanaLdFromWei,
+  assertReturnCreatesAta, RETURN_ATA_RENT_LAMPORTS, RETURN_LZ_RECEIVE_GAS,
 } from "../src/oft_return.js";
 
 let failures = 0;
@@ -52,6 +53,11 @@ expect("an already-wrapped return does not reserve wrap gas again", wrappedPlan.
 let rejected = false;
 try { await quoteReturn({ amountRao: 999n, solanaRecipient: TO }); } catch (e) { rejected = /0\.000001 TAO/.test(e.message); }
 expect("sub-shared-decimal returns are rejected before an RPC call", rejected);
+
+{
+  const r = await assertReturnCreatesAta();
+  expect("wTAO enforced options still fund a first-time Solana token account", r.nativeDropLamports === RETURN_ATA_RENT_LAMPORTS && r.lzReceiveGas === RETURN_LZ_RECEIVE_GAS, `${r.nativeDropLamports} lamports · ${r.lzReceiveGas} CU`);
+}
 
 console.log(failures ? `\n${failures} failed` : "\nall passed");
 process.exit(failures ? 1 : 0);

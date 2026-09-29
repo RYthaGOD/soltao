@@ -36,16 +36,20 @@ const utf8 = (s) => new TextEncoder().encode(s);
  * own docs example doesn't avoid colons either). A period fixed it. Confirmed no non-ASCII or
  * control characters remain in the full message (test/derive.test.mjs enforces this going forward).
  */
-export function signInFields(solanaAddress, { domain = "soltao.xyz", uri = "https://soltao.xyz/stake/" } = {}) {
+export function signInFields(solanaAddress) {
   return {
-    domain, address: solanaAddress, uri, version: "1", chainId: "mainnet",
-    statement: `Create my Bittensor wallet. Only sign this on ${domain}. This signature is the key to that wallet. It moves no funds.`,
+    domain: "soltao.xyz",
+    address: solanaAddress,
+    uri: "https://soltao.xyz/stake/",
+    version: "1",
+    chainId: "mainnet",
+    statement: "Create my Bittensor wallet. Only sign this on soltao.xyz. This signature is the key to that wallet. It moves no funds.",
   };
 }
 
 /** The exact text a fallback signMessage() call signs: signInFields(), laid out by hand. */
-export function derivationMessage(solanaAddress, opts) {
-  const f = signInFields(solanaAddress, opts);
+export function derivationMessage(solanaAddress) {
+  const f = signInFields(solanaAddress);
   return [
     `${f.domain} wants you to sign in with your Solana account:`,
     f.address,
@@ -137,8 +141,10 @@ export function evmAddress(privateKey) {
 
 /** Everything the page needs from one signature. */
 export function walletFromSignature(signature, solanaAddress) {
-  const mnemonic = mnemonicFromSignature(signature, solanaAddress);
+  const sig = Uint8Array.from(signature);
+  const mnemonic = mnemonicFromSignature(sig, solanaAddress);
   const publicKey = publicKeyFromMnemonic(mnemonic);
-  const transitKey = transitKeyFromSignature(signature, solanaAddress);
+  const transitKey = transitKeyFromSignature(sig, solanaAddress);
+  sig.fill(0);
   return { mnemonic, publicKey, address: ss58Encode(publicKey), transitKey, transitAddress: evmAddress(transitKey) };
 }

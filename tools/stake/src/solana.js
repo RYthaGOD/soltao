@@ -11,17 +11,78 @@ import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
 import { publicKey as umiKey, createNoopSigner } from "@metaplex-foundation/umi";
 import { toWeb3JsInstruction } from "@metaplex-foundation/umi-web3js-adapters";
 import { oft } from "@layerzerolabs/oft-v2-solana-sdk";
-import { CONFIG } from "./config.js";
+import { CONFIG, solanaRpcs } from "./config.js";
 
 // Both read from chain, not recalled: the TAO mint's owner, and the ATA program itself.
 const TOKEN_PROGRAM = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const ATA_PROGRAM = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
-export function createClients(rpcUrl = CONFIG.solanaRpc) {
-  const connection = new Connection(rpcUrl, "confirmed");
-  // The LayerZero SDK wants umi's RPC for account reads and a web3.js Connection for simulation.
-  const rpc = Object.assign(Object.create(createUmi(rpcUrl).rpc), { connection });
-  return { connection, rpc };
+// A signed send must not retry on another RPC: a timeout after the first accepted it would
+// double-broadcast. Reads try each URL in CONFIG.solanaRpcs.
+const WRITE_METHODS = new Set(["sendRawTransaction", "sendTransaction", "sendEncodedTransaction"]);
+const RPC_MS = 30_000;
+
+function timedFetch(ms = RPC_MS) {
+  return async (input, init = {}) => {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), ms);
+    try {
+      if (init.signal) {
+        if (init.signal.aborted) ac.abort();
+        else init.signal.addEventListener("abort", () => ac.abort(), { once: true });
+      }
+      return await fetch(input, { ...init, signal: ac.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+}
+
+function connectionFor(url) {
+  return new Connection(url, { commitment: "confirmed", fetch: timedFetch(), disableRetryOnRateLimit: true });
+}
+
+function failoverConnection(urls) {
+  const pool = urls.map(connectionFor);
+  const primary = pool[0];
+  return new Proxy(primary, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver);
+      if (typeof value !== "function") return value;
+      if (WRITE_METHODS.has(prop)) return value.bind(target);
+      return (...args) => {
+        const tryAll = async () => {
+          let last;
+          for (const c of pool) {
+            try { return await c[prop](...args); } catch (e) { last = e; }
+          }
+          throw last;
+        };
+        return tryAll();
+      };
+    },
+  });
+}
+
+function umiRpc(url, connection) {
+  return Object.assign(Object.create(createUmi(url, { commitment: "confirmed", fetch: timedFetch(), disableRetryOnRateLimit: true }).rpc), { connection });
+}
+
+export function createClients(rpcUrl) {
+  const urls = rpcUrl == null ? solanaRpcs() : Array.isArray(rpcUrl) ? rpcUrl : [rpcUrl];
+  const connection = urls.length > 1 ? failoverConnection(urls) : connectionFor(urls[0]);
+  return { connection, rpc: umiRpc(urls[0], connection), urls };
+}
+
+async function withUmi(clients, fn) {
+  const urls = clients.urls || solanaRpcs();
+  let last;
+  for (let i = 0; i < urls.length; i++) {
+    try {
+      return await fn(i === 0 ? clients.rpc : umiRpc(urls[i], clients.connection));
+    } catch (e) { last = e; }
+  }
+  throw last;
 }
 
 export function taoTokenAccount(owner) {
@@ -84,8 +145,10 @@ const tokenAccounts = () => ({ tokenMint: umiKey(CONFIG.taoMint), tokenEscrow: u
 
 /** The LayerZero fee in lamports, from a simulation of the TAO program's own quote instruction. */
 export async function quoteNativeFee(clients, { user, transit, amountLd }) {
-  const q = await oft.quote(clients.rpc, { payer: umiKey(user), ...tokenAccounts() }, { ...sendParams({ transit, amountLd }), payInLzToken: false }, programs(), [], umiKey(CONFIG.lookupTable));
-  return q.nativeFee;
+  return withUmi(clients, async (rpc) => {
+    const q = await oft.quote(rpc, { payer: umiKey(user), ...tokenAccounts() }, { ...sendParams({ transit, amountLd }), payInLzToken: false }, programs(), [], umiKey(CONFIG.lookupTable));
+    return q.nativeFee;
+  });
 }
 
 /** A priority fee (micro-lamports per compute unit) from recent fees on the given writable accounts (the TAO program's, by default). */
@@ -103,12 +166,12 @@ export const priorityFeeLamports = (microLamports, units = CONFIG.computeUnits) 
 /** The unsigned transaction, ready for the wallet. */
 export async function buildRouteTransaction(clients, { user, transit, amountLd, nativeFee, fee, priorityMicroLamports = 0n, computeUnits = CONFIG.computeUnits }) {
   const owner = new PublicKey(user);
-  const send = await oft.send(
-    clients.rpc,
+  const send = await withUmi(clients, (rpc) => oft.send(
+    rpc,
     { payer: createNoopSigner(umiKey(user)), ...tokenAccounts(), tokenSource: umiKey(taoTokenAccount(user).toBase58()) },
     { ...sendParams({ transit, amountLd }), nativeFee },
     programs(),
-  );
+  ));
 
   const instructions = [ComputeBudgetProgram.setComputeUnitLimit({ units: computeUnits })];
   if (BigInt(priorityMicroLamports) > 0n) instructions.push(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: BigInt(priorityMicroLamports) }));

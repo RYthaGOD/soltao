@@ -4,16 +4,18 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-09-29 (late). **Live on soltao.xyz:** commit `830ac26`, `stake.js?v=629349d7`,
-`stake.css?v=77e376c9`, `return.js?v=3955c7bb`. Served on the first poll after `railway up --ci`.
-Ships bug history item 29 (an unconfirmed Solana send must not unlock a second send) and the
-first-time / core-loop copy: hero and holdings name the way back, the review quotes how to exit, a
-subnet link is the way in and back, Jupiter is in step 1, the board no longer calls the fee "flat
-SOL". `npm test` all passed; page runs A, A2, C passed (including `#r-later`). `test:live` matched
-the hash, CSP, return toggle, and subnet-1 checks; the two failures were Bittensor's public RPC
-busy on the subnet-64 directory card. **Still off:** Top up Chutes (`chutesLive: false`). **Not yet
-with real funds:** Move, the batched Bittensor fee, unstake, Chutes, and a subnet stake through
-the live page.
+Last updated: 2026-09-29 (item 31 deploy). **Unreleased until the next poll confirms this hash:**
+Built as `stake.js?v=a683574c`, `return.js?v=7ac428cd`, `stake.css?v=77e376c9`. Production is still
+`830ac26` / `stake.js?v=629349d7` until this ships. **Still off:** Top up Chutes (`chutesLive: false`). **Not yet
+with real funds:** Move, the batched Bittensor fee, unstake, Chutes, a subnet stake through
+the live page, and a first-time Solana token-account arrival.
+
+Previous live header (29 Sep, late): commit `830ac26`, `stake.js?v=629349d7`. Served on the first
+poll after `railway up --ci`. Shipped bug history item 29 and the first-time / core-loop copy: hero
+and holdings name the way back, the review quotes how to exit, a subnet link is the way in and back,
+Jupiter is in step 1, the board no longer calls the fee "flat SOL". `npm test` all passed; page runs
+A, A2, C passed (including `#r-later`). `test:live` matched the hash, CSP, return toggle, and subnet-1
+checks; the two failures were Bittensor's public RPC busy on the subnet-64 directory card.
 
 As of 2026-09-25: **Live in production, nothing unreleased on `main`.** Latest deploy (25 Sep,
 Craig's go-ahead after a review of it): commit `d50a180`, `stake.js?v=d20813dc`, which ships item 21
@@ -781,6 +783,35 @@ This is **not** git-push-triggered. Steps, in order, every time:
     signature is what later unstakes and sends TAO home; the board's stake CTA says 0.25%, not a
     "flat SOL fee". Holdings stay fetch-on-click (no extra RPC on sign-in). Chutes stays off.
 
+31. **RPC fallbacks, confirm cap, honest arrival (29 Sep 2026).** Zero-cost engineering so the
+    page survives a busy public RPC and does not lie about what it measured.
+    - Bittensor reads walk `CONFIG.bittensorEvmRpcs` (lite, then archive). Measured 29 Sep 2026
+      under Origin `https://soltao.xyz`: both answer `eth_chainId` and Substrate `system_health`
+      with `access-control-allow-origin: *`. `getApi()` tries the same URLs, 30 s each. EVM
+      `fetch` aborts at 20 s so a hung lite node actually reaches archive.
+    - Solana reads try both PublicNode hostnames (`solana-rpc.publicnode.com`, then
+      `solana.publicnode.com`). Same Origin probe: both return 200 with ACAO `*`.
+      `api.mainnet-beta.solana.com` 403 "Access forbidden", Helius 403 on the lapsed plan.
+      Listing those as fallbacks only delayed a failed read. Helius remains in both CSPs so
+      restoring the plan is a one-line `solanaRpcs` change. Signed Solana sends never retry
+      another URL. Umi quotes use the same 30 s `timedFetch` as `Connection`.
+    - SIWS `domain` / `uri` are frozen to `soltao.xyz` / `https://soltao.xyz/stake/` (no caller
+      override). The signature bytes are wiped after HKDF. Sign-in errors log name/message/code,
+      not the wallet result object.
+    - Holdings copy says Unstake / Move / Stake have been checked against Bittensor's runtime at
+      zero cost and have not carried real funds through this page.
+    - `assertReturnCreatesAta()` re-reads `enforcedOptions(30168,1)` and fails if 200,000 CU or
+      2,039,280 lamports drop out of the wTAO contract.
+    - `confirmSignature` returns `uncertain` after 120 s if height never advances; `processed` is
+      still in-flight, never landed.
+    - A finished return says the Solana TAO balance rose, and that LayerZero Scan is the bridge
+      record. `#r-later` no longer quotes a stale 0.003 TAO.
+    - `test:live` retries subnet 64 on a busy RPC and checks configured RPC origins against the live CSP.
+    - Built locally as `stake.js?v=a683574c` / `return.js?v=7ac428cd`.
+      Not deployed until the live hash matches.
+    - Chutes stays off. Still not done with real funds: Move, batched Bittensor fee, unstake, a
+      subnet stake through the live page, first-time ATA.
+
 ## Link previews and SEO
 
 `index.html` and `stake/index.html` each carry their own `og:`/`twitter:` block; they are hand-
@@ -804,17 +835,21 @@ or a page's positioning, change these too or the shared link silently starts lyi
 - **`/stake/` only runs on `soltao.xyz` or a local host.** The SIWS message names `soltao.xyz`, and
   the GitHub Pages and Railway-generated mirrors serve no CSP, so `init()` redirects any other host
   to the canonical page. `test/live.test.mjs` checks both mirrors hand off.
-- **The Solana RPC is PublicNode again (25 Sep 2026).** The Helius URL `config.js` used from
-  `fc630a3` began answering every request with `403 Secure URLs are not available on your current
-  plan`, so connecting a wallet never loaded a balance. `solanaRpc` is back on
-  `https://solana-rpc.publicnode.com`; the Helius origin is still in both CSPs, so switching back
-  is a one-line change once the plan is restored. Check it with a bare `getSlot` before you do.
+- **The Solana RPC is PublicNode (25 Sep 2026; Origin probe 29 Sep).** The Helius URL `config.js`
+  used from `fc630a3` began answering every request with `403 Secure URLs are not available on your
+  current plan`, so connecting a wallet never loaded a balance. `solanaRpcs` is both PublicNode
+  hostnames (`solana-rpc.publicnode.com`, `solana.publicnode.com`): `api.mainnet-beta.solana.com`
+  403s browser Origin, and Helius still 403s on the lapsed plan. Helius remains in both CSPs so
+  restoring the plan is a one-line change. Every URL in `solanaRpcs` / `bittensorEvmRpcs` must be
+  in **both** CSPs. A new origin that is not in the CSP looks like "Failed to fetch".
 - **Space out the live test runs.** `lite.chain.opentensor.ai` rate-limits per client over a 60 s
   window (`429`, `retry-after: 60`, `x-ratelimit-policy: http_60s`), and it limits requests that
   carry a browser `Origin` more readily than bare ones. Running the mainnet replay, the page test and
-  the live check back to back tripped it on 24 Sep 2026. In the browser that shows up as "Failed to
-  fetch", not as a CSP violation. Despite the 60 s header, a 2-minute pause was not enough that day
-  and a 5-minute fully quiet pause was. Rerun after a quiet pause before suspecting the code.
+  the live check back to back tripped it on 24 Sep 2026. The page now falls through to
+  `archive.chain.opentensor.ai`; `test:live` retries the subnet-64 card. In the browser a 429 still
+  shows up as "Failed to fetch", not as a CSP violation. Despite the 60 s header, a 2-minute pause
+  was not enough that day and a 5-minute fully quiet pause was. Rerun after a quiet pause before
+  suspecting the code.
 
 ## Product roast and usage, 24 Sep 2026
 
@@ -850,9 +885,10 @@ Avoided: token-first thinking; the $SOLTAO gate was rejected and the conflict is
 
 ## Current state
 
-**As of 29 Sep 2026 late (this session).** Production is `830ac26` / `stake.js?v=629349d7` (item 29
-+ loop copy). `chutesLive` stays false. `railway up --ci` exits before rollout; this one appeared
-on the first live poll.
+**As of 29 Sep 2026, item 31 ready to ship.** Production is still `830ac26` / `stake.js?v=629349d7` until
+the live poll matches `stake.js?v=a683574c`. Unreleased: item 31, built as `stake.js?v=a683574c` / `return.js?v=7ac428cd`.
+`chutesLive` stays false. `railway up --ci` exits before rollout; poll the live script hash after a
+deploy.
 
 ### What has real-funds proof
 - Wallet connect, SIWS, derivation, quotes, simulation.

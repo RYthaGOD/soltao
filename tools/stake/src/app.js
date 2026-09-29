@@ -180,13 +180,12 @@ async function sign() {
   const canSignIn = typeof state.provider?.signIn === "function";
   if (!canSignIn && !state.provider?.signMessage) { note("derive-note", "This wallet cannot sign messages, and the route needs one signature to create your keys.", "bad"); return; }
   
-  const opts = { domain: "soltao.xyz", uri: "https://soltao.xyz/stake/" };
-  const expected = new TextEncoder().encode(derivationMessage(state.user, opts));
+  const expected = new TextEncoder().encode(derivationMessage(state.user));
   $("derive").disabled = true; note("derive-note", "check your wallet…");
   try {
     let signature, signed;
     if (canSignIn) {
-      const out = [].concat(await state.provider.signIn(signInFields(state.user, opts)))[0];
+      const out = [].concat(await state.provider.signIn(signInFields(state.user)))[0];
       if (!out?.signature || !out?.signedMessage) throw new Error("wallet returned an unexpected sign-in result");
       const acct = out.account?.address || (out.account?.publicKey && new PublicKey(out.account.publicKey).toBase58());
       if (acct && acct !== state.user) throw new Error("signed in as a different wallet than the one connected");
@@ -198,11 +197,12 @@ async function sign() {
       signed = expected;
     }
     if (signature.length !== 64) throw new Error("wallet returned an unexpected signature");
-    // Same bytes any standards-following wallet would sign for these fields: any wallet holding this
-    // key recreates the same keys. If it built something else, only this exact wallet setup can.
     const matches = signed.length === expected.length && signed.every((b, i) => b === expected[i]);
     const raw = matches && ed25519.verify(signature, signed, new PublicKey(state.user).toBytes());
-    state.signed = { wallet: walletFromSignature(signature, state.user), raw };
+    const wallet = walletFromSignature(signature, state.user);
+    signature.fill(0);
+    if (signed !== expected) signed.fill(0);
+    state.signed = { wallet, raw };
     $("derive").textContent = "Signed";
     note("derive-note", raw ? "Done. Same wallet, same signature, same keys." : "Done, but your wallet signed in a non-standard format. Only this exact wallet setup can recreate these keys: save the phrase.", raw ? "ok" : "warn");
     $("transit-out").textContent = state.signed.wallet.transitAddress;
@@ -211,7 +211,7 @@ async function sign() {
   } catch (e) {
     $("derive").disabled = false;
     if (isRejection(e)) { note("derive-note", ""); return; }
-    console.error("sign-in failed", e, e && Object.fromEntries(Object.entries(e)));
+    console.error("sign-in failed", e?.name, e?.message, e?.code);
     const detail = [e?.name, e?.message || String(e), e?.code !== undefined && `code ${e.code}`, e?.data !== undefined && `data ${JSON.stringify(e.data)}`].filter(Boolean).join(" · ");
     note("derive-note", `Could not create them: ${detail}. The browser console (F12) has the full error.`, "bad");
   }
@@ -1011,8 +1011,8 @@ function renderReview(ready) {
     return `Stake about ${tao(stake)} on subnet ${state.netuid} to ${to}, bought as its Alpha at the pool price. If that price is more than ${pct}% worse when it lands, nothing is staked and the TAO arrives free. ${rest}`;
   });
   set("r-later", () => (state.plan === "stake"
-    ? "Unstake from Your Bittensor holdings in step 2, then Back to Solana. The return quotes a live bridge fee then (about 0.003 TAO when last measured) plus 0.25%."
-    : "Back to Solana in the toggle above. The return quotes a live bridge fee then (about 0.003 TAO when last measured) plus 0.25%."));
+    ? "Unstake from Your Bittensor holdings in step 2, then Back to Solana. The return quotes a live bridge fee then, plus 0.25%."
+    : "Back to Solana in the toggle above. The return quotes a live bridge fee then, plus 0.25%."));
   set("r-gas", () => { const g = bittensorGas(); return g === null ? "—" : `about ${tao(g)}`; });
   // Name the counterparty, not just the amount: the fee is a plain transfer to this address.
   if (!ready) { for (const id of ["r-lzfee", "r-prio", "r-fee", "r-total", "r-usd"]) $(id).textContent = "—"; state.feeLamports = null; showShare(NaN); }
@@ -1181,7 +1181,7 @@ async function showHoldings() {
       : owedTotal ? ` Root rewards do not add to the stake on their own: ${tao(owedTotal)} is waiting to be claimed, and "Claim" adds it to your root stake. Each claim pays a Bittensor fee (about 0.008 TAO on 25 Sep 2026), so it only pays off once more than that has built up.`
       : rootHotkeys.size ? " Root rewards wait with the validator until claimed, and each claim pays a Bittensor fee (about 0.008 TAO on 25 Sep 2026); none is waiting yet." : "";
     const paidNote = paidShown ? ` ${paidRule(paidShown)} Moving to another validator on the same subnet swaps nothing: "Move" does it with the one chosen in step 3.` : "";
-    note("holdings-note", `Read ${new Date().toISOString().slice(11, 16)} UTC. ${positions.length ? `${positions.length} stake position${positions.length === 1 ? "" : "s"}. Subnet stakes are in that subnet's Alpha and collect their rewards in the stake itself; root stakes are in TAO.` : "No stake positions."}${yieldNote}${inAll}${changed ? " Changes since you last looked here include rewards and anything added or taken out elsewhere." : ""}${paidNote}${smallFree}`);
+    note("holdings-note", `Read ${new Date().toISOString().slice(11, 16)} UTC. ${positions.length ? `${positions.length} stake position${positions.length === 1 ? "" : "s"}. Subnet stakes are in that subnet's Alpha and collect their rewards in the stake itself; root stakes are in TAO.` : "No stake positions."}${yieldNote}${inAll}${changed ? " Changes since you last looked here include rewards and anything added or taken out elsewhere." : ""}${paidNote}${smallFree}${canMove() ? " Unstake, Move, Stake and Claim from this table have been checked against Bittensor's real runtime at zero cost; they have not yet carried real funds through this page." : ""}`);
   } catch (e) {
     if (seq === holdingsSeq) note("holdings-note", `Could not read it from Bittensor: ${e.message}`, "bad");
   } finally {
@@ -1650,10 +1650,10 @@ async function runReturn({ amountRao: chosen = null, retryReverted = false, afte
       trackRev("finish", "busy", `waiting for it on Solana · ${Math.round((Date.now() - start) / 1000)}s`);
       await new Promise((r) => setTimeout(r, 8000));
     }
-    trackRev("finish", "ok", `${tao(arrivingLd(amountRao))} arrived`);
+    trackRev("finish", "ok", `${tao(arrivingLd(amountRao))} observed in your wallet`);
     clearReturn(w);
     $("sign").textContent = "Sign and send";
-    note("track-note", `Done. ${tao(arrivingLd(amountRao))} is back in your Solana wallet as canonical TAO.`, "ok");
+    note("track-note", `Done. Your Solana TAO balance rose by ${tao(arrivingLd(amountRao))}. That is this page watching the token account, not LayerZero's delivery record — LayerZero Scan is the record of the bridge.`, "ok");
     setStep("step-status", "done");
   } catch (e) {
     const busy = document.querySelector('#track-rev li[data-s="busy"]');

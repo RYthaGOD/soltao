@@ -4,29 +4,40 @@
 const landed = (st) => Boolean(st && (st.confirmationStatus === "confirmed" || st.confirmationStatus === "finalized"));
 
 /**
- * Wait until `signature` is confirmed, failed, or its blockhash expires.
+ * Wait until `signature` is confirmed, failed, uncertain past its blockhash, or `maxWaitMs` elapses.
  *
- * A height past `lastValidBlockHeight` is not proof the transaction dropped: the RPC can lag the
- * slot. That case is `uncertain`, never "nothing was sent". Only `failed` (a chain error) is safe
- * to treat as a dead send.
+ * `processed` is not landed. A height past `lastValidBlockHeight` is not proof the transaction
+ * dropped: the RPC can lag the slot. That case, and a wait that never confirms, is `uncertain`,
+ * never "nothing was sent". Only `failed` (a chain error) is safe to treat as a dead send.
  */
 export async function confirmSignature(connection, signature, lastValidBlockHeight, {
   sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
   lagMs = 4_000,
   pollMs = 2_000,
+  maxWaitMs = 120_000,
+  now = Date.now,
 } = {}) {
+  const started = now();
   for (;;) {
     const [{ value: [st] }, height] = await Promise.all([
       connection.getSignatureStatuses([signature]),
       connection.getBlockHeight("confirmed"),
     ]);
     if (st?.err) return { ok: false, failed: true, why: `failed on Solana: ${JSON.stringify(st.err)}` };
+    // `processed` stays in-flight: only confirmed/finalized is safe to treat as landed.
     if (landed(st)) return { ok: true };
     if (height > lastValidBlockHeight) {
       await sleep(lagMs);
       const { value: [final] } = await connection.getSignatureStatuses([signature]);
       if (final?.err) return { ok: false, failed: true, why: `failed on Solana: ${JSON.stringify(final.err)}` };
       if (landed(final)) return { ok: true };
+      return {
+        ok: false,
+        uncertain: true,
+        why: "Solana did not confirm in time: waiting for the bridge in case it landed. Do not send again.",
+      };
+    }
+    if (now() - started >= maxWaitMs) {
       return {
         ok: false,
         uncertain: true,

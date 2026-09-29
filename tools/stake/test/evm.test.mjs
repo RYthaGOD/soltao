@@ -58,5 +58,36 @@ const unfunded = { ...cases[2], nonce: BigInt(Math.floor(Math.random() * 1_000_0
 try { await rpc("eth_sendRawTransaction", [signLegacyTx(unfunded, bytes(ethers.Wallet.createRandom().privateKey))]); expect("RPC refuses an unfunded tx", false, "accepted?"); }
 catch (e) { expect("Bittensor RPC parses the transaction", /insufficient funds|already known/i.test(e.message), e.message); }
 
+{
+  const orig = globalThis.fetch;
+  const seen = [];
+  globalThis.fetch = async (url) => {
+    seen.push(String(url));
+    if (String(url).includes("lite.example")) throw new Error("lite down");
+    return { ok: true, json: async () => ({ result: "0x3c4" }) };
+  };
+  try {
+    const got = await rpc("eth_chainId", [], ["https://lite.example", "https://archive.example"]);
+    expect("rpc falls through to the next URL when the first fails", got === "0x3c4" && seen[0].includes("lite.example") && seen.includes("https://archive.example"));
+  } finally { globalThis.fetch = orig; }
+}
+
+{
+  const { readFileSync } = await import("node:fs");
+  const { dirname, join } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const { solanaRpcs, bittensorRpcs } = await import("../src/config.js");
+  const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+  const headers = readFileSync(join(root, "_headers"), "utf8");
+  const nginx = readFileSync(join(root, "deploy/nginx.conf.template"), "utf8");
+  const must = [...solanaRpcs(), ...bittensorRpcs(), "https://joell-lsu6ge-fast-mainnet.helius-rpc.com"];
+  for (const url of must) {
+    expect(`both CSPs list ${url}`, headers.includes(url) && nginx.includes(url));
+  }
+  expect("official Solana RPC is not in connect-src (it 403s browser Origin)", !headers.includes("api.mainnet-beta.solana.com") && !nginx.includes("api.mainnet-beta.solana.com"));
+  const html = readFileSync(join(root, "stake/index.html"), "utf8");
+  expect("holdings copy says Unstake/Move/Stake are runtime-checked, not real-funds-proven", html.includes("checked against Bittensor's real runtime at zero cost") && html.includes("have not yet carried real funds through this page"));
+}
+
 console.log(failures ? `\n${failures} failed` : "\nall passed");
 process.exit(failures ? 1 : 0);
