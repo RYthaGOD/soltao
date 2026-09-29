@@ -4,9 +4,19 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-09-28. **Built and tested locally, not committed or deployed:** items 25 (subnet profiles and charts), 26 (alpha trading: exact quotes and Move) and 27 (validators'
-30-day record, directory changes, the review's Alpha quote). Everything below
-this paragraph about the last deploy is still true of production. As of 2026-09-25: **Live in production, nothing unreleased on `main`.** Latest deploy (25 Sep,
+Last updated: 2026-09-29. **Live in production, nothing unreleased on `main`.** Deployed 29 Sep 2026 at Craig's
+request ("make this live"): commit `bf510de`, `stake.js?v=1365725d`, `stake.css?v=1c9043fc`, `return.js?v=3955c7bb`.
+That ships items 25 (subnet profiles and charts), 26 (exact quotes and Move), 27 (validators' 30-day record,
+directory changes) and 28 (soltao's 0.25% fee on everything); item 24 (the SOLTAO swap) was removed before
+the deploy. Served on the first poll; `npm run test:live` passed 32 of 32 on the real domain, including the
+profile, the history files and the validator records. Before the deploy: `npm test` (276 checks), page-test
+runs A, A2, B, C, D, E, F and H, `test:return:live`, `test:return:metadata`, `test:subnet:live` and
+`test:mainnet` all passed. The public Bittensor RPC rate-limits back-to-back page runs ("Failed to fetch");
+space them out and rerun a run that fails that way. `railway up` now skips marketing/, docs/, tools/ and
+research/ (`.railwayignore`): the video project made the upload time out. **Not yet with real funds:** Move,
+and the batched Bittensor fee.
+
+As of 2026-09-25: **Live in production, nothing unreleased on `main`.** Latest deploy (25 Sep,
 Craig's go-ahead after a review of it): commit `d50a180`, `stake.js?v=d20813dc`, which ships item 21
 (claim root rewards, subnet pages) and `31cafeb` (board and stake-page polish: hero copy, subscript
 prices, SOLTAO row, footer, notes font). Served on the first poll; `npm test`, page-test runs A, E and

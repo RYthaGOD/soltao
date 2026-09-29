@@ -1,0 +1,8 @@
+# `railway up` uploads this directory before building. The image needs only what the Dockerfile
+# copies (the root pages, board/, stake/ and deploy/), so leave out the heavy folders it never reads:
+# marketing's video project alone made the upload time out on 29 Sep 2026.
+marketing/
+docs/
+tools/
+research/
+.superstack/
