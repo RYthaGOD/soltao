@@ -4,11 +4,12 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-09-29 (item 31 deploy). **Unreleased until the next poll confirms this hash:**
-Built as `stake.js?v=a683574c`, `return.js?v=7ac428cd`, `stake.css?v=77e376c9`. Production is still
-`830ac26` / `stake.js?v=629349d7` until this ships. **Still off:** Top up Chutes (`chutesLive: false`). **Not yet
-with real funds:** Move, the batched Bittensor fee, unstake, Chutes, a subnet stake through
-the live page, and a first-time Solana token-account arrival.
+Last updated: 2026-09-29 (item 31 live). **Live on soltao.xyz:** commit `fc4b204`, `stake.js?v=a683574c`,
+`return.js?v=7ac428cd`, `stake.css?v=77e376c9`. Served after `railway up --ci` (CLI exited 1 on log
+stream; Railway status SUCCESS; live poll matched). `npm test` and `test:live` all passed, including
+both PublicNode hosts, archive CSP, holdings disclosure, and subnet 64. **Still off:** Top up Chutes
+(`chutesLive: false`). **Not yet with real funds:** Move, the batched Bittensor fee, unstake, Chutes,
+a subnet stake through the live page, and a first-time Solana token-account arrival.
 
 Previous live header (29 Sep, late): commit `830ac26`, `stake.js?v=629349d7`. Served on the first
 poll after `railway up --ci`. Shipped bug history item 29 and the first-time / core-loop copy: hero
@@ -807,8 +808,8 @@ This is **not** git-push-triggered. Steps, in order, every time:
     - A finished return says the Solana TAO balance rose, and that LayerZero Scan is the bridge
       record. `#r-later` no longer quotes a stale 0.003 TAO.
     - `test:live` retries subnet 64 on a busy RPC and checks configured RPC origins against the live CSP.
-    - Built locally as `stake.js?v=a683574c` / `return.js?v=7ac428cd`.
-      Not deployed until the live hash matches.
+    - Built as `stake.js?v=a683574c` / `return.js?v=7ac428cd`. Live as `fc4b204`.
+      `test:live` all passed (both PublicNode hosts 200, archive CSP, holdings copy, subnet 64).
     - Chutes stays off. Still not done with real funds: Move, batched Bittensor fee, unstake, a
       subnet stake through the live page, first-time ATA.
 
@@ -885,10 +886,8 @@ Avoided: token-first thinking; the $SOLTAO gate was rejected and the conflict is
 
 ## Current state
 
-**As of 29 Sep 2026, item 31 ready to ship.** Production is still `830ac26` / `stake.js?v=629349d7` until
-the live poll matches `stake.js?v=a683574c`. Unreleased: item 31, built as `stake.js?v=a683574c` / `return.js?v=7ac428cd`.
-`chutesLive` stays false. `railway up --ci` exits before rollout; poll the live script hash after a
-deploy.
+**As of 29 Sep 2026, item 31 live.** Production is `fc4b204` / `stake.js?v=a683574c` / `return.js?v=7ac428cd`.
+`chutesLive` stays false. `railway up --ci` exited 1 on log stream; poll the live script hash.
 
 ### What has real-funds proof
 - Wallet connect, SIWS, derivation, quotes, simulation.
