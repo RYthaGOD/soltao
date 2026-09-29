@@ -66,6 +66,8 @@ try {
   const { page, problems, status } = await open("/stake/");
   expect("/stake/ loads", status === 200, `HTTP ${status}`);
   const served = await page.evaluate(() => document.querySelector('script[src*="stake.js"]')?.getAttribute("src"));
+  // Until a subnet is chosen (its profile reads Bittensor through it), the return code is not downloaded.
+  const returnAtLoad = await page.evaluate(() => performance.getEntriesByType("resource").some((e) => e.name.includes("return.js")));
   expect("the served script is the one just built", served?.endsWith(`v=${builtHash}`), `${served} vs v=${builtHash}`);
 
   // Caching: the hashed script is kept for good, the HTML that names it stays fresh.
@@ -111,7 +113,7 @@ try {
   // Bug history item 1: the bundle once leaked Node's `process`/`Buffer` onto window and broke Phantom.
   const leaks = await page.evaluate(() => ["process", "Buffer", "global"].filter((k) => k in window));
   expect("the bundle adds no Node globals to window", leaks.length === 0, leaks.join(", "));
-  expect("the forward page never downloads the return code", !(await page.evaluate(() => performance.getEntriesByType("resource").some((e) => e.name.includes("return.js")))));
+  expect("the forward page does not download the return code until a subnet is chosen", !returnAtLoad);
   const returnSrc = (await (await fetch(`${SITE}/stake/${served}`)).text()).match(/return\.js\?v=[0-9a-f]{8}/)?.[0];
   if (returnSrc) {
     const res = await fetch(`${SITE}/stake/${returnSrc}`, { method: "HEAD" });
@@ -131,10 +133,24 @@ try {
     await waitText(page, "#subnet-note", /registered on Bittensor|Could not read|has no subnet/, 90_000);
     const h = await text(page, "#subnet-card-h"), note = await text(page, "#subnet-note");
     expect("/stake/?netuid=64 opens subnet 64's page with its registered name and pool", status === 200 && !(await page.$eval("#subnet-card", (el) => el.hidden)) && h.startsWith("Chutes") && /^[\d,]+ TAO$/.test(await text(page, "#subnet-pool")) && /does not endorse this subnet/.test(note), `${h} · ${note}`);
+    // Its profile (item 25): the summary, the chart from the served history, the numbers and the risks.
+    await page.waitForSelector("#subnet-card-profile .chart svg", { timeout: 90_000 }).catch(() => {});
+    const profile = await text(page, "#subnet-card-profile");
+    expect("subnet 64's profile shows its summary, a price chart with daily history, and its stats", /Serverless AI compute/.test(profile) && (await page.$$eval("#subnet-card-profile table tbody tr", (r) => r.length)) > 20 && /Price change: 7, 30 and 90 days/.test(profile) && /What its validators paid stakers/.test(profile) && /Before you buy/.test(profile), profile.slice(0, 200));
     const csp = await page.evaluate(() => window.__csp);
     expect("subnet page: no CSP violations", csp.length === 0, csp.join(" | "));
     expect("subnet page: no page or console errors", problems.length === 0, problems.join(" | "));
     await page.close();
+  }
+
+  // What the profiles and directory read from soltao's own origin, as deployed (Dockerfile copies them).
+  {
+    const get = async (path) => { const r = await fetch(`${SITE}${path}`); return { status: r.status, json: r.ok ? await r.json().catch(() => null) : null }; };
+    const [profiles, index, h64, v64, summary] = await Promise.all(["/stake/subnet-profiles.json", "/stake/history/index.json", "/stake/history/64.json", "/stake/history/validators/64.json", "/stake/history/summary.json"].map(get));
+    expect("the subnet summaries are served", profiles.status === 200 && Boolean(profiles.json?.profiles?.["64"]?.what), `HTTP ${profiles.status}`);
+    const ageDays = index.json?.lastTime ? (Date.now() / 1000 - index.json.lastTime) / 86_400 : Infinity;
+    expect("the daily history is served, complete and under 3 days old", index.status === 200 && index.json.missingDays === 0 && ageDays < 3 && h64.status === 200 && h64.json.points.length >= 60, `HTTP ${index.status}/${h64.status} · ${ageDays.toFixed(1)} days old · ${h64.json?.points?.length} points`);
+    expect("the validator records and the directory summary are served", v64.status === 200 && v64.json.validators.length >= 5 && summary.status === 200 && Object.keys(summary.json.prices).length > 100, `HTTP ${v64.status}/${summary.status}`);
   }
 
   // Mirrors cannot sign in (the message names soltao.xyz) or serve the CSP, so they must hand off.

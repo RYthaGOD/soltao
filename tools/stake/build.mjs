@@ -82,5 +82,9 @@ const hash = createHash("sha256").update(code).digest("hex").slice(0, 8);
 const page = readFileSync(html, "utf8");
 const busted = page.replace(/(<script src="stake\.js)(?:\?v=[0-9a-f]+)?(" defer><\/script>)/, `$1?v=${hash}$2`);
 if (busted === page && !page.includes(`stake.js?v=${hash}"`)) { console.error("could not find the stake.js script tag in index.html to version"); process.exit(1); }
-writeFileSync(html, busted);
-console.log(`stake/index.html  now points at stake.js?v=${hash}`);
+// The same for stake.css, which nginx lets browsers keep for an hour: a changed stylesheet is a new URL.
+const cssHash = hashOf(readFileSync("../../stake/stake.css", "utf8"));
+const styled = busted.replace(/(<link rel="stylesheet" href="stake\.css)(?:\?v=[0-9a-f]+)?(">)/, `$1?v=${cssHash}$2`);
+if (!styled.includes(`stake.css?v=${cssHash}"`)) { console.error("could not find the stake.css link in index.html to version"); process.exit(1); }
+writeFileSync(html, styled);
+console.log(`stake/index.html  now points at stake.js?v=${hash} and stake.css?v=${cssHash}`);

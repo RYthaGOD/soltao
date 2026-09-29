@@ -14,6 +14,8 @@ RUN rm -f ./*
 COPY index.html styles.css app.js pairs.json ./
 COPY board/index.html ./board/
 COPY favicon.svg logo.png og.png og.html robots.txt sitemap.xml ./
-COPY stake/index.html stake/stake.css stake/stake.js stake/stake.js.LEGAL.txt stake/return.js stake/return.js.LEGAL.txt ./stake/
+COPY stake/index.html stake/stake.css stake/stake.js stake/stake.js.LEGAL.txt stake/return.js stake/return.js.LEGAL.txt stake/subnet-profiles.json ./stake/
+# The subnet profiles' daily history and validator records (tools/stake: npm run history).
+COPY stake/history ./stake/history/
 
 EXPOSE 8080
