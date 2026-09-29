@@ -257,6 +257,7 @@ if (want("B")) {
   expect("soltao's fee is 0.25% of the TAO sent in SOL, at least 0.0035 SOL, and says so, with the price it used", soltaoFee >= 0.0035 && /^[\d.]+ SOL( → BgGF…72Na)? \(0\.25%, at least 0\.0035 SOL; 1 TAO = [\d.]+ SOL at the Orca TAO\/SOL pool\)$/.test(feeText), feeText);
   expect("total adds the priority fee and soltao's fee", Math.abs(total - lz - prio - soltaoFee) < 2e-6, `${total} SOL`);
   expect("review names the plan and the stake", /^Stake about 0\.0\d+ TAO on root/.test(await text(page, "#r-plan")), await text(page, "#r-plan"));
+  expect("review names how to get the stake back, and that the return quotes then", /^Unstake from Your Bittensor holdings in step 2, then Back to Solana\. The return quotes a live bridge fee then \(about 0\.003 TAO when last measured\) plus 0\.25%\.$/.test(await text(page, "#r-later")), await text(page, "#r-later"));
   expect("review shows the transit account", /^0x[0-9a-f]{40}$/.test(await text(page, "#r-via")));
   expect("review estimates Bittensor gas in TAO", /^about 0\.00\d+ TAO$/.test(await text(page, "#r-gas")), await text(page, "#r-gas"));
   expect("sign stays disabled while the route is not live", await page.$eval("#sign", (b) => b.disabled));
@@ -268,9 +269,9 @@ if (want("B")) {
   await waitText(page, "#netuid-note", /not registered/);
   expect("a subnet that does not exist is refused before anything is sent", /Subnet 60000 is not registered/.test(await text(page, "#netuid-note")), await text(page, "#netuid-note"));
   await setField("#netuid-in", "1");
-  await waitText(page, "#netuid-note", /registered hotkeys/);
+  await waitText(page, "#netuid-note", /registered hotkeys/, 120_000);
   await setField("#hotkey-in", FOUNDATION_HOTKEY);
-  await waitText(page, "#hotkey-note", /Not on subnet 1|Validator on subnet 1/);
+  await waitText(page, "#hotkey-note", /Not on subnet 1|Validator on subnet 1/, 120_000);
   expect("a delegate with no slot on the chosen subnet is refused", /^Not on subnet 1: .* It validates elsewhere/.test(await text(page, "#hotkey-note")), await text(page, "#hotkey-note"));
   expect("…and the review stays locked", (await text(page, "#r-plan")) === "—" && (await page.$eval("#sign", (b) => b.disabled)), await text(page, "#r-plan"));
   await setField("#hotkey-in", SUBNET1_OWNER_HOTKEY);
@@ -291,6 +292,7 @@ if (want("B")) {
   await clickEl(page, 'input[name="plan"][value="deliver"]');
   await waitText(page, "#r-lzfee", /SOL/);
   expect("'just deliver' names the plan", /^Deliver 0\.1 TAO/.test(await text(page, "#r-plan")), await text(page, "#r-plan"));
+  expect("'just deliver' still names how to get it back", /^Back to Solana in the toggle above\. The return quotes a live bridge fee then \(about 0\.003 TAO when last measured\) plus 0\.25%\.$/.test(await text(page, "#r-later")), await text(page, "#r-later"));
   expect("'just deliver' costs less Bittensor gas", parseFloat((await text(page, "#r-gas")).slice(6)) < parseFloat(stakeGas.slice(6)), `${await text(page, "#r-gas")} vs ${stakeGas}`);
 
   await page.$eval("#amount", (el) => { el.value = ""; });
@@ -313,6 +315,7 @@ if (want("C")) {
   await clickEl(page, 'input[name="plan"][value="deliver"]');
   await page.type("#amount", "0.1");
   await waitText(page, "#r-lzfee", /SOL/);
+  expect("'just deliver' names how to get it back", /^Back to Solana in the toggle above\. The return quotes a live bridge fee then \(about 0\.003 TAO when last measured\) plus 0\.25%\.$/.test(await text(page, "#r-later")), await text(page, "#r-later"));
   expect("sign stays disabled until the permanent destination is acknowledged", await page.$eval("#sign", (button) => button.disabled));
   await clickEl(page, "#review-ack-check");
   await page.waitForFunction(() => !document.querySelector("#sign").disabled, { timeout: 30_000 });

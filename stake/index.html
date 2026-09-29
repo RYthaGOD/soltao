@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>soltao — stake your Solana TAO on Bittensor</title>
-<meta name="description" content="Stake the TAO in your Solana wallet on Bittensor. One signature, one transaction. You keep the keys.">
+<meta name="description" content="Stake the TAO in your Solana wallet on Bittensor. Come back here to unstake or send it home. One signature, one transaction. You keep the keys.">
 <link rel="canonical" href="https://soltao.xyz/stake/">
 <meta name="theme-color" content="#0b0b0c">
 <meta name="color-scheme" content="dark">
@@ -13,21 +13,21 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="soltao">
 <meta property="og:title" content="Stake Solana TAO in a wallet you own — no contract, no custody">
-<meta property="og:description" content="Bridge canonical Solana TAO home to Bittensor and stake it in one Solana transaction. Every key is derived from your own signature; nobody else ever holds one.">
+<meta property="og:description" content="Bridge canonical Solana TAO home to Bittensor and stake it in one Solana transaction. Come back to the same page to unstake or send it home. Every key is derived from your own signature; nobody else ever holds one.">
 <meta property="og:url" content="https://soltao.xyz/stake/">
 <meta property="og:image" content="https://soltao.xyz/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Stake Solana TAO in a wallet you own — no contract, no custody">
-<meta name="twitter:description" content="Bridge canonical Solana TAO home to Bittensor and stake it in one Solana transaction. Every key comes from your own signature.">
+<meta name="twitter:description" content="Bridge canonical Solana TAO home to Bittensor and stake it. Come back here to unstake or send it home. Every key comes from your own signature.">
 <meta name="twitter:image" content="https://soltao.xyz/og.png">
 
 <link rel="icon" href="../favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="../logo.png">
 <link rel="stylesheet" href="../styles.css">
-<link rel="stylesheet" href="stake.css?v=1c9043fc">
-<script src="stake.js?v=1365725d" defer></script>
+<link rel="stylesheet" href="stake.css?v=77e376c9">
+<script src="stake.js?v=629349d7" defer></script>
 </head>
 <body>
 <a class="skip" href="#steps">Skip to the steps</a>
@@ -56,14 +56,14 @@
     <span class="dir-rev" hidden>Bring your TAO <em>back to Solana</em></span>
   </h1>
   <p class="stake-lede">
-    <span class="dir-fwd">Earn staking rewards on the TAO in your Solana wallet. One signature, one transaction. You keep the keys.</span>
-    <span class="dir-rev" hidden>Send TAO from your Bittensor wallet back to your Solana wallet.</span>
+    <span class="dir-fwd">Earn staking rewards on the TAO in your Solana wallet. One signature, one transaction. You keep the keys. Come back here to see it, unstake, or send it home.</span>
+    <span class="dir-rev" hidden>Send free TAO from your Bittensor wallet back to your Solana wallet. Unstake first from Your Bittensor holdings in step 2 if it is still staked.</span>
   </p>
   <p class="stake-trust">Open source · No custody · A 0.25% fee</p>
   <div class="info-row">
   <details class="info"><summary><span class="info-i" aria-hidden="true">i</span><span class="info-l">How it works</span></summary><div class="info-body">
     <p class="dir-fwd">Your TAO goes home over the LayerZero bridge it came in on, and this page stakes it to the validator you choose, owned by your own Bittensor wallet. There is no receipt token and no soltao contract: every key along the way comes from your signature, and nobody else holds one.</p>
-    <p class="dir-rev" hidden>This sends free TAO from the Bittensor wallet your signature creates back to your Solana wallet as canonical TAO, over the same LayerZero bridge. The page signs every Bittensor step with keys only you hold. To bring back staked TAO, unstake it first from "Show what this wallet holds" in step 2.</p>
+    <p class="dir-rev" hidden>This sends free TAO from the Bittensor wallet your signature creates back to your Solana wallet as canonical TAO, over the same LayerZero bridge. The page signs every Bittensor step with keys only you hold. To bring back staked TAO, unstake it first from Your Bittensor holdings in step 2.</p>
     <ol class="hops stake-hops dir-fwd" aria-label="The route">
       <li><b>Solana</b><span>canonical TAO · you sign once</span></li>
       <li><b>LayerZero</b><span>the bridge TAO arrived on</span></li>
@@ -97,6 +97,7 @@
     </dl>
     <div class="profile" id="subnet-card-profile"></div>
     <p class="subnet-links" id="subnet-links" hidden></p>
+    <p class="step-p small">This link is the way in and the way back: stake from your Solana wallet, then return here to unstake or send TAO home.</p>
     <p class="step-note" id="subnet-note" role="status"></p>
   </div>
 </section>
@@ -133,6 +134,7 @@
       <h2>Connect your Solana wallet</h2>
     </div>
     <p class="step-p">Nothing moves until you sign in step 4.</p>
+    <p class="step-p small dir-fwd">Need canonical Solana TAO first? <a href="https://jup.ag/swap/So11111111111111111111111111111111111111112-taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY" rel="noopener" target="_blank">Swap SOL for it on Jupiter ↗</a> — keep this tab open so your subnet choice stays.</p>
     <div class="step-row">
       <button type="button" class="btn btn-primary" id="connect">Connect wallet</button>
       <span class="step-note" id="connect-note" role="status"></span>
@@ -154,8 +156,8 @@
       <span class="rs-n">02</span>
       <h2>Create your Bittensor wallet</h2>
     </div>
-    <p class="step-p">Sign one message to create it. Signing moves no funds.</p>
-    <details class="info"><summary><span class="info-i" aria-hidden="true">i</span><span class="info-l">What does signing do?</span></summary><div class="info-body"><p>The signature creates two keys that only you hold: a Bittensor wallet, and a temporary account on Bittensor EVM (the transit account). The bridge delivers to the transit account, and this page stakes your TAO from there and hands it to your wallet. The same Solana wallet always recreates the same Bittensor wallet.</p></div></details>
+    <p class="step-p">Sign one message to create it. That signature is later what unstakes, moves stake, and sends TAO home. Signing moves no funds.</p>
+    <details class="info"><summary><span class="info-i" aria-hidden="true">i</span><span class="info-l">What does signing do?</span></summary><div class="info-body"><p>The signature creates two keys that only you hold: a Bittensor wallet, and a temporary account on Bittensor EVM (the transit account). The bridge delivers to the transit account, and this page stakes your TAO from there and hands it to your wallet. The same Solana wallet always recreates the same Bittensor wallet, so come back here and sign the same message to manage it.</p></div></details>
 
     <fieldset class="choice dir-fwd">
       <legend class="sr">Where the TAO should land</legend>
@@ -228,7 +230,8 @@
         </label>
       </div>
       <div class="holdings">
-        <button type="button" class="btn btn-ghost btn-sm" id="holdings-btn">Show what this wallet holds</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="holdings-btn">Your Bittensor holdings</button>
+        <p class="step-p small" id="holdings-prompt">Come back here to unstake, claim rewards, move stake, or send TAO home.</p>
         <div id="holdings-wrap" hidden>
           <p class="step-note" id="holdings-note" role="status"></p>
           <div class="pick-scroll">
@@ -336,7 +339,7 @@
         <summary id="plan-profile-h">About this subnet</summary>
         <div class="profile" id="plan-profile"></div>
       </details>
-      <details class="info"><summary><span class="info-i" aria-hidden="true">i</span><span class="info-l">What's a subnet?</span></summary><div class="info-body"><p>Bittensor is made of subnets, each doing a different AI job. <b>Root (0)</b> stakes your TAO as TAO. Any other subnet converts your TAO into that subnet's own token (its Alpha) at the current price, so its value moves with that subnet.</p><p><b>Collecting rewards:</b> a subnet stake collects its rewards in the stake itself. Root rewards wait with the validator until you claim them from "Show what this wallet holds", and each claim pays a Bittensor fee (about 0.008 TAO on 25 Sep 2026). Small root stakes can take a long time to earn more than that, so root suits larger amounts.</p></div></details>
+      <details class="info"><summary><span class="info-i" aria-hidden="true">i</span><span class="info-l">What's a subnet?</span></summary><div class="info-body"><p>Bittensor is made of subnets, each doing a different AI job. <b>Root (0)</b> stakes your TAO as TAO. Any other subnet converts your TAO into that subnet's own token (its Alpha) at the current price, so its value moves with that subnet.</p><p><b>Collecting rewards:</b> a subnet stake collects its rewards in the stake itself. Root rewards wait with the validator until you claim them from Your Bittensor holdings, and each claim pays a Bittensor fee (about 0.008 TAO on 25 Sep 2026). Small root stakes can take a long time to earn more than that, so root suits larger amounts.</p></div></details>
       <div class="picker">
         <button type="button" class="btn btn-ghost btn-sm" id="dir-btn">Browse subnets</button>
         <div id="dir-wrap" hidden>
@@ -395,6 +398,7 @@
       <div><dt>Goes to</dt><dd class="num" id="r-dest">—</dd></div>
       <div class="dir-fwd"><dt>Via</dt><dd class="num" id="r-via">—</dd></div>
       <div class="dir-fwd"><dt>On arrival</dt><dd id="r-plan">—</dd></div>
+      <div class="dir-fwd"><dt>To get it back</dt><dd id="r-later">—</dd></div>
       <div><dt>Bittensor fee (TAO)</dt><dd class="num" id="r-gas">—</dd></div>
       <div class="dir-rev" hidden><dt>soltao fee (0.25%, TAO)</dt><dd class="num" id="r-rfee">—</dd></div>
       <div><dt>Bridge fee</dt><dd class="num" id="r-lzfee">—</dd></div>
@@ -469,7 +473,7 @@
         <div><dt id="f-staked-label">Staked TAO</dt><dd class="num" id="f-staked">—</dd></div>
         <div><dt>Free TAO</dt><dd class="num" id="f-free">—</dd></div>
       </dl>
-      <p class="step-p small">Manage it here any time, or in any Bittensor wallet (btcli, Talisman) with your recovery phrase.</p>
+      <p class="step-p small">Come back to this page, sign the same message, and open Your Bittensor holdings to unstake or send it home. You can also use any Bittensor wallet (btcli, Talisman) with your recovery phrase.</p>
     </div>
   </li>
 </ol>

@@ -1,6 +1,6 @@
 # soltao Gateway Plan
 
-Last updated: 2026-09-24
+Last updated: 2026-09-29
 
 ## Product promise
 
@@ -60,7 +60,9 @@ Acceptance:
 
 ## Milestone 3: bridge-back foundation
 
-Status: return engine implemented behind the disabled production UI. It has independently checked OFT calldata, explicit rao/wei/Solana-local conversions, a live mainnet fee quote, a coldkey signer identity check, live runtime-metadata guards, resumable funding/wrap/send checkpoints, and a zero-cost replay through the real canonical wTAO and LayerZero contracts. It is wired into the page, which opens it on local hosts only until `CONFIG.returnLive`.
+Status: done in production. `CONFIG.returnLive` is true. A real-funds free-TAO return landed 24 Sep
+2026 (HANDOVER item 17). Unstake and Move are live in the holdings view; they have not yet carried
+real funds. The batched 0.25% Bittensor fee (item 28) has not carried real funds.
 
 Goal: build return-to-Solana for free TAO first, then add unstake.
 
@@ -82,10 +84,10 @@ Evidence captured on 2026-09-23:
 - Recovery tests cover interruptions after coldkey funding, after wrapping, after OFT broadcast, and while the OFT transaction is pending; none duplicates a transfer, wrap, or send.
 - A read-only mainnet-state replay wrapped 1 TAO through the real wTAO contract and executed its real LayerZero send toward Solana. It measured 59,827 total gas for wrap and 246,363 for send, inside the configured 75,000 and 650,000 limits, with zero wTAO left behind.
 
-Remaining before the toggle can be enabled (updated 24 Sep 2026):
+Remaining:
 
 - Done: the page persists sealed checkpoints before every broadcast and renders the free-return review
-  and tracker. It is open on local hosts only; `CONFIG.returnLive` stays false.
+  and tracker. `CONFIG.returnLive` is true; a real-funds return landed 24 Sep 2026.
 - Done: arrival is tracked by the Solana wallet's TAO balance. First-time token accounts: the wTAO
   contract's enforced options carry 2,039,280 lamports (one token account's rent) on every delivery,
   and the Solana OFT's receive takes the Associated Token and System programs. Inferred, not yet
@@ -94,14 +96,14 @@ Remaining before the toggle can be enabled (updated 24 Sep 2026):
   CSP is unchanged and the forward page never downloads it.
 - Done: every funding, wrap and send is reconciled on resume (mined / pending / dead), per the Codex
   review of 24 Sep 2026.
-- Open: complete one deliberately small real-funds free-TAO return after explicit approval, then set
-  `returnLive`.
+- Open: unstake / Move / the batched Bittensor fee with real funds; first-time ATA rent path.
 
 ## Milestone 4: unstake and return
 
-Status (24 Sep 2026): built as two resumable steps, behind the same production gate as the return
-(`CONFIG.returnLive`). "Show what this Bittensor wallet holds" lists every position from the chain;
-each one offers "Unstake" (a full or partial amount, `removeStakeLimit` 2% under the pool price on a
+Status (29 Sep 2026): live in production (`CONFIG.returnLive` true). Unstake, Stake and Move from
+the holdings view are open; none of those three have carried real funds yet. Outcome of each move
+is the extrinsic's own event when the node still has it (item 22), else a balance/stake fallback.
+Each position offers "Unstake" (a full or partial amount, `removeStakeLimit` 2% under the pool price on a
 subnet, plain `removeStake` on root), which leaves free TAO that "Bridge to Solana" then brings home.
 Free TAO offers "Stake" to step 3's checked subnet and validator (`addStakeLimit` 2% over), which is
 also the in-page retry for a subnet stake the chain refused on price. Each move is signed and sealed

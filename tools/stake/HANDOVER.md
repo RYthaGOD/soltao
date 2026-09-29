@@ -4,17 +4,15 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-09-29. **Live in production, nothing unreleased on `main`.** Deployed 29 Sep 2026 at Craig's
-request ("make this live"): commit `bf510de`, `stake.js?v=1365725d`, `stake.css?v=1c9043fc`, `return.js?v=3955c7bb`.
-That ships items 25 (subnet profiles and charts), 26 (exact quotes and Move), 27 (validators' 30-day record,
-directory changes) and 28 (soltao's 0.25% fee on everything); item 24 (the SOLTAO swap) was removed before
-the deploy. Served on the first poll; `npm run test:live` passed 32 of 32 on the real domain, including the
-profile, the history files and the validator records. Before the deploy: `npm test` (276 checks), page-test
-runs A, A2, B, C, D, E, F and H, `test:return:live`, `test:return:metadata`, `test:subnet:live` and
-`test:mainnet` all passed. The public Bittensor RPC rate-limits back-to-back page runs ("Failed to fetch");
-space them out and rerun a run that fails that way. `railway up` now skips marketing/, docs/, tools/ and
-research/ (`.railwayignore`): the video project made the upload time out. **Not yet with real funds:** Move,
-and the batched Bittensor fee.
+Last updated: 2026-09-29 (late). **Built, not yet on soltao.xyz:** `stake.js?v=629349d7`,
+`stake.css?v=77e376c9`, `return.js?v=3955c7bb`. Ships bug history item 29 (an unconfirmed Solana
+send must not unlock a second send) and the first-time / core-loop copy: hero and holdings name
+the way back, the review quotes how to exit, a subnet link is the way in and back, Jupiter is in
+step 1, the board no longer calls the fee "flat SOL". `npm test` all passed; page runs A, A2, C
+passed (including the new `#r-later` lines). Run B's subnet-1 swap quote still flakes on the public
+RPC. **Production until this deploys** is `bf510de` / `stake.js?v=1365725d`. **Still off:** Top up
+Chutes (`chutesLive: false`). **Not yet with real funds:** Move, the batched Bittensor fee,
+unstake, Chutes, and a subnet stake through the live page.
 
 As of 2026-09-25: **Live in production, nothing unreleased on `main`.** Latest deploy (25 Sep,
 Craig's go-ahead after a review of it): commit `d50a180`, `stake.js?v=d20813dc`, which ships item 21
@@ -44,11 +42,10 @@ resume routes); both Codex P1 fixes (item 12); the roast fixes (validator picker
 who-runs-this line, USD in the review, holdings view); plus the redesign, subnet staking, the Helius
 switch and link previews from before.
 
-**Shipped but switched off** (`CONFIG.returnLive` false; opens on local hosts only): the return to
-Solana, and unstake/re-stake from the holdings view (item 13). Turning them on needs one small
-real-funds run of each, with Craig's approval, then `returnLive: true`, a build and a deploy.
-See "Current state" for what has real-funds proof versus what shipped on zero-cost mainnet-state
-verification plus Craig's own informed go-ahead.
+**Shipped and on in production** (`CONFIG.returnLive` true since 24 Sep 2026): return to Solana
+(real-funds proof, item 17), unstake/re-stake/Move from the holdings view (no real-funds proof yet).
+**Still off:** Top up Chutes (`CONFIG.chutesLive` false). **This working tree, awaiting deploy:**
+item 29 plus the loop copy (`stake.js?v=629349d7`).
 
 An earlier version of this header warned about an unreleased CSP fix. That is resolved: the live
 CSP on both `/` and `/stake/` now includes the configured Helius origin, confirmed by simulating
@@ -100,8 +97,8 @@ main "Solana TAO Board" page which stays no-wallet-connect).
   the sign-in flow (always goes through the real wallet, including on localhost — see standing
   constraints); `send()` is the Solana transaction; `runRoute()` drives the Bittensor half. It also
   runs the return direction, the holdings view and its stake moves, the validator picker and the
-  subnet directory. The return and the stake moves are open only where `RETURN_OPEN` (local hosts,
-  or `CONFIG.returnLive`, which is false), so production cannot reach them.
+  subnet directory. The return and the stake moves are open where `RETURN_OPEN` (local hosts, or
+  `CONFIG.returnLive`, which has been true since 24 Sep 2026).
 - `tools/stake/src/stake_moves.js` + `src/settle.js` — unstake / re-stake from the coldkey (item 13)
   and the shared settling of a signed coldkey extrinsic.
 - `tools/stake/src/payments.js` — "Top up Chutes" (item 18): free TAO from the coldkey to a pasted
@@ -116,13 +113,14 @@ main "Solana TAO Board" page which stays no-wallet-connect).
 - `tools/stake/src/route.js` — the 4-step Bittensor route logic (unwrap/stake/handover/sweep) for
   the forward direction, now netuid-aware (stakes and hands over on whichever subnet the user
   picked, root by default), including the stake-refusal fallback.
-- `tools/stake/src/solana.js` — the LayerZero OFT bridge transaction + fee transfer + gas drop.
+- `tools/stake/src/solana.js` — the LayerZero OFT bridge transaction + fee transfer + gas drop + priority fee.
+- `tools/stake/src/confirm.js` — wait for the Solana signature. A lagged RPC is `uncertain`, never
+  "nothing was sent"; `mayForgetPending` refuses Forget while the signature might still land.
 - `tools/stake/src/evm.js` — Bittensor RPC calls, retry/backoff, receipt polling.
-- `tools/stake/src/bittensor.js` — precompile reads (delegate, stake, balance, wTAO, address map).
+- `tools/stake/src/bittensor.js` — precompile reads (delegate, stake, balance, wTAO, address map, metagraph).
 - `tools/stake/src/config.js` — addresses, the soltao fee wallet
-  (`BgGFMbwUtKLifQYZogbDorEXTXYp3UKVAZSH41xQ72Na`). `solanaRpc` switched from a public shared
-  endpoint to a dedicated Helius endpoint on 23 Sep 2026 — this is committed and public (visible in
-  the shipped bundle to anyone), a deliberate tradeoff Craig accepted for reliability.
+  (`BgGFMbwUtKLifQYZogbDorEXTXYp3UKVAZSH41xQ72Na`) and Bittensor fee coldkey. `solanaRpc` is
+  PublicNode (`https://solana-rpc.publicnode.com`) after Helius began answering 403 on 25 Sep 2026.
 - `tools/stake/src/oft_return.js` — builds/quotes the canonical wTAO -> Solana OFT send for the
   return direction (rao/wei/6-decimal-dust conversions, funding math, live fee quoting). Pure.
 - `tools/stake/src/return_route.js` — the resumable free-TAO return engine: coldkey funding -> wrap ->
@@ -137,9 +135,9 @@ main "Solana TAO Board" page which stays no-wallet-connect).
   (`__RETURN_BUNDLE__`, defined at build time). Built with polkadot's no-WebAssembly loader.
 - `tools/stake/src/pending.js` — sealing for saved browser records: the forward resume route
   (`sealRoute`/`readRoute`) and the return checkpoints (`sealRecord`/`openRecord`, label "return").
-- The return direction in the page (`app.js`, "the return direction") opens only where
-  `RETURN_OPEN`: on local hosts, or when `CONFIG.returnLive` is true. **It is false.** Production
-  shows the option disabled until one small real-funds return has been done with Craig's approval.
+- The return direction in the page (`app.js`) opens where `RETURN_OPEN`: local hosts, or
+  `CONFIG.returnLive`. **It is true** since 24 Sep 2026; a real-funds return landed the same day
+  (bug history item 17). Unstake / Move / the batched Bittensor fee have not yet carried real funds.
 - `tools/stake/build.mjs` — esbuild bundler. Also stamps `stake/index.html`'s script tag with a
   content hash (`stake.js?v=<hash>`) so a new deploy can never be served stale from any cache layer.
   **Always run `npm run build` before deploying** — the hash must change for the fix to actually
@@ -153,7 +151,8 @@ main "Solana TAO Board" page which stays no-wallet-connect).
   `return_route.test.mjs` (recovery state machine, part of `npm test`) and
   `return_mainnet.test.mjs` + `ReturnReplay.sol` (real wTAO/LayerZero zero-cost replay, run with
   `npm run test:return:mainnet`), plus `subnet.test.mjs` (mocked metagraph batching and lookup, part
-  of `npm test`) and `subnet_live.test.mjs` (read-only mainnet, `npm run test:subnet:live`).
+  of `npm test`) and `subnet_live.test.mjs` (read-only mainnet, `npm run test:subnet:live`), plus
+  `confirm.test.mjs` (mocked Solana confirm/forget, part of `npm test`).
 - `stake/index.html`, `stake/stake.js`, `stake/stake.css` — the built, committed output actually
   served in production. Never hand-edit `stake/stake.js`; it's generated by `npm run build` from
   `tools/stake/src/*`. `index.html`/`stake.css` are hand-edited directly (only the script version
@@ -190,7 +189,7 @@ This is **not** git-push-triggered. Steps, in order, every time:
 6. Once the hash is live, run `npm run test:live` from `tools/stake`. It is read-only (no wallet,
    nothing signed) and checks the real domain: served hash equals the local build, both RPC origins
    pass the live CSP from inside the page, the subnet/hotkey checks behave on mainnet in the
-   deployed bundle, the return toggle is still disabled, and there are zero console or CSP errors on
+   deployed bundle, the return toggle is enabled (`CONFIG.returnLive`), and there are zero console or CSP errors on
    `/` and `/stake/`. Extend it whenever a deploy changes something it does not yet cover.
 
 ## Bug history (chronological, all confirmed via live testing)
@@ -764,6 +763,23 @@ This is **not** git-push-triggered. Steps, in order, every time:
       - **The batched Bittensor fee has not carried real funds yet.**
     - *Deploy:* merged from `stake-trading`, together with items 24 (removed), 25, 26 and 27.
 
+29. **An unconfirmed Solana send must not unlock a second send (29 Sep 2026).**
+    After the wallet signs, `confirm()` used to treat a blockhash past `lastValidBlockHeight` as
+    "expired before it landed: nothing was sent, try again", clear the pending route, and re-enable
+    Sign. If the RPC had only lagged, the first OFT send could still land and the user could sign a
+    second. Fix: `src/confirm.js` returns `failed` only on a chain error, and `uncertain` when the
+    deadline passes with no status. `send()` keeps the sealed pending route, waits for the bridge,
+    and does not offer a second send. Forget is refused while the signature is processed/confirmed,
+    while the RPC read fails, or while a missing record is younger than 3 minutes. Covered by
+    `test/confirm.test.mjs` (in `npm test`). Bundled as `stake.js?v=629349d7`.
+
+30. **First-time / core-loop copy (29 Sep 2026).** The roast's remaining UX lifts that do not need
+    outside users: the hero and holdings name the way back; the review has a "To get it back" row
+    (`#r-later`) with a live-quoted return later; a subnet `?netuid=` page says the same link is the
+    way in and back; step 1 always offers Jupiter and tells people to keep the tab; step 2 says the
+    signature is what later unstakes and sends TAO home; the board's stake CTA says 0.25%, not a
+    "flat SOL fee". Holdings stay fetch-on-click (no extra RPC on sign-in). Chutes stays off.
+
 ## Link previews and SEO
 
 `index.html` and `stake/index.html` each carry their own `og:`/`twitter:` block; they are hand-
@@ -833,105 +849,39 @@ Avoided: token-first thinking; the $SOLTAO gate was rejected and the conflict is
 
 ## Current state
 
-### Deployed 23-24 Sep 2026 (three rounds)
-Round one: the redesign, netuid-aware `route.js`, the direction-toggle scaffold, and the Helius RPC
-switch were built, tested, committed, pushed, and deployed via `railway up --ci` with Craig's
-explicit go-ahead. That deploy shipped a real bug — `config.js` pointed at Helius but the CSP
-headers still only allowed PublicNode (bug history item 7) — caught by checking response headers
-directly rather than trusting a page-load-only smoke test.
-
-Round two happened separately and concurrently: another session/process (commit `a1de8dc`, "Build
-resumable free-TAO return foundation") fixed the CSP gap, refined the review-step gating (bug
-history item 8), and pushed further Milestone 3 work (`return_route.js`, resumable free-TAO
-return), then deployed it.
-
-Round three (24 Sep): the link-preview/SEO metadata fix (bug history item 9), deployed and verified.
-
-**State after round three** (superseded by the later-session note below, which deployed `292b68b`):
-local `main`, `origin/main`, and the live site were in sync at commit `0dc334b`, script hash
-`stake.js?v=b5d4275d`. Verified directly against the live domain, not inferred: script
-hash matches the local build, `og:title` on both pages returns the new copy, `og.png` is the
-regenerated 170,825-byte file, and the CSP on `/stake/` includes the Helius origin. The Helius
-endpoint was additionally exercised by running the page's own wallet-connect `fetch()` from inside
-the live page (200 OK, zero CSP violations).
-
-**Session of 24 Sep 2026 (research only, no deploy).** Looked at where the data for a subnet
-directory and validator picker would come from — taostats' API versus Bittensor's own precompiles.
-Nothing was implemented, no API key was created, `npm run build` was not run and nothing was
-deployed. Findings are in `research/subnet-validator-data-research.md` (local only: `research/` is
-gitignored) with the durable summary in `docs/gateway-plan.md` under Milestone 5. The one thing
-worth acting on: the live hotkey check is subnet-blind, so the page can call a hotkey a "registered
-validator" for a subnet it does not validate on. Verified at close that every served file
-(`stake/stake.js`, `stake/index.html`, `stake/stake.css`, `index.html`, `app.js`, `styles.css`,
-`_headers`, `deploy/nginx.conf.template`) is byte-identical between the deployed commit `0dc334b`
-and HEAD, and that the live hash is still `stake.js?v=b5d4275d` — so every commit after `0dc334b`
-is documentation and the live site is not behind.
-
-**Later session of 24 Sep 2026 (built and deployed).** Acted on that finding: bug history item 10.
-The replay settled the open question (the chain accepts an off-subnet stake silently), the page now
-checks the chosen subnet's metagraph, and the harness's fake-revert flake is fixed. Results:
-`npm test` green, `npm run test:page` green including the new subnet cases, `test:subnet:live` green,
-`test:mainnet` green. Pushed and deployed as `292b68b` / `stake.js?v=65f935e0` with Craig's explicit
-go-ahead; the hash was serving on the first poll. Post-deploy: every served file byte-identical to
-the repo, CSP on `/` and `/stake/` allows both RPC origins, new `npm run test:live` 16/16 on the real
-domain, and `npm test`, `test:return:live`, `test:return:mainnet` and `test:return:metadata` all
-green.
-
-**Note for whoever picks this up next:** at least one other agent/process was actively committing
-and deploying to this same repo across 23-24 Sep, without coordinating through this session. It
-overwrote parts of this document mid-session, including re-introducing a stale "unreleased CSP fix"
-warning after the fix had shipped. Re-check `git log origin/main`, the live script hash, and the
-live response headers before trusting any claim in here — including this one. `railway up --ci`
-also exits before the rollout finishes, so a clean exit code does **not** mean the new build is
-serving; poll the live site until the change actually appears.
+**As of 29 Sep 2026 late (this session).** Built `stake.js?v=629349d7` (item 29 + loop copy).
+Production until deploy is `bf510de` / `stake.js?v=1365725d`. `chutesLive` stays false. Do not
+treat `railway up --ci` exit as live — poll the script hash.
 
 ### What has real-funds proof
-- **Wallet connection, SIWS sign-in, wallet derivation, transit account/coldkey generation,
-  transaction building/simulation/quote** — all exercised live on `soltao.xyz` before today.
-- **Root-staking forward route** (unwrap -> addStake root -> transferStake -> sweep): a live
-  production transaction was sent and routed successfully — SIWS sign-in succeeded, Phantom
-  approved the Solana bridge tx, the bridge delivered wTAO + gas drop, the route unwrapped and
-  swept to the coldkey, and it landed in Craig's Talisman wallet with the soltao fee correctly
-  reaching the treasury wallet. Confirmed real by Craig on 23 Sep 2026 (predates subnet staking,
-  the localhost-bypass removal, and the redesign).
-- **Error recovery** — messages persist, UI recovers, background bridging resumes from chain state.
+- Wallet connect, SIWS, derivation, quotes, simulation.
+- Root-staking forward route (23 Sep 2026).
+- Free-TAO return to Solana (24 Sep 2026, item 17): wrap + LayerZero send landed, existing token account.
+- Error recovery / resume from chain state.
+- One hand-held third-party "Just deliver it" route (item 23). Keep-alive sweep (item 20) on that run.
 
-### What shipped on real-mainnet-state verification, not yet a real signed transaction
-- **Subnet staking** (`route.js` addStake/transferStake now take a netuid). Covered by a mocked
-  chain simulation (`route.test.mjs`, proving subnet resume never touches root stake) and by a
-  zero-cost mainnet-replay extension added 23 Sep 2026: `test/mainnet.test.mjs` replays the real
-  signed transactions through the real staking precompile against real subnet 1 (owner hotkey
-  independently confirmed live to be a registered delegate). Across repeated runs, 0.1 TAO
-  consistently converts to ~11.2 Alpha owned by the fresh coldkey, zero root-stake
-  cross-contamination, `addStake` succeeding in 8 of 8 attempts (one run's *later* step hit the
-  shared public Bittensor RPC's rate limit from our own repeated testing, not a revert). This is
-  why Craig chose to ship without spending real subnet-stake funds first: the one thing a mock
-  can't prove (real precompile behavior on a real, currently-registered subnet) is now proven, for
-  free. What remains open — Phantom actually signing the real calldata cleanly, LayerZero's
-  executor actually delivering — is the same class of risk the root-staking route already cleared,
-  not something specific to subnets.
-- **The visual redesign** (PR #1, merged 23 Sep 2026) — verified headless pre-deploy and again
-  against the live production domain post-deploy (zero console/CSP errors both times), but not yet
-  exercised by a real wallet signing a real transaction on it. Past bugs in this project (items 1,
-  3, 4 above) were real-browser/real-domain issues headless testing would not have caught, so a
-  real-wallet pass is still the highest-value thing left to do, at Craig's convenience — not a
-  blocker, since it already shipped on his informed call.
-- **Bridge-back foundation** (`oft_return.js`, `substrate.js`) — Milestone 3 in `docs/gateway-plan.md`,
-  now includes the resumable `return_route.js` engine. Deliberately not reachable from the live page
-  (disabled toggle, `app.js` gates on `direction === "forward"`). Its local recovery suite covers
-  funding, wrapping, fee increases, partial returns, broadcast and pending-transaction resumes. A
-  zero-cost mainnet-state replay wrapped 1 real canonical TAO and ran the real wTAO LayerZero send
-  toward Solana: live fee 0.002859118 TAO, wrap 59,827/75,000 total gas, send
-  246,363/650,000 total gas, zero wTAO left. Still missing browser checkpoint persistence, Solana
-  arrival/ATA tracking, a lazy return-only bundle, and one small real-funds return. Confirmed on the
-  live domain that the toggle remains inert.
+### Live on soltao.xyz, not yet with real funds
+- Subnet staking (metagraph check + `addStakeLimit`; zero-cost mainnet replay only).
+- Unstake / Stake / Move from holdings (items 13, 26).
+- Batched 0.25% Bittensor fee (item 28).
+- Root reward claim (item 21).
+- Subnet directory, profiles, validator 30-day record (items 14, 25, 27).
 
-**Bottom line:** live in production. Root staking has full real-funds proof. Subnet staking has
-real-chain-state proof plus Craig's informed acceptance of the remaining gap. The redesign has
-headless proof on the real domain. The bridge-back return engine's mocked recovery suite
-(`return_route.test.mjs`, 11 assertions) and its zero-cost mainnet replay (`return_mainnet.test.mjs`
-— live fee 0.002859118 TAO, wrap 59,827/75,000 gas, send 246,363/650,000 gas, 0 wTAO left) were both
-independently re-run and confirmed this session, not just taken on the other session's word. The
-standing deploy constraint above (explicit confirmation before every `railway up --ci`) was
-followed for the deploy this session made, and still applies to the next one — including whichever
-session makes it.
+### Built, gated off (`chutesLive: false`)
+- Top up Chutes (item 18). Needs one ≥0.01 TAO real top-up credited by Chutes before flipping the flag.
+
+### Still open (not a deploy, needs Craig)
+- First-time Solana token-account rent path on a return (inferred, never observed).
+- A large subnet stake that moves the pool more than 2% by itself (review does not estimate impact;
+  exact swap quotes now warn from 1% simulated impact).
+- `evm.test.mjs`: public RPC answering "already known" for a fresh unfunded tx, so that string is
+  not proof a transaction is in the pool.
+
+The 23–24 Sep deploy narrative below is historical. Trust the header and this section over it.
+`railway up --ci` exits before rollout; poll the live script hash.
+
+### Historical: deployed 23-24 Sep 2026 (three rounds)
+Round one shipped a CSP/Helius mismatch (bug history item 7). Round two deployed the return
+foundation. Round three fixed link previews. Item 10 (subnet-aware hotkey check) deployed later
+the same day as `292b68b`. Concurrent sessions overwrote this document more than once; re-check
+`git log origin/main` and the live hash before trusting any commit id here.

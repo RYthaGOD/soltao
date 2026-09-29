@@ -8,6 +8,7 @@ import { ed25519 } from "@noble/curves/ed25519";
 import { CONFIG } from "./config.js";
 import { derivationMessage, signInFields, walletFromSignature, ss58Decode, ss58Encode, toHex } from "./derive.js";
 import { createClients, getTaoBalance, quoteNativeFee, quotePriorityFee, priorityFeeLamports, buildRouteTransaction, removeDust } from "./solana.js";
+import { confirmSignature, mayForgetPending } from "./confirm.js";
 import { findOnSubnet, getDelegate, getFreeBalance, getUidCount, subnetValidators } from "./bittensor.js";
 import { getGasPrice } from "./evm.js";
 import { usdPrices, fmtUsd } from "./prices.js";
@@ -334,7 +335,19 @@ function resumeRoute(u) {
   return { trusted: false, plan: untrustedPlan(u), coldkey: rec.destination, route: rec.route, savedDestination: rec.savedDestination };
 }
 
-function forget() {
+async function forget() {
+  const u = state.unfinished;
+  const rec = u?.pending && pendingNow(u.pending);
+  const sig = rec?.route?.sig;
+  if (sig) {
+    let status;
+    try { ({ value: [status] } = await clients.connection.getSignatureStatuses([sig])); }
+    catch { status = undefined; }
+    if (!mayForgetPending({ holds: Boolean(u.holds), sig, status, sentAt: rec.route.at })) {
+      note("derive-note", "That Solana transaction may have landed. Wait for the bridge instead of sending again.", "warn");
+      return;
+    }
+  }
   if (state.signed) clearPending(state.signed.wallet.transitAddress);
   state.unfinished = null; renderUnfinished(); gate();
 }
@@ -997,6 +1010,9 @@ function renderReview(ready) {
     planQuote = { netuid: Number(state.netuid), stakeRao: stake };
     return `Stake about ${tao(stake)} on subnet ${state.netuid} to ${to}, bought as its Alpha at the pool price. If that price is more than ${pct}% worse when it lands, nothing is staked and the TAO arrives free. ${rest}`;
   });
+  set("r-later", () => (state.plan === "stake"
+    ? "Unstake from Your Bittensor holdings in step 2, then Back to Solana. The return quotes a live bridge fee then (about 0.003 TAO when last measured) plus 0.25%."
+    : "Back to Solana in the toggle above. The return quotes a live bridge fee then (about 0.003 TAO when last measured) plus 0.25%."));
   set("r-gas", () => { const g = bittensorGas(); return g === null ? "—" : `about ${tao(g)}`; });
   // Name the counterparty, not just the amount: the fee is a plain transfer to this address.
   if (!ready) { for (const id of ["r-lzfee", "r-prio", "r-fee", "r-total", "r-usd"]) $(id).textContent = "—"; state.feeLamports = null; showShare(NaN); }
@@ -1763,6 +1779,7 @@ async function send() {
   resetTrack(state.plan); setStep("step-status", "active");
   track("solana", "busy", "building");
   let started = false;
+  let route;
   try {
     const minAmountLd = removeDust(state.amountLd);
 
@@ -1777,7 +1794,7 @@ async function send() {
       throw new Error(`Simulation failed, nothing was sent. ${why || JSON.stringify(sim.value.err)}`);
     }
 
-    const route = {
+    route = {
       plan: state.plan, hotkey: state.plan === "stake" ? toHex(state.hotkey) : null, coldkey: state.coldkeyAddress,
       netuid: String(state.netuid),
       reserveRao: String(state.plan === "stake" ? state.reserveRao : 0n), amountLd: String(minAmountLd), sig: null, at: Date.now(),
@@ -1795,46 +1812,31 @@ async function send() {
     $("track-links").replaceChildren(link(`https://solscan.io/tx/${signature}`, "Solscan ↗"), text("  ·  "), link(`https://layerzeroscan.com/tx/${signature}`, "LayerZero Scan ↗"), text("  ·  "), link(`https://taostats.io/account/${state.coldkeyAddress}`, "your Bittensor wallet ↗"));
     track("solana", "busy", "confirming…");
 
-    const confirmed = await confirm(signature, blockhash, lastValidBlockHeight);
-    if (!confirmed.ok) { clearPending(w.transitAddress); track("solana", "bad", confirmed.why); throw new Error(confirmed.why); }
-    track("solana", "ok", "confirmed"); setStep("step-review", "done");
+    const confirmed = await confirmSignature(clients.connection, signature, lastValidBlockHeight);
+    if (confirmed.failed) { clearPending(w.transitAddress); track("solana", "bad", confirmed.why); throw new Error(confirmed.why); }
+    if (confirmed.uncertain) {
+      track("solana", "busy", "unconfirmed; waiting for the bridge in case it landed");
+      note("sign-note", confirmed.why, "warn");
+    } else {
+      track("solana", "ok", "confirmed");
+    }
+    setStep("step-review", "done");
     started = true;
     await runRoute(route, { expectLd: minAmountLd, fresh: true });
   } catch (e) {
     if (!started) {
       state.running = false;
       if (isRejection(e)) { note("sign-note", ""); track("solana", "", "—"); setStep("step-status", "locked"); gate(); }
-      else { 
-        note("sign-note", `Send failed: ${e.message || String(e)}`, "bad"); 
-        if (!/confirm|expired|failed on Solana/.test(e.message)) track("solana", "bad", "not sent"); 
-        // Re-enable the button so the user can retry without refreshing.
+      else {
+        note("sign-note", `Send failed: ${e.message || String(e)}`, "bad");
+        if (!/confirm|expired|failed on Solana/.test(e.message)) track("solana", "bad", "not sent");
+        // A signature already saved means the wallet sent something: do not offer a second send.
         // Don't call gate() — it fires requestQuote() which overwrites sign-note.
-        $("sign").disabled = false;
+        $("sign").disabled = Boolean(route?.sig);
         setStep("step-status", "locked");
+        if (route?.sig) checkTransit();
       }
     }
-  }
-}
-
-async function confirm(signature, blockhash, lastValidBlockHeight) {
-  for (;;) {
-    const [{ value: [st] }, height] = await Promise.all([
-      clients.connection.getSignatureStatuses([signature]),
-      clients.connection.getBlockHeight("confirmed"),
-    ]);
-    if (st?.err) return { ok: false, why: `failed on Solana: ${JSON.stringify(st.err)}` };
-    if (st && (st.confirmationStatus === "confirmed" || st.confirmationStatus === "finalized")) return { ok: true };
-    if (height > lastValidBlockHeight) {
-      // The block height passed the deadline, but the tx may have landed in one of the last
-      // blocks and the RPC just hasn't indexed it yet. Wait a moment and check one more time
-      // before declaring it expired — this closes a race where the status lags behind the height.
-      await new Promise((r) => setTimeout(r, 4000));
-      const { value: [final] } = await clients.connection.getSignatureStatuses([signature]);
-      if (final?.err) return { ok: false, why: `failed on Solana: ${JSON.stringify(final.err)}` };
-      if (final && (final.confirmationStatus === "confirmed" || final.confirmationStatus === "finalized")) return { ok: true };
-      return { ok: false, why: "expired before it landed: nothing was sent, try again" };
-    }
-    await new Promise((r) => setTimeout(r, 2000));
   }
 }
 
@@ -1857,8 +1859,8 @@ async function runRoute(route, { expectLd = null, fresh = false } = {}) {
     const freeAfter = await getFreeBalance(coldkey).catch(() => null);
     const free = freeBefore !== null && freeAfter !== null && freeAfter > freeBefore ? freeAfter - freeBefore : null;
     track("sweep", "ok", [summary.stakedRao > 0n && `staked ${stakeAmount(summary.stakedRao, netuid)}`, free !== null && `${tao(free)} free`].filter(Boolean).join(" · ") || "done");
-    note("track-note", summary.stakedRao > 0n ? `Done. The ${bittensorStakeAsset(netuid)} stake is owned by your coldkey; unstake it any time from any Bittensor wallet.`
-      : summary.stakeRefused ? `Bittensor refused the stake${netuid === 0n ? "" : ` (the validator changed, or subnet ${netuid}'s price moved past the ${Number(CONFIG.subnetPriceToleranceBps) / 100}% limit)`}, so your TAO arrived unstaked. It is free TAO in your wallet: stake it again at today's price, or bring it back to Solana, from "Show what this Bittensor wallet holds" in step 2, or from any Bittensor wallet.` : "Done. It is free TAO in your Bittensor wallet.", summary.stakeRefused ? "warn" : "ok");
+    note("track-note", summary.stakedRao > 0n ? `Done. The ${bittensorStakeAsset(netuid)} stake is owned by your coldkey. Open Your Bittensor holdings in step 2 to unstake or send it home, or use any Bittensor wallet.`
+      : summary.stakeRefused ? `Bittensor refused the stake${netuid === 0n ? "" : ` (the validator changed, or subnet ${netuid}'s price moved past the ${Number(CONFIG.subnetPriceToleranceBps) / 100}% limit)`}, so your TAO arrived unstaked. It is free TAO in your wallet: stake it again at today's price, or bring it back to Solana, from Your Bittensor holdings in step 2, or from any Bittensor wallet.` : "Done. It is free TAO in your Bittensor wallet. Open Your Bittensor holdings in step 2 to stake it or send it home.", summary.stakeRefused ? "warn" : "ok");
       
     $("f-dest").textContent = short(route.coldkey, 6);
     $("f-staked-label").textContent = netuid === 0n ? "Staked TAO" : `Staked Alpha, subnet ${netuid}`;
@@ -1884,7 +1886,7 @@ async function runRoute(route, { expectLd = null, fresh = false } = {}) {
 // Local hosts stay, for development and the headless tests.
 const CANONICAL = "soltao.xyz";
 const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])$/;
-// The return direction stays shut on soltao.xyz until CONFIG.returnLive; local hosts open it for testing.
+// The return direction and holdings moves: `CONFIG.returnLive` is true (open on soltao.xyz since 24 Sep 2026). Local hosts always open it.
 const RETURN_OPEN = CONFIG.returnLive === true || LOCAL.test(location.hostname);
 // "Top up Chutes" stays shut on soltao.xyz until CONFIG.chutesLive; local hosts open it for testing.
 const CHUTES_OPEN = CONFIG.chutesLive === true || LOCAL.test(location.hostname);

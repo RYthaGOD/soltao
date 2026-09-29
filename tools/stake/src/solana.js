@@ -2,7 +2,7 @@
 //   1. compute budget: the unit limit, and a priority fee shown in the review before signing
 //   2. the canonical TAO OFT `send` to the user's own transit account on Bittensor EVM, asking
 //      LayerZero's executor to drop a little native TAO there for gas
-//   3. soltao's flat fee, a plain SOL transfer (only when configured)
+//   3. soltao's fee (0.25% of the TAO, valued in SOL, at least 0.0035 SOL), a plain SOL transfer
 
 import {
   Connection, PublicKey, TransactionMessage, VersionedTransaction, ComputeBudgetProgram, SystemProgram,
