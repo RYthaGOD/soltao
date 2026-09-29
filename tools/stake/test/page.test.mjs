@@ -253,7 +253,9 @@ if (want("B")) {
     const warned = (await attr(page, "#share-note", "data-tone")) === "warn" && /mostly flat/.test(await text(page, "#share-note"));
     expect("the review states fees as a share of the amount, and warns from 10%", /^(about [\d.]+%|under 1%)$/.test(share) && warned === pct >= 10, `${share} · ${await text(page, "#share-note") || "no warning"}`);
   }
-  expect("total adds the priority fee and soltao's flat fee", Math.abs(total - lz - prio - Number(CONFIG.fee.lamports) / 1e9) < 2e-6, `${total} SOL`);
+  const feeText = await text(page, "#r-fee"), soltaoFee = parseFloat(feeText);
+  expect("soltao's fee is 0.25% of the TAO sent in SOL, at least 0.0035 SOL, and says so, with the price it used", soltaoFee >= 0.0035 && /^[\d.]+ SOL( → BgGF…72Na)? \(0\.25%, at least 0\.0035 SOL; 1 TAO = [\d.]+ SOL at the Orca TAO\/SOL pool\)$/.test(feeText), feeText);
+  expect("total adds the priority fee and soltao's fee", Math.abs(total - lz - prio - soltaoFee) < 2e-6, `${total} SOL`);
   expect("review names the plan and the stake", /^Stake about 0\.0\d+ TAO on root/.test(await text(page, "#r-plan")), await text(page, "#r-plan"));
   expect("review shows the transit account", /^0x[0-9a-f]{40}$/.test(await text(page, "#r-via")));
   expect("review estimates Bittensor gas in TAO", /^about 0\.00\d+ TAO$/.test(await text(page, "#r-gas")), await text(page, "#r-gas"));
@@ -330,6 +332,7 @@ if (want("C")) {
   await page.waitForFunction(() => document.querySelector("#share-ack-box").hidden && !document.querySelector("#sign").disabled, { timeout: 60_000 }).catch(() => {});
   expect("a larger amount needs no such acknowledgement", (await hidden(page, "#share-ack-box")) && !(await page.$eval("#sign", (b) => b.disabled)), await text(page, "#r-share"));
 
+  const reviewFee = await text(page, "#r-fee");
   await clickEl(page, "#sign");
   await page.waitForFunction(() => window.__sent || /failed|Could not/i.test(document.querySelector("#sign-note")?.textContent || ""), { timeout: 90_000 });
   const sent = await page.evaluate(() => window.__sent);
@@ -339,6 +342,11 @@ if (want("C")) {
     const keys = tx.message.staticAccountKeys.map((k) => k.toBase58());
     const budget = tx.message.compiledInstructions.filter((ix) => keys[ix.programIdIndex] === "ComputeBudget111111111111111111111111111111").map((ix) => Buffer.from(ix.data)[0]);
     expect(`it carries the unit limit, the priority fee, the OFT send and the fee to ${FEE_WALLET}`, keys.includes(CONFIG.taoOftProgram) && keys.includes(FEE_WALLET) && tx.message.compiledInstructions.length === 4 && budget.includes(2) && budget.includes(3), `${tx.serialize().length} bytes`);
+    // The fee signed is exactly the one the review showed: 0.25% of the 0.1 TAO in SOL, here the 0.0035 SOL floor.
+    const transfer = tx.message.compiledInstructions.find((ix) => keys[ix.programIdIndex] === "11111111111111111111111111111111");
+    const signedFee = transfer ? Buffer.from(transfer.data).readBigUInt64LE(4) : null;
+    const shownFee = BigInt(Math.round(parseFloat(reviewFee) * 1e9));
+    expect("…and the fee it signs is exactly the one the review showed", signedFee !== null && signedFee === shownFee && signedFee >= CONFIG.fee.minLamports, `${signedFee} vs shown ${shownFee}`);
     const pending = await page.evaluate(() => window.__pendingAtPrompt);
     const route = pending.length === 1 ? JSON.parse(pending[0]) : null;
     expect("the route was remembered before the wallet opened", route?.plan === "deliver" && route?.amountLd === "100000000", pending.join(" | "));
@@ -450,7 +458,7 @@ if (want("E")) {
   await waitText(page, "#netuid-note", /registered hotkeys|Could not reach/);
 
   const who = (await text(page, ".stake-who")).replace(/\s+/g, " ");
-  expect("the page says who runs it and what they can take, near the top", /never sent to them/.test(who) && /only charge is a flat SOL fee/.test(who), who);
+  expect("the page says who runs it and what they can take, near the top", /never sent to them/.test(who) && /only charge is\s+0\.25% of what you move, shown before you sign/.test(who), who);
   await clean(page, problems, "run E");
   await page.close();
 }
@@ -532,7 +540,7 @@ if (want("F")) {
   await page.$eval("#holdings-body tr:nth-child(4) button", (b) => b.click());
   await waitText(page, "#move-quote", /^Claims about|Could not|The Bittensor fee/, 60_000);
   // The real claim fee (read live, about 0.008 TAO on 25 Sep) is more than the 0.003 TAO served here.
-  expect("Claim is priced before anything is signed, has no amount to enter, and warns when its fee outweighs the rewards", /^Claims about 0\.003 TAO of root rewards and adds it to your root stake with this validator\. Bittensor reserves a network fee of about [\d.]+ TAO from free TAO and charges what the claim actually used, which can be less\..* That fee is more than the rewards waiting, so claiming now can cost more than it pays/.test(await text(page, "#move-quote")) && (await text(page, "#move-title")).startsWith("Claim root rewards from 5") && (await page.$eval("#move-amount-wrap", (el) => el.hidden)) && !(await page.$eval("#move-go", (b) => b.disabled)), await text(page, "#move-quote"));
+  expect("Claim is priced before anything is signed, has no amount to enter, and warns when its fee outweighs the rewards", /^Claims about 0\.003 TAO of root rewards and adds it to your root stake with this validator\. Bittensor reserves a network fee of about [\d.]+ TAO from free TAO and charges what the claim actually used, which can be less\..* The fees are more than the rewards waiting, so claiming now can cost more than it pays/.test(await text(page, "#move-quote")) && (await text(page, "#move-title")).startsWith("Claim root rewards from 5") && (await page.$eval("#move-amount-wrap", (el) => el.hidden)) && !(await page.$eval("#move-go", (b) => b.disabled)), await text(page, "#move-quote"));
   await clickEl(page, "#move-cancel");
   // The next read compares with this one: make the stored look 0.001 Alpha smaller, as if rewards arrived since.
   await page.evaluate(() => {
@@ -549,11 +557,11 @@ if (want("F")) {
   // Unstake, then return: offered on an unstake, and priced (sale and bridge fee) before anything is signed.
   await page.$eval("#holdings-body tr:nth-child(3) button", (b) => b.click());
   await waitText(page, "#move-quote", /Sells for about|Could not/, 60_000);
-  expect("a position offers Unstake, quoted from the chain's own swap simulation, with the 2% floor", /^Sells for about [\d.,]+ TAO: a pool fee of [\d.]+ Alpha and [\d.]+% price impact, per the chain's own simulation\. If the price is more than 2% lower when it lands, nothing is unstaked\.$/.test(await text(page, "#move-quote")) && (await text(page, "#move-title")).startsWith("Unstake from subnet 1"), await text(page, "#move-quote"));
+  expect("a position offers Unstake, quoted from the chain's own swap simulation, with the 2% floor", /^Sells for about [\d.,]+ TAO: a pool fee of [\d.]+ Alpha and [\d.]+% price impact, per the chain's own simulation\. If the price is more than 2% lower when it lands, nothing is unstaked\. soltao's fee: [\d.]+ TAO \(0\.25%, at least 0\.001 TAO\), in the same transaction, out of what it frees; if the chain refuses the unstake, no fee is paid\.$/.test(await text(page, "#move-quote")) && (await text(page, "#move-title")).startsWith("Unstake from subnet 1"), await text(page, "#move-quote"));
   expect("…with the choice to bring the TAO back to Solana, off by default", !(await page.$eval("#move-then-wrap", (el) => el.hidden)) && !(await page.$eval("#move-then", (el) => el.checked)));
   await clickEl(page, "#move-then");
   await waitText(page, "#move-quote", /LayerZero fee|Could not/, 60_000);
-  expect("…which, when chosen, adds the live bridge fee and what stays free", /Then that TAO goes to your Solana wallet as canonical TAO, less the LayerZero fee \(about [\d.]+ TAO today\) and a little Bittensor gas; 0\.001 TAO stays free for later fees\./.test(await text(page, "#move-quote")), await text(page, "#move-quote"));
+  expect("…which, when chosen, adds the live bridge fee and what stays free", /Then that TAO goes to your Solana wallet as canonical TAO, less the LayerZero fee \(about [\d.]+ TAO today\), soltao's fee on the return and a little Bittensor gas; 0\.001 TAO stays free for later fees\./.test(await text(page, "#move-quote")), await text(page, "#move-quote"));
   await clickEl(page, "#move-cancel");
   // Stake moves from the holdings view (not confirmed: nothing is signed or sent).
   expect("free TAO offers Stake and Top up Chutes on a local host", (await page.$$eval("#holdings-body tr:first-child button", (b) => b.map((x) => x.textContent))).join() === "Stake,Top up Chutes");
@@ -564,8 +572,8 @@ if (want("F")) {
   await waitText(page, "#hotkey-note", /Validator on subnet 1|Not on subnet|Could not reach/, 90_000);
   await page.$eval("#holdings-body tr:first-child button", (b) => b.click());
   await waitText(page, "#move-quote", /Buys about|Could not/, 60_000);
-  expect("…then quotes the Alpha it buys from the chain's own swap simulation, with the 2% ceiling", /^Buys about [\d.,]+ Alpha: a pool fee of [\d.]+ TAO and [\d.]+% price impact, per the chain's own simulation\. If the price is more than 2% higher when it lands, nothing is staked\.$/.test(await text(page, "#move-quote")), await text(page, "#move-quote"));
-  expect("…from the free TAO, keeping 0.01 TAO for fees", (await text(page, "#move-title")).startsWith("Stake free TAO on subnet 1 to 5HCFWv") && (await page.$eval("#move-amount", (el) => el.value)) === "1.99", await page.$eval("#move-amount", (el) => el.value));
+  expect("…then quotes the Alpha it buys from the chain's own swap simulation, with the 2% ceiling", /^Buys about [\d.,]+ Alpha: a pool fee of [\d.]+ TAO and [\d.]+% price impact, per the chain's own simulation\. If the price is more than 2% higher when it lands, nothing is staked\. soltao's fee: [\d.]+ TAO \(0\.25%, at least 0\.001 TAO\), in the same transaction; if the chain refuses the stake, no fee is paid\.$/.test(await text(page, "#move-quote")), await text(page, "#move-quote"));
+  expect("…from the free TAO, keeping 0.01 TAO for fees and room for soltao's 0.25% (1.99 less 0.004975)", (await text(page, "#move-title")).startsWith("Stake free TAO on subnet 1 to 5HCFWv") && (await page.$eval("#move-amount", (el) => el.value)) === "1.985025", await page.$eval("#move-amount", (el) => el.value));
   await setFieldE(page, "#move-amount", "3");
   expect("…and refuses more than that", /More than the 1\.99 available/.test(await text(page, "#move-quote")) && (await page.$eval("#move-go", (b) => b.disabled)), await text(page, "#move-quote"));
   await setFieldE(page, "#move-amount", "0.01");
@@ -573,18 +581,27 @@ if (want("F")) {
   expect("…and less than the staking minimum", /^Staking needs at least 0\.02 TAO\.$/.test(await text(page, "#move-quote")) && (await page.$eval("#move-go", (b) => b.disabled)), await text(page, "#move-quote"));
   await clickEl(page, "#move-cancel");
   // Move a position to step 3's choice (not confirmed: nothing is signed or sent). Subnet 1 is in step 3
-  // now, so a subnet 1 position either switches validator (no swap) or is already there.
+  // now, so a subnet 1 position either switches validator (no swap) or is already there. The whole
+  // position is worth about 1,800 TAO, so soltao's 0.25% fee (about 4.5 TAO, from free TAO) is more than
+  // the 2 TAO this wallet has free: refused before signing, with the way out.
   await page.$eval("#holdings-body tr:nth-child(2) button:nth-of-type(2)", (b) => b.click());
-  await waitText(page, "#move-quote", /Nothing is sold|same subnet and validator|Could not/, 30_000);
-  expect("Move within a subnet swaps nothing, or says the stake is already there", /Nothing is sold or bought, so there is no price risk|Step 3 names this same subnet and validator/.test(await text(page, "#move-quote")), await text(page, "#move-quote"));
+  await waitText(page, "#move-quote", /paid from free TAO|same subnet and validator|Could not/, 30_000);
+  expect("Move refuses, before signing, a move whose soltao fee is more than the free TAO (or says the stake is already there)", /soltao's fee on this move is [\d.]+ TAO, paid from free TAO, and this wallet has 2 TAO free\. Unstake a little first, or move less\.|Step 3 names this same subnet and validator/.test(await text(page, "#move-quote")), await text(page, "#move-quote"));
+  if (!/same subnet and validator/.test(await text(page, "#move-quote"))) {
+    await setFieldE(page, "#move-amount", "100");
+    await waitText(page, "#move-quote", /Nothing is sold|Could not/, 30_000);
+    expect("…and a smaller move within a subnet swaps nothing, and states soltao's fee", /Nothing is sold or bought, so there is no price risk; only a small Bittensor network fee\. soltao's fee: 0\.00\d+ TAO \(0\.25%, at least 0\.001 TAO\), from your free TAO in the same transaction; if the chain refuses the move, no fee is paid\.$/.test(await text(page, "#move-quote")), await text(page, "#move-quote"));
+  }
   await clickEl(page, "#move-cancel");
   await setFieldE(page, "#netuid-in", "0");
   await setFieldE(page, "#hotkey-in", VALIDATOR);
   await waitText(page, "#hotkey-note", /Registered validator|Could not reach/, 90_000);
   await page.$eval("#holdings-body tr:nth-child(2) button:nth-of-type(2)", (b) => b.click());
-  await waitText(page, "#move-quote", /then stakes that TAO on root|Could not/, 60_000);
-  // The whole position is large for subnet 1's pool, so its price impact also draws the warning.
-  expect("Move to root is one transaction: it sells the Alpha (quoted by the chain's simulation) and stakes the TAO, within 2%", /^Sells [\d.,]+ Alpha on subnet 1 for about [\d.,]+ TAO \(a pool fee of [\d.]+ Alpha and [\d.]+% price impact, per the chain's own simulation\), then stakes that TAO on root, all in one Bittensor transaction to validator 5CoZxg…AUbifj\. If the two prices move more than 2% against you before it lands, nothing moves\.( At this size the price impact is large enough that the chain may refuse it at the limit, and only the network fee would be spent\. A smaller amount is more likely to go through\.)?$/.test(await text(page, "#move-quote")) && /^Move from subnet 1 \(5\w+…\w+\) to root \(5CoZxg…AUbifj\)$/.test(await text(page, "#move-title")), `${await text(page, "#move-title")} · ${await text(page, "#move-quote")}`);
+  await waitText(page, "#move-quote", /paid from free TAO|then stakes that TAO on root|Could not/, 60_000);
+  // 100,000 Alpha (about 660 TAO): a fee of about 1.7 TAO fits the free TAO, and its price impact is large.
+  await setFieldE(page, "#move-amount", "100000");
+  await waitText(page, "#move-quote", /^Sells 100,000|Could not/, 60_000);
+  expect("Move to root is one transaction: it sells the Alpha (quoted by the chain's simulation) and stakes the TAO, within 2%, and states soltao's fee", /^Sells 100,000 Alpha on subnet 1 for about [\d.,]+ TAO \(a pool fee of [\d.]+ Alpha and [\d.]+% price impact, per the chain's own simulation\), then stakes that TAO on root, all in one Bittensor transaction to validator 5CoZxg…AUbifj\. If the two prices move more than 2% against you before it lands, nothing moves\. soltao's fee: [\d.]+ TAO \(0\.25%, at least 0\.001 TAO\), from your free TAO in the same transaction; if the chain refuses the move, no fee is paid\.( At this size the price impact is large enough that the chain may refuse it at the limit, and only the network fee would be spent\. A smaller amount is more likely to go through\.)?$/.test(await text(page, "#move-quote")) && /^Move from subnet 1 \(5\w+…\w+\) to root \(5CoZxg…AUbifj\)$/.test(await text(page, "#move-title")), `${await text(page, "#move-title")} · ${await text(page, "#move-quote")}`);
   const impact = Number((await text(page, "#move-quote")).match(/([\d.]+)% price impact/)?.[1] ?? 0);
   expect("…and from 1% price impact it warns that the chain may refuse it at the limit", (impact >= 1) === /may refuse it at the limit/.test(await text(page, "#move-quote")) && (impact < 1 || (await attr(page, "#move-quote", "data-tone")) === "warn"), `${impact}%`);
   await clickEl(page, "#move-cancel");
@@ -603,7 +620,7 @@ if (want("F")) {
   expect("…and more than the free TAO, keeping 0.01 TAO for fees", /More than the 1\.99 TAO available/.test(await text(page, "#pay-quote")) && (await page.$eval("#pay-go", (b) => b.disabled)), await text(page, "#pay-quote"));
   await setFieldE(page, "#pay-amount", "0.5");
   await waitText(page, "#pay-quote", /^Sends|Could not/, 60_000);
-  expect("…quotes the transfer and its network fee from the chain", /^Sends 0\.5 TAO to 5Grwva…\w+\. Bittensor network fee about [\d.]+ TAO; [\d.]+ TAO stays free here\./.test(await text(page, "#pay-quote")) && /public "via soltao" tag/.test(await text(page, "#pay-quote")), await text(page, "#pay-quote"));
+  expect("…quotes the transfer and its network fee from the chain", /^Sends 0\.5 TAO to 5Grwva…\w+\. Bittensor network fee about [\d.]+ TAO; soltao's fee 0\.00125 TAO \(0\.25%, at least 0\.001 TAO\), in the same transaction; [\d.]+ TAO stays free here\./.test(await text(page, "#pay-quote")) && /public "via soltao" tag/.test(await text(page, "#pay-quote")), await text(page, "#pay-quote"));
   expect("…and stays closed until the address is acknowledged", await page.$eval("#pay-go", (b) => b.disabled));
   await clickEl(page, "#pay-ack");
   expect("…then opens", !(await page.$eval("#pay-go", (b) => b.disabled)));
@@ -615,6 +632,7 @@ if (want("F")) {
   await waitText(page, "#r-receive", /TAO|—/, 90_000);
   await waitText(page, "#r-cost", /TAO/, 90_000);
   expect("the review states what arrives on Solana", /^0\.5 canonical TAO$/.test(await text(page, "#r-receive")), await text(page, "#r-receive"));
+  expect("…and soltao's fee on the return, 0.25% of it in TAO, to soltao's Bittensor wallet", /^0\.00125 TAO → 5Cvj…QG94 \(0\.25%, at least 0\.001 TAO\)$/.test(await text(page, "#r-rfee")), await text(page, "#r-rfee"));
   expect("the return review states its fees as a share of the amount", /^(about [\d.]+%|under 1%)$/.test(await text(page, "#r-share")), await text(page, "#r-share"));
   const lz = parseFloat(await text(page, "#r-lzfee")), cost = parseFloat(await text(page, "#r-cost"));
   expect("…the LayerZero fee, quoted live in TAO", lz > 0 && lz < 0.05, `${lz} TAO`);

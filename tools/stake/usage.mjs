@@ -27,7 +27,9 @@ const asJson = args.includes("--json");
 
 const connection = new Connection(flag("--rpc") || "https://api.mainnet-beta.solana.com", "confirmed");
 const wallet = new PublicKey(CONFIG.fee.wallet);
-const FEES = new Set([3_000_000, 7_500_000]); // today's 0.003 SOL, and the 0.0075 SOL it launched at
+// The route fee was a flat 0.0075 SOL at launch, then 0.003 SOL; since 29 Sep 2026 it is 0.25% of the TAO
+// sent, at least 0.0035 SOL. So a fee is any transfer to the wallet of at least the smallest of those.
+const MIN_FEE = 3_000_000;
 
 async function main() {
 const candidates = [];
@@ -51,7 +53,7 @@ const routes = [], missing = [];
 for (const s of candidates) {
   const tx = await connection.getParsedTransaction(s.signature, { maxSupportedTransactionVersion: 0 });
   if (!tx) { missing.push(s.signature); continue; }
-  const fee = tx.transaction.message.instructions.find((i) => i.parsed?.type === "transfer" && i.parsed.info.destination === CONFIG.fee.wallet && FEES.has(i.parsed.info.lamports));
+  const fee = tx.transaction.message.instructions.find((i) => i.parsed?.type === "transfer" && i.parsed.info.destination === CONFIG.fee.wallet && i.parsed.info.lamports >= MIN_FEE);
   const bridged = tx.transaction.message.accountKeys.some((k) => k.pubkey.toBase58() === CONFIG.taoOftProgram);
   if (fee && bridged) routes.push({ at: new Date(s.blockTime * 1000).toISOString(), signature: s.signature, from: fee.parsed.info.source, feeLamports: fee.parsed.info.lamports });
 }

@@ -5,6 +5,7 @@
 
 import { finishFreeReturn } from "../src/return_route.js";
 import { RETURN_GAS_LIMIT, WEI_PER_RAO } from "../src/oft_return.js";
+import { actionFeeRao } from "../src/fees.js";
 
 const PRICE = 5_000_000_000n;
 const FEE = 2_859_118_000_000_000n;
@@ -17,7 +18,7 @@ const count = (s, kind) => s.applied.filter((x) => x === kind).length;
 
 function chain({ nativeWei = 0n, wtaoWei = 0n, coldkeyFreeRao = 2_000_000_000n, bridgeFees = [FEE], sendReverts = false } = {}) {
   const s = {
-    nativeWei, wtaoWei, coldkeyFreeRao, coldkeyNonce: 0n, evmNonce: 0n,
+    nativeWei, wtaoWei, coldkeyFreeRao, coldkeyNonce: 0n, evmNonce: 0n, soltaoPaid: [],
     pool: new Map(), receipts: new Map(), signed: new Map(), applied: [], log: [], quotes: 0, n: 0,
     autoMine: true, crashAfter: null, loseReplyOf: null, expired: new Set(), sendReverts,
   };
@@ -27,7 +28,8 @@ function chain({ nativeWei = 0n, wtaoWei = 0n, coldkeyFreeRao = 2_000_000_000n, 
       s.pool.delete(tx.key);
       if (tx.chain === "substrate") {
         if (tx.nonce !== s.coldkeyNonce) continue;
-        s.coldkeyNonce++; s.coldkeyFreeRao -= tx.amountRao + XFER_FEE; s.nativeWei += tx.amountRao * WEI_PER_RAO; s.applied.push("fund");
+        s.coldkeyNonce++; s.coldkeyFreeRao -= tx.amountRao + XFER_FEE + tx.soltaoFeeRao; s.nativeWei += tx.amountRao * WEI_PER_RAO; s.applied.push("fund");
+        if (tx.soltaoFeeRao > 0n) s.soltaoPaid.push(tx.soltaoFeeRao);
       } else {
         if (tx.nonce !== s.evmNonce) continue;
         s.evmNonce++;
@@ -47,11 +49,11 @@ function chain({ nativeWei = 0n, wtaoWei = 0n, coldkeyFreeRao = 2_000_000_000n, 
     state: async () => ({ nativeWei: s.nativeWei, wtaoWei: s.wtaoWei }),
     gasPrice: async () => PRICE,
     quoteBridge: async () => ({ nativeFee: bridgeFees[Math.min(s.quotes++, bridgeFees.length - 1)], lzTokenFee: 0n, amountWei: AMOUNT_WEI, amountRao: AMOUNT_RAO, solanaAmountLd: AMOUNT_RAO }),
-    quoteFunding: async (_m, to, amountRao) => ({ address: "5DerivedColdkey", freeRao: s.coldkeyFreeRao, feeRao: XFER_FEE, amountRao, remainingRao: s.coldkeyFreeRao - amountRao - XFER_FEE, to }),
-    prepareFund: async (_m, _to, amountRao) => {
+    quoteFunding: async (_m, to, amountRao, soltaoFeeRao = 0n) => ({ address: "5DerivedColdkey", freeRao: s.coldkeyFreeRao, feeRao: XFER_FEE, amountRao, remainingRao: s.coldkeyFreeRao - amountRao - XFER_FEE - BigInt(soltaoFeeRao), to }),
+    prepareFund: async (_m, _to, amountRao, soltaoFeeRao = 0n) => {
       const pendingFunds = [...s.pool.values()].filter((t) => t.chain === "substrate").length;
       const i = s.n++, rec = { id: `0xfund${i}`, signed: `signed-fund-${i}`, nonce: s.coldkeyNonce + BigInt(pendingFunds), address: "5DerivedColdkey" };
-      s.signed.set(rec.signed, { chain: "substrate", key: rec.signed, nonce: rec.nonce, amountRao: BigInt(amountRao) });
+      s.signed.set(rec.signed, { chain: "substrate", key: rec.signed, nonce: rec.nonce, amountRao: BigInt(amountRao), soltaoFeeRao: BigInt(soltaoFeeRao) });
       return { ...rec, nonce: String(rec.nonce) };
     },
     submitFund: async (signed) => {
@@ -108,6 +110,13 @@ function chain({ nativeWei = 0n, wtaoWei = 0n, coldkeyFreeRao = 2_000_000_000n, 
   expect("canonical amount is sent and no wTAO is left", result.stage === "sent" && result.amountRao === AMOUNT_RAO && s.wtaoWei === 0n);
   const order = s.log.filter((x) => /^(checkpoint:(funding|wrapping|send-signed)|broadcast:)/.test(x)).join(",");
   expect("every mutation is checkpointed before it is broadcast", order === "checkpoint:funding,broadcast:fund,checkpoint:wrapping,broadcast:wrap,checkpoint:send-signed,broadcast:send", order);
+  expect("soltao's fee rides with the funding transfer, once: 0.25% of the 1 TAO returned", s.soltaoPaid.length === 1 && s.soltaoPaid[0] === actionFeeRao(AMOUNT_RAO) && s.soltaoPaid[0] === 2_500_000n, s.soltaoPaid.join(","));
+}
+{
+  // The bridge fee rises between the quotes, so a second, top-up funding transfer is needed: no second fee.
+  const { s, run } = chain({ bridgeFees: [FEE, FEE * 2n] });
+  await run({});
+  expect("a top-up funding transfer does not charge soltao's fee again", count(s, "fund") === 2 && s.soltaoPaid.length === 1, `${count(s, "fund")} funds · fees ${s.soltaoPaid.join(",")}`);
 }
 
 // ── the review findings: a page closed while a mutation is still pending ──
@@ -119,6 +128,7 @@ function chain({ nativeWei = 0n, wtaoWei = 0n, coldkeyFreeRao = 2_000_000_000n, 
   s.autoMine = true;
   await run();
   expect("resume re-submits the same signed transfer and never funds twice", count(s, "fund") === 1 && count(s, "wrap") === 1 && count(s, "send") === 1, s.applied.join(","));
+  expect("…and soltao's fee is paid once", s.soltaoPaid.length === 1);
 }
 {
   // The funding mines; the wrap is broadcast but the page closes before it is mined.

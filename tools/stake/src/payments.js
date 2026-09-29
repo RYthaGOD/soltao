@@ -25,6 +25,8 @@
 import { blake2b } from "@noble/hashes/blake2b";
 import { dispatchResult, settleSigned } from "./settle.js";
 import { ss58Decode } from "./derive.js";
+import { CONFIG } from "./config.js";
+import { actionFeeRao } from "./fees.js";
 import { accountNonce, coldkeySigner, extrinsicOutcome, freeBalance, getApi, prepareCall, submitSigned } from "./substrate.js";
 
 /** Chutes ignores smaller payments as dust (DUST_THRESHOLD_RAO in chutesai/chutes-api). */
@@ -34,25 +36,31 @@ export const CHUTES_MIN_RAO = 10_000_000n; // 0.01 TAO
 export const SOLTAO_TAG = "soltao.xyz:chutes-topup:v1";
 export const SOLTAO_TAG_HASH = "0x" + Array.from(blake2b(new TextEncoder().encode(SOLTAO_TAG), { dkLen: 32 }), (x) => x.toString(16).padStart(2, "0")).join("");
 
-/** The tagged top-up as one call: the transfer and the tag, all or nothing. */
-export function paymentCall(api, to, amount) {
+/**
+ * The tagged top-up as one call: the transfer, the tag and soltao's fee (src/fees.js; a keep-alive transfer
+ * to CONFIG.fee.bittensor), all or nothing. One batch, since the runtime refuses a batch inside a batch.
+ */
+export function paymentCall(api, to, amount, soltaoFeeRao = 0n) {
   if (!api.tx.utility?.batchAll || !api.tx.system?.remarkWithEvent) throw new Error("Bittensor no longer offers the calls a tagged top-up needs; nothing was sent");
-  return api.tx.utility.batchAll([api.tx.balances.transferAllowDeath(String(to), BigInt(amount)), api.tx.system.remarkWithEvent(SOLTAO_TAG)]);
+  const calls = [api.tx.balances.transferAllowDeath(String(to), BigInt(amount)), api.tx.system.remarkWithEvent(SOLTAO_TAG)];
+  if (BigInt(soltaoFeeRao) > 0n) calls.push(api.tx.balances.transferKeepAlive(CONFIG.fee.bittensor, BigInt(soltaoFeeRao)));
+  return api.tx.utility.batchAll(calls);
 }
 
-/** Read-only fee and balance check for a tagged top-up: { freeRao, feeRao, remainingRao }. */
+/** Read-only fee and balance check for a tagged top-up: { freeRao, feeRao, soltaoFeeRao, remainingRao }. */
 export async function quotePayment(mnemonic, to, amount) {
   const api = await getApi();
   const { address } = coldkeySigner(mnemonic);
-  const [payment, account] = await Promise.all([paymentCall(api, to, amount).paymentInfo(address), api.query.system.account(address)]);
+  const soltaoFeeRao = actionFeeRao(amount);
+  const [payment, account] = await Promise.all([paymentCall(api, to, amount, soltaoFeeRao).paymentInfo(address), api.query.system.account(address)]);
   const feeRao = payment.partialFee.toBigInt(), freeRao = account.data.free.toBigInt();
-  return { freeRao, feeRao, remainingRao: freeRao - BigInt(amount) - feeRao };
+  return { freeRao, feeRao, soltaoFeeRao, remainingRao: freeRao - BigInt(amount) - feeRao - soltaoFeeRao };
 }
 
 const realOps = {
   signerAddress: (mnemonic) => coldkeySigner(mnemonic).address,
   free: freeBalance,
-  prepare: (mnemonic, to, amount) => prepareCall(mnemonic, (api) => paymentCall(api, to, amount)),
+  prepare: (mnemonic, to, amount, soltaoFeeRao) => prepareCall(mnemonic, (api) => paymentCall(api, to, amount, soltaoFeeRao)),
   submit: submitSigned,
   coldkeyNonce: accountNonce,
   outcome: extrinsicOutcome,
@@ -105,11 +113,12 @@ export async function runPayment({
   const amt = BigInt(amount);
   if (amt < BigInt(min)) throw new Error(`send at least ${Number(min) / 1e9} TAO: Chutes ignores smaller payments`);
   const freeBefore = await ops.free(coldkey);
-  if (amt > freeBefore) throw new Error("that is more free TAO than this wallet holds");
+  const soltaoFeeRao = actionFeeRao(amt);
+  if (amt + soltaoFeeRao > freeBefore) throw new Error("that and soltao's fee are more free TAO than this wallet holds");
   onStep("pay", "busy", "signing");
-  const rec = await ops.prepare(mnemonic, String(to).trim(), amt);
+  const rec = await ops.prepare(mnemonic, String(to).trim(), amt, soltaoFeeRao);
   if (rec.address !== coldkey) throw new Error("the payment was signed by a different coldkey");
-  save({ stage: "signed", to: String(to).trim(), amount: String(amt), freeBefore: String(freeBefore), rec: { ...str(rec), status: "signed" } });
+  save({ stage: "signed", to: String(to).trim(), amount: String(amt), soltaoFeeRao: String(soltaoFeeRao), freeBefore: String(freeBefore), rec: { ...str(rec), status: "signed" } });
   onStep("pay", "busy", "sent to Bittensor");
   const sub = await ops.submit(rec.signed);
   const status = sub.state === "rejected" ? "dead" : await settleSigned({ coldkeyNonce: ops.coldkeyNonce, submit: ops.submit }, saved.rec, { waitMs, pollMs, what: "payment" });

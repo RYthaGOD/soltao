@@ -10,6 +10,7 @@
 // change: the coldkey's free balance and this position's stake, read before and after.
 
 import { CONFIG } from "./config.js";
+import { actionFeeRao } from "./fees.js";
 import { dispatchResult, settleSigned } from "./settle.js";
 import { accountNonce, alphaPriceRao, coldkeySigner, extrinsicOutcome, freeBalance, prepareRootClaim, prepareStakeMove, rootPayout, stakeOf, submitSigned } from "./substrate.js";
 
@@ -30,6 +31,15 @@ const realOps = {
 export function limitPrice(kind, priceRao, toleranceBps) {
   const p = BigInt(priceRao), t = BigInt(toleranceBps);
   return kind === "stake" ? (p * (10_000n + t)) / 10_000n : (p * (10_000n - t)) / 10_000n;
+}
+
+/**
+ * soltao's fee on a stake move (src/fees.js), from what it moves in TAO at the pool's price: the TAO staked,
+ * or the TAO value of the Alpha unstaked or moved. Paid in TAO with the move, all or nothing.
+ */
+export function moveFeeRao(kind, netuid, amount, priceRao) {
+  const value = kind === "stake" || Number(netuid) === 0 ? BigInt(amount) : (BigInt(amount) * BigInt(priceRao)) / 1_000_000_000n;
+  return actionFeeRao(value);
 }
 
 const str = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === "bigint" ? String(v) : v]));
@@ -77,12 +87,15 @@ export async function runStakeMove({
   const amt = BigInt(amount);
   if (amt <= 0n) throw new Error("enter an amount above zero");
   if (kind === "unstake" && amt > stakeBefore) throw new Error("that is more than this position holds");
-  if (kind === "stake" && amt > freeBefore) throw new Error("that is more free TAO than this wallet holds");
+  const soltaoFeeRao = moveFeeRao(kind, netuid, amt, price);
+  if (kind === "stake" && amt + soltaoFeeRao > freeBefore) throw new Error("that and soltao's fee are more free TAO than this wallet holds");
+  // An unstake pays the fee out of what it frees, so it has to free more than the fee.
+  if (kind === "unstake" && (Number(netuid) === 0 ? amt : (amt * price) / 1_000_000_000n) <= soltaoFeeRao) throw new Error("that is worth less than soltao's fee on it");
   const limitRao = Number(netuid) === 0 ? 0n : limitPrice(kind, price, toleranceBps);
   onStep(kind, "busy", "signing");
-  const rec = await ops.prepare(mnemonic, { kind, hotkey, netuid, amount: amt, limitRao });
+  const rec = await ops.prepare(mnemonic, { kind, hotkey, netuid, amount: amt, limitRao, soltaoFeeRao });
   if (rec.address !== coldkey) throw new Error("the stake move was signed by a different coldkey");
-  save({ stage: "signed", kind, hotkey, netuid: String(netuid), amount: String(amt), stakeBefore: String(stakeBefore), freeBefore: String(freeBefore), priceRao: String(price), limitRao: String(limitRao), rec: { ...str(rec), status: "signed" } });
+  save({ stage: "signed", kind, hotkey, netuid: String(netuid), amount: String(amt), stakeBefore: String(stakeBefore), freeBefore: String(freeBefore), priceRao: String(price), limitRao: String(limitRao), soltaoFeeRao: String(soltaoFeeRao), rec: { ...str(rec), status: "signed" } });
   onStep(kind, "busy", "sent to Bittensor");
   const sub = await ops.submit(rec.signed);
   const status = sub.state === "rejected" ? "dead" : await settleSigned({ coldkeyNonce: ops.coldkeyNonce, submit: ops.submit }, saved.rec, { waitMs, pollMs, what: kind });
@@ -141,12 +154,15 @@ export async function runStakeSwitch({
   if (amt <= 0n) throw new Error("enter an amount above zero");
   if (amt > fromBefore) throw new Error("that is more than this position holds");
   const limitRao = fromNetuid === toNetuid ? 0n : moveLimit(fromPrice, toPrice, toleranceBps);
+  // The fee comes from free TAO, since a move frees none.
+  const soltaoFeeRao = moveFeeRao("move", fromNetuid, amt, fromPrice), free = await ops.free(coldkey);
+  if (free <= soltaoFeeRao) throw new Error(`soltao's fee on this move is ${Number(soltaoFeeRao) / 1e9} TAO, paid from free TAO, and this wallet has ${Number(free) / 1e9} TAO free`);
   onStep("move", "busy", "signing");
-  const rec = await ops.prepare(mnemonic, { kind: "move", hotkey: from.hotkey, netuid: fromNetuid, toHotkey: to.hotkey, toNetuid, amount: amt, limitRao });
+  const rec = await ops.prepare(mnemonic, { kind: "move", hotkey: from.hotkey, netuid: fromNetuid, toHotkey: to.hotkey, toNetuid, amount: amt, limitRao, soltaoFeeRao });
   if (rec.address !== coldkey) throw new Error("the stake move was signed by a different coldkey");
   save({
     stage: "signed", kind: "move", fromHotkey: from.hotkey, fromNetuid: String(fromNetuid), toHotkey: to.hotkey, toNetuid: String(toNetuid), amount: String(amt),
-    fromBefore: String(fromBefore), toBefore: String(toBefore), fromPriceRao: String(fromPrice), toPriceRao: String(toPrice), limitRao: String(limitRao), rec: { ...str(rec), status: "signed" },
+    fromBefore: String(fromBefore), toBefore: String(toBefore), fromPriceRao: String(fromPrice), toPriceRao: String(toPrice), limitRao: String(limitRao), soltaoFeeRao: String(soltaoFeeRao), rec: { ...str(rec), status: "signed" },
   });
   onStep("move", "busy", "sent to Bittensor");
   const sub = await ops.submit(rec.signed);
@@ -191,10 +207,13 @@ export async function runRootClaim({
 
   const [stakeBefore, payout] = await Promise.all([ops.stakeOf(coldkey, hotkey, 0), ops.rootPayout(coldkey, hotkey)]);
   if (payout <= 0n) throw new Error("no root rewards are waiting with this validator");
+  // A claim pays into the root stake, not free TAO, so the fee comes from free TAO.
+  const soltaoFeeRao = actionFeeRao(payout), free = await ops.free(coldkey);
+  if (free <= soltaoFeeRao) throw new Error(`soltao's fee on this claim is ${Number(soltaoFeeRao) / 1e9} TAO, paid from free TAO, and this wallet has ${Number(free) / 1e9} TAO free`);
   onStep("claim", "busy", "signing");
-  const rec = await ops.prepareClaim(mnemonic, hotkey);
+  const rec = await ops.prepareClaim(mnemonic, hotkey, soltaoFeeRao);
   if (rec.address !== coldkey) throw new Error("the claim was signed by a different coldkey");
-  save({ stage: "signed", kind: "claim", hotkey, stakeBefore: String(stakeBefore), payoutRao: String(payout), rec: { ...str(rec), status: "signed" } });
+  save({ stage: "signed", kind: "claim", hotkey, stakeBefore: String(stakeBefore), payoutRao: String(payout), soltaoFeeRao: String(soltaoFeeRao), rec: { ...str(rec), status: "signed" } });
   onStep("claim", "busy", "sent to Bittensor");
   const sub = await ops.submit(rec.signed);
   const status = sub.state === "rejected" ? "dead" : await settleSigned({ coldkeyNonce: ops.coldkeyNonce, submit: ops.submit }, saved.rec, { waitMs, pollMs, what: "claim" });

@@ -11,6 +11,19 @@ import { ApiPromise, HttpProvider, Keyring } from "@polkadot/api";
 import { sign as srSign, getPublicKey } from "@scure/sr25519";
 import { blake2b } from "@noble/hashes/blake2b";
 import { coldkeySecret, ss58Encode } from "./derive.js";
+import { CONFIG } from "./config.js";
+
+/**
+ * An action and soltao's fee (src/fees.js) as one all-or-nothing `utility.batchAll`: the fee is a keep-alive
+ * transfer to CONFIG.fee.bittensor after the action, so an action the chain refuses pays no fee, and the fee
+ * can never empty the account. No fee (0) leaves the call as it is.
+ */
+export function withFee(api, call, soltaoFeeRao = 0n) {
+  const fee = BigInt(soltaoFeeRao);
+  if (fee <= 0n) return call;
+  if (!api.tx.utility?.batchAll) throw new Error("Bittensor no longer offers the batch soltao's fee rides in; nothing was sent");
+  return api.tx.utility.batchAll([call, api.tx.balances.transferKeepAlive(CONFIG.fee.bittensor, fee)]);
+}
 
 const API_START_MS = 30_000;
 let _api = null; // a promise of a ready api
@@ -74,16 +87,16 @@ export function coldkeySigner(mnemonic, { onSign = null } = {}) {
 const destination = (value) => value instanceof Uint8Array ? ss58Encode(value) : value;
 
 /** Read-only fee and balance check for the coldkey -> EVM-mirror funding transfer. */
-export async function quoteTransfer(mnemonic, toAddress, amountRao) {
+export async function quoteTransfer(mnemonic, toAddress, amountRao, soltaoFeeRao = 0n) {
   const amount = BigInt(amountRao);
   if (amount <= 0n) throw new Error("transfer amount must be positive");
   const api = await getApi();
   const { address } = coldkeySigner(mnemonic);
-  const extrinsic = api.tx.balances.transferAllowDeath(destination(toAddress), amount);
+  const extrinsic = withFee(api, api.tx.balances.transferAllowDeath(destination(toAddress), amount), soltaoFeeRao);
   const [payment, account] = await Promise.all([extrinsic.paymentInfo(address), api.query.system.account(address)]);
   const feeRao = payment.partialFee.toBigInt();
   const freeRao = account.data.free.toBigInt();
-  return { address, freeRao, feeRao, amountRao: amount, remainingRao: freeRao - amount - feeRao };
+  return { address, freeRao, feeRao, soltaoFeeRao: BigInt(soltaoFeeRao), amountRao: amount, remainingRao: freeRao - amount - feeRao - BigInt(soltaoFeeRao) };
 }
 
 /** Free (transferable) TAO in rao for an SS58 account. */
@@ -128,15 +141,21 @@ export async function prepareCall(mnemonic, build, { onSign = null } = {}) {
 export const prepareTransfer = (mnemonic, toAddress, amountRao, opts) =>
   prepareCall(mnemonic, (api) => api.tx.balances.transferAllowDeath(destination(toAddress), BigInt(amountRao)), opts);
 
+/** A return's funding transfer with soltao's fee batched in (withFee), signed and not sent. */
+export const prepareFunding = (mnemonic, toAddress, amountRao, soltaoFeeRao = 0n, opts) =>
+  prepareCall(mnemonic, (api) => withFee(api, api.tx.balances.transferAllowDeath(destination(toAddress), BigInt(amountRao)), soltaoFeeRao), opts);
+
 /**
  * A stake move from the coldkey, signed and not sent. Root (netuid 0) has no pool, so it is a plain
  * addStake/removeStake. A subnet swaps through its Alpha pool, so it is the *Limit form, never a partial
  * fill: `limitRao` is the worst price accepted in rao of TAO per Alpha (a ceiling when buying, a floor
  * when selling). Argument order is the live runtime's (test/polkadot.test.mjs, 24 Sep 2026).
  */
-export function prepareStakeMove(mnemonic, { kind, hotkey, netuid, amount, limitRao, toHotkey, toNetuid }) {
+export function prepareStakeMove(mnemonic, { kind, hotkey, netuid, amount, limitRao, toHotkey, toNetuid, soltaoFeeRao = 0n }) {
   const n = Number(netuid), amt = BigInt(amount);
-  return prepareCall(mnemonic, (api) => {
+  return prepareCall(mnemonic, (api) => withFee(api, stakeMoveCall(api, { kind, hotkey, n, amt, limitRao, toHotkey, toNetuid }), soltaoFeeRao));
+}
+function stakeMoveCall(api, { kind, hotkey, n, amt, limitRao, toHotkey, toNetuid }) {
     const m = api.tx.subtensorModule;
     if (kind === "stake") return n === 0 ? m.addStake(hotkey, 0, amt) : m.addStakeLimit(hotkey, n, amt, BigInt(limitRao), false);
     if (kind === "unstake") return n === 0 ? m.removeStake(hotkey, 0, amt) : m.removeStakeLimit(hotkey, n, amt, BigInt(limitRao), false);
@@ -144,7 +163,6 @@ export function prepareStakeMove(mnemonic, { kind, hotkey, netuid, amount, limit
     // it sells on one pool and buys on the other, limited by the ratio of their prices, all or nothing.
     if (kind === "move") return n === Number(toNetuid) ? m.moveStake(hotkey, toHotkey, n, n, amt) : m.moveStakeLimit(hotkey, toHotkey, n, Number(toNetuid), amt, BigInt(limitRao), false);
     throw new Error(`unknown stake move ${kind}`);
-  });
 }
 
 /**
@@ -259,18 +277,18 @@ export async function rootClaimMinRao() {
 }
 
 /** A root claim for one validator, signed and not sent: { id, signed, nonce, address }. */
-export const prepareRootClaim = (mnemonic, hotkey) =>
-  prepareCall(mnemonic, (api) => api.tx.subtensorModule.claimRootWithHotkey(hotkey));
+export const prepareRootClaim = (mnemonic, hotkey, soltaoFeeRao = 0n) =>
+  prepareCall(mnemonic, (api) => withFee(api, api.tx.subtensorModule.claimRootWithHotkey(hotkey), soltaoFeeRao));
 
 /** Read-only: the network fee for that claim, and the coldkey's free TAO, which has to cover it. */
-export async function quoteRootClaim(mnemonic, hotkey) {
+export async function quoteRootClaim(mnemonic, hotkey, soltaoFeeRao = 0n) {
   const api = await getApi();
   const { address } = coldkeySigner(mnemonic);
   const [payment, account] = await Promise.all([
-    api.tx.subtensorModule.claimRootWithHotkey(hotkey).paymentInfo(address),
+    withFee(api, api.tx.subtensorModule.claimRootWithHotkey(hotkey), soltaoFeeRao).paymentInfo(address),
     api.query.system.account(address),
   ]);
-  return { feeRao: payment.partialFee.toBigInt(), freeRao: account.data.free.toBigInt() };
+  return { feeRao: payment.partialFee.toBigInt(), soltaoFeeRao: BigInt(soltaoFeeRao), freeRao: account.data.free.toBigInt() };
 }
 
 /** Submits signed bytes. "Already imported" means it is in the pool: pending, not an error. */

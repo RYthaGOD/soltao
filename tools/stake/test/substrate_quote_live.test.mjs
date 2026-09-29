@@ -2,6 +2,7 @@
 //   node test/substrate_quote_live.test.mjs
 import { cryptoWaitReady, signatureVerify } from "@polkadot/util-crypto";
 import { verify as srVerify } from "@scure/sr25519";
+import { CONFIG } from "../src/config.js";
 import { quoteTransfer, prepareTransfer, accountNonce, coldkeySigner, coldkeyPair, getApi, disconnectApi, stakePositions, prepareStakeMove, alphaPriceRao } from "../src/substrate.js";
 import { publicKeyFromMnemonic } from "../src/derive.js";
 
@@ -43,6 +44,21 @@ try {
     if (got !== want || JSON.stringify(gotArgs) !== JSON.stringify(args)) throw new Error(`${move.kind} on ${move.netuid} built ${got}(${gotArgs}) not ${want}(${args})`);
   }
   console.log(`PASS  stake moves sign and decode as removeStakeLimit / addStakeLimit on subnets and plain on root, and moves as moveStakeLimit across subnets and moveStake within one (subnet 1 Alpha price ${price1} rao); not submitted`);
+
+  // soltao's fee rides in one batchAll after the action: a keep-alive transfer to CONFIG.fee.bittensor.
+  {
+    const withFeeSigned = await prepareStakeMove(mnemonic, { kind: "unstake", hotkey: HOT, netuid: 1, amount: 123n, limitRao: 980n, soltaoFeeRao: 1_000_000n });
+    const outer = apiForDecode.createType("Extrinsic", withFeeSigned.signed).method;
+    const inner = outer.args[0].map((c) => ({ call: `${c.section}.${c.method}`, args: c.args.map((a) => a.toString()) }));
+    const ok = `${outer.section}.${outer.method}` === "utility.batchAll" && inner.length === 2
+      && inner[0].call === "subtensorModule.removeStakeLimit" && JSON.stringify(inner[0].args) === JSON.stringify([HOT, "1", "123", "980", "false"])
+      && inner[1].call === "balances.transferKeepAlive" && inner[1].args[0] === CONFIG.fee.bittensor && inner[1].args[1] === "1000000";
+    if (!ok) throw new Error(`a move with soltao's fee built ${outer.section}.${outer.method}(${JSON.stringify(inner)})`);
+    // The runtime prices the batch like any extrinsic, so its fee can be quoted before signing.
+    const q = await quoteTransfer(mnemonic, HOT, 1_000_000_000n, 1_000_000n);
+    if (!(q.feeRao > 0n && q.soltaoFeeRao === 1_000_000n && q.remainingRao === q.freeRao - 1_000_000_000n - q.feeRao - 1_000_000n)) throw new Error(`unexpected funding quote with soltao's fee: ${JSON.stringify(q, (_k, v) => (typeof v === "bigint" ? String(v) : v))}`);
+    console.log(`PASS  soltao's fee signs as utility.batchAll([action, balances.transferKeepAlive(${CONFIG.fee.bittensor.slice(0, 6)}…, fee)]), and the runtime quotes the batch (network fee ${q.feeRao} rao); not submitted`);
+  }
 
   // Resumable funding signs offline first, so its identity can be saved before it is submitted.
   let signedMsg = null;

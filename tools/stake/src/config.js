@@ -43,10 +43,22 @@ export const CONFIG = {
   // as the route's Bittensor cost, paid in TAO on arrival.
   gasUsed: { unwrap: 43_181n, addStake: 100_637n, transferStake: 62_000n, sweep: 27_545n },
 
-  // soltao's fee: a plain SOL transfer inside the same Solana transaction, shown before signing.
-  // The page refuses to send until the wallet is set. Wallet supplied by Craig on 21 Sep 2026; checked
-  // on chain that day: an on-curve key owned by the System Program, so an ordinary wallet.
-  fee: { wallet: "BgGFMbwUtKLifQYZogbDorEXTXYp3UKVAZSH41xQ72Na", lamports: 3_000_000n }, // 0.003 SOL
+  // soltao's fee (src/fees.js): 0.25% of what an action moves, on everything. The route pays it in SOL, a
+  // plain transfer to `wallet` inside the same Solana transaction, never less than 0.0035 SOL (the TAO
+  // valued at the Orca TAO/SOL pool's price). Bittensor actions pay it in TAO to `bittensor`, batched with
+  // the action, never less than 0.001 TAO. Shown before signing. The page refuses to send until `wallet`
+  // is set. Both addresses supplied by Craig: `wallet` on 21 Sep 2026 (an on-curve key owned by the System
+  // Program, so an ordinary wallet); `bittensor` on 28 Sep 2026 (a valid SS58 coldkey, not a hotkey).
+  // Until 29 Sep 2026 the route fee was a flat 0.003 SOL (0.0075 SOL at launch).
+  fee: {
+    wallet: "BgGFMbwUtKLifQYZogbDorEXTXYp3UKVAZSH41xQ72Na",
+    bittensor: "5Cvj3sq8RU2m6vFQmz2jFVix8sqBfWcuqyGKaCnMXyf9QG94",
+    bps: 25n,
+    minLamports: 3_500_000n, // 0.0035 SOL
+    minRao: 1_000_000n, // 0.001 TAO
+  },
+  // The pool the route's fee values TAO at (src/orca.js): the deepest canonical TAO/SOL pool on Solana.
+  orca: { program: "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc", pool: "BM1KpngQa9efH9k6cDvRGatGqE95xbZdLKJHdFKcmBMC" },
 
   // A subnet stake swaps TAO into the subnet's Alpha pool, and the transit account's transaction sits
   // in a public mempool. So it is sent as addStakeLimit, refusing any fill worse than this much above

@@ -707,6 +707,53 @@ This is **not** git-push-triggered. Steps, in order, every time:
     - *Tests:* page-test runs E (picker column and rule; directory change columns, sparklines and sort),
       F (holdings line) and H (profile stat), and run B (review quote).
 
+28. **soltao's fee on everything: 0.25%, 29 Sep 2026.** Craig's decision: "everything carries the
+    protocol fee". It is 0.25% of what an action moves (`src/fees.js`, `CONFIG.fee`), and it replaces the
+    flat 0.003 SOL per route.
+    - *Route from Solana:* paid in SOL, the same plain transfer to `CONFIG.fee.wallet` in the same
+      transaction, never less than 0.0035 SOL.
+      - The TAO sent is valued at the on-chain price of the deepest TAO/SOL pool, Orca Whirlpool
+        `BM1Kpng…BMC`, about $196k deep (`src/orca.js`). The price is decoded from the pool's
+        `sqrt_price`; the layout was checked against the live pool on 28 Sep, with wSOL as mint A and
+        TAO as mint B.
+      - It is read with the bridge quote. The review shows the fee, the rule, the price used and where
+        it goes. `send()` signs exactly the fee the review showed.
+      - If the pool can't be read, signing stays shut instead of guessing.
+      - No TAO account is needed for the fee wallet.
+      - `npm run usage` now counts any fee transfer of at least 0.003 SOL alongside the OFT program.
+    - *Bittensor actions:* paid in TAO to `CONFIG.fee.bittensor`, `5Cvj3sq8…QG94`. That is Craig's
+      address; checked on 28 Sep as a valid SS58 coldkey, not a hotkey, holding 0.0066 TAO. The floor is
+      0.001 TAO.
+      - `withFee()` in `src/substrate.js` sends the action and a `balances.transferKeepAlive(fee)` as one
+        `utility.batchAll`, so a refused action (a price limit, say) pays no fee. The runtime's call
+        filter only refuses nested batches (`NoNestingCallFilter`, subtensor `c004ceb`), so this is
+        allowed.
+      - Stake: the fee is on the TAO staked, and "all" leaves room for it.
+      - Unstake: on the TAO value at the pool price, paid from what it frees. It is refused if it would
+        free no more than the fee.
+      - Move: on the origin value, paid from free TAO. It is refused before signing if free TAO can't
+        cover it.
+      - Root claims: on the payout, from free TAO.
+      - Chutes top-ups: on the amount, as the third call in its existing batch.
+      - Return to Solana: on the amount, riding once in the batch of the first funding transfer
+        (`feePaid` in its progress), so a top-up funding or a resume never charges it twice.
+      - Every quote states the fee, its rule and that a refused action pays none. The return review has a
+        "soltao fee (0.25%, TAO)" row.
+    - *Page copy:* the hero trust line, "who runs this", the return's fee note and the footer now describe
+      the 0.25% fee.
+    - *Verified:*
+      - Route: a mainnet simulation of the route with the percentage fee (`test/solana.test.mjs`: 0.0035
+        SOL floor on 0.1 TAO, 1,184 of 1,232 bytes, 506k CU).
+      - Page-test run C decodes the transaction handed to the wallet: the fee signed equals the fee the
+        review showed.
+      - Mocked chains: fees on every stake move, claim, top-up and return. The return charges once,
+        including with a top-up funding and after a page closed mid-funding.
+      - Live runtime: a stake move with the fee signs and decodes as `utility.batchAll([removeStakeLimit,
+        transferKeepAlive(5Cvj…, fee)])`, and the runtime prices the batch.
+      - Page-test run F: every holdings quote states the fee.
+      - **The batched Bittensor fee has not carried real funds yet.**
+    - *Deploy:* merged from `stake-trading`, together with items 24 (removed), 25, 26 and 27.
+
 ## Link previews and SEO
 
 `index.html` and `stake/index.html` each carry their own `og:`/`twitter:` block; they are hand-

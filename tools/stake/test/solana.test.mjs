@@ -7,6 +7,8 @@ import { PublicKey } from "@solana/web3.js";
 import { Options } from "@layerzerolabs/lz-v2-utilities";
 import { createClients, buildRouteTransaction, quoteNativeFee, lzOptions, h160Bytes32, removeDust, getTaoBalance, quotePriorityFee, priorityFeeLamports } from "../src/solana.js";
 import { CONFIG } from "../src/config.js";
+import { routeFeeLamports, actionFeeRao } from "../src/fees.js";
+import { readLamportsPerTao, decodeWhirlpool, lamportsPerTao } from "../src/orca.js";
 
 let failures = 0;
 const expect = (name, ok, detail = "") => { console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? "  — " + detail : ""}`); if (!ok) failures++; };
@@ -28,9 +30,25 @@ const TRANSIT = "0xe00a4459090378cfbe2f8c7c93a993237911cbcc";
 
 // A wallet seen holding both TAO and SOL on 21 Sep 2026, used only as a simulation identity.
 const HOLDER = process.env.SIM_HOLDER || "E7wdV5qCYL1fZJf6YfvHEyheAeow67Mf7BTpByX89mNQ";
-// The configured fee wallet, or a stand-in until there is one.
-const FEE = { wallet: CONFIG.fee.wallet ?? "11111111111111111111111111111112", lamports: CONFIG.fee.lamports };
 const clients = createClients();
+
+// soltao's fee (src/fees.js): 0.25% of the TAO sent, valued at the Orca TAO/SOL pool's price, at least
+// 0.0035 SOL; and on Bittensor 0.25% in TAO, at least 0.001 TAO.
+const perTao = await readLamportsPerTao(clients.connection);
+expect("the TAO/SOL price is read from the Orca pool, and is plausible", perTao > 500_000_000n && perTao < 20_000_000_000n, `1 TAO = ${Number(perTao) / 1e9} SOL`);
+{
+  const p = 2_500_000_000n; // 2.5 SOL per TAO
+  expect("the route fee is 0.25% of the TAO sent in SOL", routeFeeLamports(4_000_000_000n, p) === 25_000_000n, String(routeFeeLamports(4_000_000_000n, p)));
+  expect("…never less than 0.0035 SOL", routeFeeLamports(100_000_000n, p) === 3_500_000n && routeFeeLamports(0n, p) === 3_500_000n);
+  expect("a Bittensor action's fee is 0.25% in TAO, never less than 0.001 TAO", actionFeeRao(10_000_000_000n) === 25_000_000n && actionFeeRao(100_000_000n) === 1_000_000n);
+  // The same pool described with its mints the other way round (and the price inverted) prices the same.
+  const real = decodeWhirlpool(await clients.connection.getAccountInfo(new PublicKey(CONFIG.orca.pool)));
+  const flipped = lamportsPerTao({ mintA: real.mintB, mintB: real.mintA, sqrtPriceX64: (1n << 128n) / real.sqrtPriceX64 });
+  const gap = flipped > perTao ? flipped - perTao : perTao - flipped;
+  expect("the price does not depend on which side of the pool each mint is", gap * 1_000_000n < perTao, `${flipped} vs ${perTao}`);
+}
+// The configured fee wallet, or a stand-in until there is one; the fee as the page would set it for 0.1 TAO.
+const FEE = { wallet: CONFIG.fee.wallet ?? "11111111111111111111111111111112", lamports: routeFeeLamports(100_000_000n, perTao) };
 
 const [bal, lamports] = await Promise.all([getTaoBalance(clients.connection, HOLDER), clients.connection.getBalance(new PublicKey(HOLDER))]);
 console.log(`simulating as ${HOLDER} (${Number(bal) / 1e9} TAO, ${lamports / 1e9} SOL)`);
@@ -66,7 +84,7 @@ const why = (r) => JSON.stringify(r.value.err) + " " + (r.value.logs || []).filt
   const fees = transaction.message.compiledInstructions.filter((ix) => keys[ix.programIdIndex] === "11111111111111111111111111111111");
   const f = fees[0], data = f && Buffer.from(f.data);
   const paid = f && data.readUInt32LE(0) === 2 ? data.readBigUInt64LE(4) : null;
-  expect(`exactly one fee transfer, ${Number(FEE.lamports) / 1e9} SOL from the user to ${FEE.wallet}`,
+  expect(`exactly one fee transfer, the quoted ${Number(FEE.lamports) / 1e9} SOL, from the user to ${FEE.wallet}`,
     fees.length === 1 && paid === FEE.lamports && keys[f.accountKeyIndexes[0]] === HOLDER && keys[f.accountKeyIndexes[1]] === FEE.wallet,
     paid === null ? "no transfer found" : `${Number(paid) / 1e9} SOL → ${keys[f.accountKeyIndexes[1]]}`);
 }

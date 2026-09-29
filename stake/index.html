@@ -27,7 +27,7 @@
 <link rel="apple-touch-icon" href="../logo.png">
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="stake.css">
-<script src="stake.js?v=711ffa21" defer></script>
+<script src="stake.js?v=1365725d" defer></script>
 </head>
 <body>
 <a class="skip" href="#steps">Skip to the steps</a>
@@ -59,7 +59,7 @@
     <span class="dir-fwd">Earn staking rewards on the TAO in your Solana wallet. One signature, one transaction. You keep the keys.</span>
     <span class="dir-rev" hidden>Send TAO from your Bittensor wallet back to your Solana wallet.</span>
   </p>
-  <p class="stake-trust">Open source · No custody · One small SOL fee</p>
+  <p class="stake-trust">Open source · No custody · A 0.25% fee</p>
   <div class="info-row">
   <details class="info"><summary><span class="info-i" aria-hidden="true">i</span><span class="info-l">How it works</span></summary><div class="info-body">
     <p class="dir-fwd">Your TAO goes home over the LayerZero bridge it came in on, and this page stakes it to the validator you choose, owned by your own Bittensor wallet. There is no receipt token and no soltao contract: every key along the way comes from your signature, and nobody else holds one.</p>
@@ -78,8 +78,8 @@
     </ol></div></details>
   <details class="info"><summary><span class="info-i" aria-hidden="true">i</span><span class="info-l">Who runs this</span></summary><div class="info-body"><p class="stake-who">Run by the maintainer of the Solana TAO Board, who also launched the SOLTAO coin (see the
     disclosure below). Your keys are made and kept in this browser and never sent to them, and there is no
-    soltao contract holding funds. You do trust this page's code, which is open source. Its only charge is a
-    flat SOL fee, shown in step 4 before you sign.</p></div></details>
+    soltao contract holding funds. You do trust this page's code, which is open source. Its only charge is
+    0.25% of what you move, shown before you sign.</p></div></details>
   </div>
 </section>
 
@@ -396,9 +396,10 @@
       <div class="dir-fwd"><dt>Via</dt><dd class="num" id="r-via">—</dd></div>
       <div class="dir-fwd"><dt>On arrival</dt><dd id="r-plan">—</dd></div>
       <div><dt>Bittensor fee (TAO)</dt><dd class="num" id="r-gas">—</dd></div>
+      <div class="dir-rev" hidden><dt>soltao fee (0.25%, TAO)</dt><dd class="num" id="r-rfee">—</dd></div>
       <div><dt>Bridge fee</dt><dd class="num" id="r-lzfee">—</dd></div>
       <div class="dir-fwd"><dt>Solana fee</dt><dd class="num" id="r-prio">—</dd></div>
-      <div class="dir-fwd"><dt>soltao fee</dt><dd class="num" id="r-fee">—</dd></div>
+      <div class="dir-fwd"><dt>soltao fee (0.25%)</dt><dd class="num" id="r-fee">—</dd></div>
       <div class="kv-total dir-fwd"><dt>Total SOL</dt><dd class="num" id="r-total">—</dd></div>
       <div class="dir-fwd"><dt>In dollars, roughly</dt><dd class="num" id="r-usd">—</dd></div>
       <div><dt>Fees, as a share of what you send</dt><dd class="num" id="r-share">—</dd></div>
@@ -416,8 +417,8 @@
     <p class="dir-rev" hidden>Your Bittensor wallet funds your transit account, which wraps the TAO and sends it
       over LayerZero; the bridge fee and gas are paid in TAO there. Gas it does not use stays on the transit
       account, and this page returns it to your Bittensor wallet next time you sign in. If your Solana wallet has
-      no TAO account yet, the bridge's delivery pays to open one. No soltao fee is charged for
-      bringing TAO back.</p></div></details>
+      no TAO account yet, the bridge's delivery pays to open one. soltao's fee, 0.25% of what you bring back and at least
+      0.001 TAO, goes with the first transfer from your Bittensor wallet.</p></div></details>
     <p class="sign-warn"><strong>Keep this page open until step 5 finishes.</strong></p>
     <details class="info"><summary><span class="info-i" aria-hidden="true">i</span><span class="info-l">What if I close it?</span></summary><div class="info-body"><p>Once the bridge delivers, usually within minutes, the page signs the Bittensor steps itself; your wallet will not ask again. If the page closes, come back, sign the same message in step 2, and it finishes. Nothing is lost.</p></div></details>
 
@@ -509,8 +510,10 @@
 
 <footer class="wrap foot">
   <p class="foot-dis">
-    <strong>Fees:</strong> soltao charges a flat SOL fee on every route, shown in step 4 before you sign and
-    paid in the same transaction. LayerZero's network fee is quoted live from the TAO program itself.
+    <strong>Fees:</strong> soltao charges 0.25% of what each action moves: on a route from Solana in SOL, at least
+    0.0035 SOL, with the TAO valued at the on-chain price of the Orca TAO/SOL pool; on Bittensor in TAO, at least
+    0.001 TAO. It is shown before you sign and paid in the same transaction, so an action that does not happen
+    pays nothing. LayerZero's network fee is quoted live from the TAO program itself.
     Bittensor gas is paid in TAO, out of what arrives. There is no soltao contract to charge anything else.
   </p>
   <p class="foot-dis">

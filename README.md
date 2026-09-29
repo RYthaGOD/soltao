@@ -203,7 +203,7 @@ the Bittensor half itself, with a key derived from the user's own signature.
 
 ```
 sign once ─► coldkey (sr25519, 12 words) + transit key (secp256k1, Bittensor EVM)
-Solana tx: OFT send to the transit account, with a 0.001 TAO gas drop  +  soltao's flat SOL fee
+Solana tx: OFT send to the transit account, with a 0.001 TAO gas drop  +  soltao's fee in SOL
 Bittensor EVM, signed by the page with the transit key:
   wTAO.withdraw → addStake (root or a chosen subnet, chosen validator) → transferStake to the coldkey → transferAll the rest
 ```
@@ -242,9 +242,15 @@ that whole limit through LayerZero's compose option (≈0.05 SOL a route); a pla
 stake and 0.0004 TAO to deliver, at 5 gwei (21 Sep 2026). The LayerZero fee for 0.1 TAO, drop
 included, was 0.0144 SOL the same day; the page quotes it live from the TAO program before signing.
 
-**soltao's fee** is 0.003 SOL, a plain SOL transfer in the same transaction, shown in the review
-with its receiving address before the wallet opens. With no contract, anyone can bridge to their
-own address without the page and skip it; the fee pays for the page, not for access.
+**soltao's fee** is 0.25% of what each action moves (src/fees.js, since 29 Sep 2026; before that a
+flat 0.003 SOL per route). On a route from Solana it is a plain SOL transfer in the same transaction,
+never less than 0.0035 SOL, with the TAO valued at the on-chain price of the deepest TAO/SOL pool (Orca,
+`src/orca.js`). On Bittensor (stake, unstake, Move, root claims, Chutes top-ups, the return to Solana)
+it is paid in TAO, never less than 0.001 TAO, to soltao's Bittensor wallet
+`5Cvj3sq8RU2m6vFQmz2jFVix8sqBfWcuqyGKaCnMXyf9QG94`, in one `utility.batchAll` with the action, so an
+action the chain refuses pays nothing. Every fee is shown, with where it goes, before anything is signed.
+With no contract, anyone can bridge to their own address without the page and skip it; the fee pays for
+the page, not for access.
 
 **What it trusts:** the canonical TAO program (upgradeable; its upgrade key and OFT admin are one
 single key), wTAO on Bittensor EVM (immutable; bridge settings under a 3-of-4 Safe), LayerZero's DVNs
@@ -257,6 +263,7 @@ script. The footer of /stake/ says the same.
 |---|---|
 | `tools/stake/src/derive.js` | The coldkey and transit key from one signature |
 | `tools/stake/src/solana.js` | The Solana transaction: OFT send with the gas drop, plus the fee |
+| `tools/stake/src/fees.js`, `orca.js` | soltao's 0.25% fee, and the Orca TAO/SOL pool price the route's fee is set from |
 | `tools/stake/src/route.js` | The Bittensor half: unwrap, stake, hand over, sweep, resumable |
 | `tools/stake/src/evm.js`, `bittensor.js` | Legacy EIP-155 signing, batched RPC, and the precompile reads it needs, including the subnet metagraph |
 | `tools/stake/src/config.js` | Every address, gas limit and the fee, with where each was measured |
@@ -303,7 +310,7 @@ The build fails if the bundle contains `eval` or `new Function`, so it can never
 
 Live on `soltao.xyz` since 23 Sep 2026. The fee wallet is
 `BgGFMbwUtKLifQYZogbDorEXTXYp3UKVAZSH41xQ72Na`, checked on chain as an ordinary wallet, and the
-Solana test decodes the fee instruction to confirm exactly 0.003 SOL goes to it. Root staking has
+Solana test decodes the fee instruction to confirm exactly the quoted fee goes to it. Root staking has
 been routed end to end with real funds. Subnet staking is verified against real mainnet state at
 zero cost but has not yet carried real funds. `tools/stake/HANDOVER.md` tracks exactly what has
 which kind of proof, and how to deploy.

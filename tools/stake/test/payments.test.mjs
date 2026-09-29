@@ -4,6 +4,8 @@
 import { runPayment, payeeProblem, paymentCall, CHUTES_MIN_RAO, SOLTAO_TAG, SOLTAO_TAG_HASH } from "../src/payments.js";
 import { blake2b } from "@noble/hashes/blake2b";
 import { ss58Encode } from "../src/derive.js";
+import { CONFIG } from "../src/config.js";
+import { actionFeeRao } from "../src/fees.js";
 
 let failures = 0;
 const expect = (name, ok, detail = "") => { console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? "  — " + detail : ""}`); if (!ok) failures++; };
@@ -29,9 +31,9 @@ function chain({ free = 1_000_000_000n, dispatchFails = false, events = true, in
   const ops = {
     signerAddress: () => OWN,
     free: async () => s.free,
-    prepare: async (_m, to, amount) => {
+    prepare: async (_m, to, amount, soltaoFeeRao) => {
       const key = `signed-${s.signed.size}`;
-      s.signed.set(key, { key, to, amount: BigInt(amount), nonce: s.nonce });
+      s.signed.set(key, { key, to, amount: BigInt(amount), soltaoFeeRao, nonce: s.nonce });
       return { id: `0x${key}`, signed: key, nonce: String(s.nonce), address: OWN, fromBlock: "100" };
     },
     submit: async (signed) => {
@@ -120,18 +122,26 @@ expect("an empty address is refused", payeeProblem("", OWN) !== null);
   // The call a top-up signs: one all-or-nothing batch of the transfer, then the public tag.
   const api = { tx: {
     utility: { batchAll: (calls) => ({ call: "utility.batchAll", calls }) },
-    balances: { transferAllowDeath: (to, amount) => ({ call: "balances.transferAllowDeath", to, amount }) },
+    balances: { transferAllowDeath: (to, amount) => ({ call: "balances.transferAllowDeath", to, amount }), transferKeepAlive: (to, amount) => ({ call: "balances.transferKeepAlive", to, amount }) },
     system: { remarkWithEvent: (remark) => ({ call: "system.remarkWithEvent", remark }) },
   } };
   const c = paymentCall(api, CHUTES, 250_000_000n);
   expect("a top-up is one batchAll: the transfer to Chutes, then the soltao tag", c.call === "utility.batchAll" && c.calls.length === 2
     && c.calls[0].call === "balances.transferAllowDeath" && c.calls[0].to === CHUTES && c.calls[0].amount === 250_000_000n
     && c.calls[1].call === "system.remarkWithEvent" && c.calls[1].remark === "soltao.xyz:chutes-topup:v1", JSON.stringify(c, (_k, v) => typeof v === "bigint" ? String(v) : v));
+  const f = paymentCall(api, CHUTES, 250_000_000n, 1_000_000n);
+  expect("with soltao's fee, the same one batch carries it third, a keep-alive transfer to soltao's Bittensor wallet", f.call === "utility.batchAll" && f.calls.length === 3 && f.calls[2].call === "balances.transferKeepAlive" && f.calls[2].to === CONFIG.fee.bittensor && f.calls[2].amount === 1_000_000n);
   const want = "0x" + Buffer.from(blake2b(Buffer.from(SOLTAO_TAG), { dkLen: 32 })).toString("hex");
   expect("the Remarked event hash every tagged top-up carries is published", SOLTAO_TAG_HASH === want && SOLTAO_TAG_HASH === "0x0f0d95b0ed710d56d26bcf41bea776f5ca2dee9f4de60b0995538a30fb321cc4", SOLTAO_TAG_HASH);
   let err = null;
   try { paymentCall({ tx: { balances: api.tx.balances, system: api.tx.system } }, CHUTES, 1n); } catch (e) { err = e; }
   expect("without batching on the chain nothing untagged is sent instead", err && /nothing was sent/.test(err.message));
+}
+
+{
+  const { s, run } = chain();
+  await run({ amount: 800_000_000n });
+  expect("a top-up signs in soltao's fee: 0.25% of what it sends, at least 0.001 TAO", [...s.signed.values()][0].soltaoFeeRao === actionFeeRao(800_000_000n) && actionFeeRao(800_000_000n) === 2_000_000n);
 }
 
 {

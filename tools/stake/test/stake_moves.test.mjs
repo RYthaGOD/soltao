@@ -1,7 +1,9 @@
 // Stake moves from the coldkey (src/stake_moves.js) against a simulated Substrate account with a
 // transaction pool. Counts moves the chain APPLIED, since the danger is a second one landing.
 
-import { runStakeMove, runStakeSwitch, runRootClaim, limitPrice, moveLimit } from "../src/stake_moves.js";
+import { runStakeMove, runStakeSwitch, runRootClaim, limitPrice, moveLimit, moveFeeRao } from "../src/stake_moves.js";
+import { actionFeeRao } from "../src/fees.js";
+import { CONFIG } from "../src/config.js";
 import { fitReturnAmount } from "../src/fit.js";
 
 let failures = 0;
@@ -36,9 +38,9 @@ function chain({ free = 2_000_000_000n, stake = 500_000_000n, priceAtDispatch = 
     free: async () => s.free,
     stakeOf: async () => s.stake,
     alphaPrice: async (n) => (Number(n) === 0 ? 1_000_000_000n : PRICE),
-    prepare: async (_m, { kind, netuid, amount, limitRao }) => {
+    prepare: async (_m, { kind, netuid, amount, limitRao, soltaoFeeRao }) => {
       const key = `signed-${s.signed.size}`;
-      s.signed.set(key, { key, kind, netuid: Number(netuid), amount: BigInt(amount), limitRao: BigInt(limitRao), nonce: s.nonce });
+      s.signed.set(key, { key, kind, netuid: Number(netuid), amount: BigInt(amount), limitRao: BigInt(limitRao), soltaoFeeRao: BigInt(soltaoFeeRao ?? -1), nonce: s.nonce });
       return { id: `0x${key}`, signed: key, nonce: String(s.nonce), address: "5Cold", fromBlock: "100" };
     },
     submit: async (signed) => {
@@ -85,16 +87,16 @@ expect("unstake floor and stake ceiling sit 2% either side of the price", limitP
 }
 {
   const { s, run } = chain({ priceAtDispatch: (PRICE * 95n) / 100n });
-  const r = await run({ kind: "unstake", netuid: 1, amount: 100_000_000n });
+  const r = await run({ kind: "unstake", netuid: 1, amount: 300_000_000n });
   expect("a price 5% worse at dispatch is refused: the nonce is used, nothing moves", r.refused && !r.done && s.applied === 0 && s.nonce === 1n && s.stake === 500_000_000n, JSON.stringify({ applied: s.applied, nonce: String(s.nonce) }));
 }
 {
   const { s, run } = chain();
   s.autoInclude = false; s.crashAfterSubmit = true;
-  let first = ""; try { await run({ kind: "unstake", netuid: 1, amount: 100_000_000n }); } catch (e) { first = e.message; }
+  let first = ""; try { await run({ kind: "unstake", netuid: 1, amount: 300_000_000n }); } catch (e) { first = e.message; }
   expect("page closes after submitting, before inclusion", /closed/.test(first) && s.applied === 0 && s.pool.size === 1);
   s.autoInclude = true;
-  const r = await run({ kind: "unstake", netuid: 1, amount: 100_000_000n });
+  const r = await run({ kind: "unstake", netuid: 1, amount: 300_000_000n });
   expect("resume re-submits the same bytes and it lands exactly once", r.done && s.applied === 1 && s.signed.size === 1, `applied ${s.applied}, signed ${s.signed.size}`);
 }
 {
@@ -112,6 +114,20 @@ expect("unstake floor and stake ceiling sit 2% either side of the price", limitP
   expect("more than the position, or more than the free TAO, is refused before signing", /more than this position/.test(m1) && /more free TAO/.test(m2), `${m1} | ${m2}`);
 }
 
+// ── soltao's fee (src/fees.js): 0.25% of what a move moves in TAO, at least 0.001 TAO, signed in with it ──
+{
+  const { s, run } = chain();
+  await run({ kind: "stake", netuid: 1, amount: 1_000_000_000n }, {});
+  await run({ kind: "unstake", netuid: 1, amount: 400_000_000n }, {});
+  const [stake, unstake] = [...s.signed.values()];
+  expect("a stake carries soltao's fee on the TAO it stakes: 0.25% of 1 TAO", stake.soltaoFeeRao === 2_500_000n && stake.soltaoFeeRao === actionFeeRao(1_000_000_000n), String(stake.soltaoFeeRao));
+  expect("an unstake carries it on the TAO value of the Alpha, at the pool price, with the 0.001 TAO floor", unstake.soltaoFeeRao === moveFeeRao("unstake", 1, 400_000_000n, PRICE) && unstake.soltaoFeeRao === CONFIG.fee.minRao, String(unstake.soltaoFeeRao));
+  let small = ""; try { await run({ kind: "unstake", netuid: 1, amount: 100_000_000n }, {}); } catch (e) { small = e.message; }
+  expect("an unstake worth no more than the fee is refused before signing", /less than soltao's fee/.test(small) && s.signed.size === 2, small);
+  let tight = ""; try { await run({ kind: "stake", netuid: 0, amount: s.free - 100n }, {}); } catch (e) { tight = e.message; }
+  expect("a stake that leaves too little free TAO for the fee is refused before signing", /soltao's fee are more free TAO/.test(tight), tight);
+}
+
 // ── root rewards: a claim pays the coldkey's slice of the validator's basket into its root stake ──
 function claimChain({ rootStake = 100_000_000n, owed = 2_000_000n, minRao = 500_000n } = {}) {
   const s = { rootStake, owed, free: 50_000_000n, nonce: 0n, pool: new Map(), signed: new Map(), applied: 0, autoInclude: true, crashAfterSubmit: false };
@@ -126,11 +142,12 @@ function claimChain({ rootStake = 100_000_000n, owed = 2_000_000n, minRao = 500_
   };
   const ops = {
     signerAddress: () => "5Cold",
+    free: async () => s.free,
     stakeOf: async (_c, _h, n) => (Number(n) === 0 ? s.rootStake : 0n),
     rootPayout: async () => s.owed,
-    prepareClaim: async () => {
+    prepareClaim: async (_m, _h, soltaoFeeRao) => {
       const key = `claim-${s.signed.size}`;
-      s.signed.set(key, { key, nonce: s.nonce });
+      s.signed.set(key, { key, nonce: s.nonce, soltaoFeeRao });
       return { id: `0x${key}`, signed: key, nonce: String(s.nonce), address: "5Cold" };
     },
     submit: async (signed) => {
@@ -151,6 +168,7 @@ function claimChain({ rootStake = 100_000_000n, owed = 2_000_000n, minRao = 500_
   const { s, run } = claimChain();
   const r = await run({});
   expect("a root claim lands once and adds the rewards to the root stake", r.done && s.applied === 1 && r.gained === 2_000_000n && s.rootStake === 102_000_000n, `gained ${r.gained}, root ${s.rootStake}`);
+  expect("…carrying soltao's fee on what it pays, here the 0.001 TAO floor", [...s.signed.values()][0].soltaoFeeRao === actionFeeRao(2_000_000n) && actionFeeRao(2_000_000n) === 1_000_000n);
 }
 {
   const { s, run } = claimChain();
@@ -194,7 +212,7 @@ function claimChain({ rootStake = 100_000_000n, owed = 2_000_000n, minRao = 500_
 // Positions keyed "hotkey:netuid". Prices in rao of TAO per Alpha; the move sells at the origin's price and
 // buys at the destination's, refused (all or nothing) when the ratio at dispatch is under the limit.
 function moveChain({ prices = { 0: 1_000_000_000n, 1: 6_818_232n, 64: 68_854_768n }, atDispatch = null, events = true } = {}) {
-  const s = { pos: new Map([["5Hot:1", 500_000_000_000n]]), nonce: 0n, pool: new Map(), signed: new Map(), applied: 0, submits: 0, result: new Map(), crashAfterSubmit: false };
+  const s = { free: 1_000_000_000n, pos: new Map([["5Hot:1", 500_000_000_000n]]), nonce: 0n, pool: new Map(), signed: new Map(), applied: 0, submits: 0, result: new Map(), crashAfterSubmit: false };
   const priceAt = (n) => (atDispatch?.[n] ?? prices[n]);
   const include = () => {
     for (const [k, tx] of [...s.pool]) {
@@ -214,11 +232,12 @@ function moveChain({ prices = { 0: 1_000_000_000n, 1: 6_818_232n, 64: 68_854_768
   };
   const ops = {
     signerAddress: () => "5Cold",
+    free: async () => s.free,
     stakeOf: async (_c, hotkey, netuid) => s.pos.get(`${hotkey}:${Number(netuid)}`) ?? 0n,
     alphaPrice: async (n) => prices[Number(n)],
     prepare: async (_m, call) => {
       const key = `signed-${s.signed.size}`;
-      s.signed.set(key, { key, ...call, netuid: Number(call.netuid), toNetuid: Number(call.toNetuid), amount: BigInt(call.amount), limitRao: BigInt(call.limitRao), nonce: s.nonce });
+      s.signed.set(key, { key, ...call, netuid: Number(call.netuid), toNetuid: Number(call.toNetuid), amount: BigInt(call.amount), limitRao: BigInt(call.limitRao), soltaoFeeRao: BigInt(call.soltaoFeeRao ?? -1), nonce: s.nonce });
       return { id: `0x${key}`, signed: key, nonce: String(s.nonce), address: "5Cold", fromBlock: "100" };
     },
     submit: async (signed) => {
@@ -247,6 +266,10 @@ function moveChain({ prices = { 0: 1_000_000_000n, 1: 6_818_232n, 64: 68_854_768
   const r = await run({ from: { hotkey: "5Hot", netuid: 1 }, to: { hotkey: "5Val", netuid: 64 }, amount: 200_000_000_000n });
   const call = [...s.signed.values()][0];
   expect("a move to another subnet is one move_stake_limit, carrying the floor", call.kind === "move" && call.netuid === 1 && call.toNetuid === 64 && call.toHotkey === "5Val" && call.limitRao === moveLimit(6_818_232n, 68_854_768n, 200n));
+  expect("…and soltao's fee on the TAO value moved: 0.25% of 200 Alpha at the origin price", call.soltaoFeeRao === actionFeeRao((200_000_000_000n * 6_818_232n) / 1_000_000_000n), String(call.soltaoFeeRao));
+  const poor = moveChain(); poor.s.free = 1_000_000n;
+  let broke = ""; try { await poor.run({ from: { hotkey: "5Hot", netuid: 1 }, to: { hotkey: "5Val", netuid: 64 }, amount: 200_000_000_000n }); } catch (e) { broke = e.message; }
+  expect("a move is refused before signing when free TAO cannot cover the fee", /paid from free TAO/.test(broke) && poor.s.signed.size === 0, broke);
   expect("it lands once: the origin shrinks by the amount and the destination grows", r.done && s.applied === 1 && s.pos.get("5Hot:1") === 300_000_000_000n && r.moved === 200_000_000_000n && r.received === s.pos.get("5Val:64") && r.received > 0n, JSON.stringify({ moved: String(r.moved), received: String(r.received) }));
 }
 {

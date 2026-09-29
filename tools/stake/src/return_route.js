@@ -19,7 +19,8 @@ import { CONFIG } from "./config.js";
 import { evmAddress, ss58Encode } from "./derive.js";
 import { broadcast, getBalance, getGasPrice, signTx, txStatus, waitMined } from "./evm.js";
 import { encode, getWtao, mirrorColdkey } from "./bittensor.js";
-import { accountNonce, coldkeySigner, prepareTransfer, quoteTransfer, submitSigned } from "./substrate.js";
+import { accountNonce, coldkeySigner, prepareFunding, quoteTransfer, submitSigned } from "./substrate.js";
+import { actionFeeRao } from "./fees.js";
 import { RETURN_GAS_LIMIT, WEI_PER_RAO, encodeOftSend, planReturnFunding, quoteReturn } from "./oft_return.js";
 import { settleSigned } from "./settle.js";
 
@@ -36,8 +37,8 @@ const realOps = {
   },
   gasPrice: getGasPrice,
   quoteBridge: ({ amountRao, solanaRecipient }) => quoteReturn({ amountRao, solanaRecipient }),
-  quoteFunding: (mnemonic, to, amountRao) => quoteTransfer(mnemonic, to, amountRao),
-  prepareFund: (mnemonic, to, amountRao) => prepareTransfer(mnemonic, to, amountRao),
+  quoteFunding: (mnemonic, to, amountRao, soltaoFeeRao) => quoteTransfer(mnemonic, to, amountRao, soltaoFeeRao),
+  prepareFund: (mnemonic, to, amountRao, soltaoFeeRao) => prepareFunding(mnemonic, to, amountRao, soltaoFeeRao),
   submitFund: (signed) => submitSigned(signed),
   coldkeyNonce: (address) => accountNonce(address),
   signWrap: (transitKey, amountWei, gasPriceWei) => signTx(transitKey, {
@@ -66,12 +67,16 @@ async function waitForFunding(ops, address, minimumWei, { waitMs, pollMs }) {
 }
 
 /**
+ * soltao's fee on a return (src/fees.js) rides, once, in the batch of its first funding transfer from the
+ * coldkey: if that transfer lands, the fee is paid; if it never lands, nothing is. `soltaoFeeRao` defaults to
+ * the fee on `amountRao`; the progress records when it has been paid, so a resume never charges it twice.
+ *
  * Continue a free-balance return from chain state. `progress` is the last checkpoint the caller saved
  * (non-secret: identities and signed bytes of transactions that are, or are about to be, public).
  * `onCheckpoint(progress)` must persist it synchronously; it is called before every broadcast.
  */
 export async function finishFreeReturn({
-  mnemonic, transitKey, solanaRecipient, amountRao, expectedColdkey = null, progress = {}, retryReverted = false,
+  mnemonic, transitKey, solanaRecipient, amountRao, soltaoFeeRao = actionFeeRao(amountRao), expectedColdkey = null, progress = {}, retryReverted = false,
   onStep = () => {}, onCheckpoint = () => {}, waitMs = 2 * 60_000, pollMs = 4_000, ops = realOps,
 }) {
   const coldkey = ops.signerAddress(mnemonic);
@@ -117,7 +122,8 @@ export async function finishFreeReturn({
   }
   if (saved.fund && saved.fund.status !== "included" && saved.fund.status !== "dead") {
     onStep("transfer", "busy", "checking the earlier funding transfer");
-    save({ fund: { ...saved.fund, status: await settleFund(saved.fund) } });
+    const status = await settleFund(saved.fund);
+    save({ fund: { ...saved.fund, status }, ...(status === "included" && BigInt(saved.fund.soltaoFeeRao ?? 0) > 0n ? { feePaid: true } : {}) });
   }
   if (saved.wrap && saved.wrap.status !== "mined" && saved.wrap.status !== "dead") {
     onStep("wrap", "busy", "checking the earlier wrap");
@@ -137,17 +143,18 @@ export async function finishFreeReturn({
     state = await ops.state(transitAddress);
     if (state.nativeWei >= minimumNativeWei) return;
     const fundingRao = ceilDiv(minimumNativeWei - state.nativeWei, WEI_PER_RAO);
-    const fundingQuote = await ops.quoteFunding(mnemonic, mirrorAddress, fundingRao);
+    const feeNow = saved.feePaid ? 0n : BigInt(soltaoFeeRao); // the first funding transfer carries the fee
+    const fundingQuote = await ops.quoteFunding(mnemonic, mirrorAddress, fundingRao, feeNow);
     if (fundingQuote.address !== coldkey) throw new Error("the funding quote used a different coldkey");
-    if (fundingQuote.remainingRao < 0n) throw new Error("not enough free TAO for the return amount and network fees");
+    if (fundingQuote.remainingRao < 0n) throw new Error("not enough free TAO for the return amount, soltao's fee and network fees");
     onStep("transfer", "busy", `funding transit with ${fundingRao} rao`);
-    const rec = await ops.prepareFund(mnemonic, mirrorAddress, fundingRao);
+    const rec = await ops.prepareFund(mnemonic, mirrorAddress, fundingRao, feeNow);
     if (rec.address !== coldkey) throw new Error("the funding transfer was signed by a different coldkey");
-    save({ stage: "funding", fund: { ...str(rec), amountRao: String(fundingRao), to: mirrorAddress, status: "signed" } });
+    save({ stage: "funding", fund: { ...str(rec), amountRao: String(fundingRao), soltaoFeeRao: String(feeNow), to: mirrorAddress, status: "signed" } });
     const sub = await ops.submitFund(rec.signed);
     if (sub.state === "rejected") { save({ fund: { ...saved.fund, status: "dead" } }); throw new Error(`Bittensor refused the funding transfer: ${sub.reason}`); }
     const status = await settleFund(saved.fund);
-    save({ stage: "funded", fund: { ...saved.fund, status } });
+    save({ stage: "funded", fund: { ...saved.fund, status }, ...(status === "included" && feeNow > 0n ? { feePaid: true } : {}) });
     if (status === "dead") throw new Error("the funding transfer expired before it was included: sign again to retry");
     state = await waitForFunding(ops, transitAddress, minimumNativeWei, { waitMs, pollMs });
     onStep("transfer", "ok", "TAO arrived on the transit account");
