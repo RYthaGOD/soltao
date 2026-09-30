@@ -465,31 +465,36 @@ function renderDirectory() {
   const hist = dirSummary?.lastTime ? ` The 7 and 30 day changes compare today's price with soltao's daily readings to ${dayText(dirSummary.lastTime)}; a past move says nothing about the next one.` : " The price history could not be read, so the change columns are empty.";
   note("dir-rule", `${rows.length} of ${directory.rows.length} subnets, ${rule}. "TAO added per day" is the TAO the chain put into that pool in the last block, times 7,200 blocks (12 seconds each); it moves from block to block.${hist} Names are what each owner registered on-chain; a name is not an endorsement. Read ${at} UTC.`);
   const current = state.netuidValid ? Number(state.netuid) : null;
+  const fact = (cls, label, value) => {
+    const s = el("span", cls);
+    s.append(el("span", "dir-k", label), document.createTextNode(" "), el("span", "dir-v", value));
+    return s;
+  };
   $("dir-body").replaceChildren(...rows.map((r) => {
-    const tr = document.createElement("tr");
-    if (r.netuid === current) tr.setAttribute("aria-current", "true");
-    if (r.description) tr.title = r.description;
-    const td = (t, cls) => Object.assign(document.createElement("td"), { textContent: t, className: cls || "" });
-    const use = Object.assign(document.createElement("button"), { type: "button", textContent: "Use" });
-    use.setAttribute("aria-label", `Use subnet ${r.netuid}, ${r.name}`);
-    use.addEventListener("click", () => { $("netuid-in").value = String(r.netuid); onNetuid(); renderDirectory(); });
-    const cell = document.createElement("td"); cell.append(use);
-    tr.append(
-      td(String(r.netuid), "num"), td(`${r.name}${r.symbol ? ` ${r.symbol}` : ""}`),
-      td(r.netuid === 0 ? "1 (root)" : r.priceRao === null ? "—" : fmtUnits(r.priceRao, 9), "num"),
-      td(r.netuid === 0 ? "no pool" : fmtUnits(r.taoInRao, 9, 0), "num"),
-      td(r.netuid === 0 || r.taoPerBlockRao === null ? "—" : fmtUnits(r.taoPerBlockRao * BLOCKS_PER_DAY, 9, 2), "num"),
-      changeCell(r.ch7), changeCell(r.ch30, r.netuid === 0 ? [] : [...daysOf(r), [nowSec, Number(r.priceRao ?? 0)]]), cell,
+    const btn = el("button", "dir-row");
+    btn.type = "button";
+    btn.setAttribute("role", "option");
+    btn.setAttribute("aria-label", `Use subnet ${r.netuid}, ${r.name}`);
+    if (r.netuid === current) btn.setAttribute("aria-current", "true");
+    if (r.description) btn.title = r.description;
+    btn.addEventListener("click", () => { $("netuid-in").value = String(r.netuid); onNetuid(); renderDirectory(); });
+    const ch7 = el("span", "dir-ch7"); ch7.append(bpsNode(r.ch7));
+    const top = el("span", "dir-top");
+    top.append(el("span", "dir-name", `${r.name}${r.symbol ? ` ${r.symbol}` : ""}`), ch7);
+    const days = r.netuid === 0 ? [] : [...daysOf(r), [nowSec, Number(r.priceRao ?? 0)]];
+    const ch30 = el("span", "dir-ch30");
+    if (days.length > 2) ch30.append(sparkline(days.map((d) => d[1])), " ");
+    ch30.append(el("b", "", "30 days "), bpsNode(r.ch30));
+    const facts = el("span", "dir-facts");
+    facts.append(
+      fact("dir-price", "Price", r.netuid === 0 ? "1 (root)" : r.priceRao === null ? "—" : fmtUnits(r.priceRao, 9)),
+      fact("dir-pool", "Pool", r.netuid === 0 ? "no pool" : fmtUnits(r.taoInRao, 9, 0)),
+      fact("dir-day", "Per day", r.netuid === 0 || r.taoPerBlockRao === null ? "—" : fmtUnits(r.taoPerBlockRao * BLOCKS_PER_DAY, 9, 2)),
+      ch30,
     );
-    return tr;
+    btn.append(el("span", "dir-id", String(r.netuid)), top, facts);
+    return btn;
   }));
-}
-/** A change figure, signed and coloured (the sign carries it without colour), with a 30-day sparkline. */
-function changeCell(bps, days = null) {
-  const td = el("td", "num dir-chg");
-  if (days && days.length > 2) td.append(sparkline(days.map((d) => d[1])), " ");
-  td.append(bpsNode(bps));
-  return td;
 }
 function sparkline(values) {
   const w = 64, h = 18, lo = Math.min(...values), hi = Math.max(...values), span = hi - lo || 1;

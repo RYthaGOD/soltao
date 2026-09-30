@@ -432,32 +432,42 @@ if (want("E")) {
   await setFieldE(page, "#netuid-in", "2");
   expect("changing the subnet clears the list", (await page.$eval("#pick-wrap", (el) => el.hidden)) && (await text(page, "#pick-btn")) === "List subnet 2's validators");
 
-  // The subnet directory: every subnet from the chain, two named orders, search, and "Use" fills the field.
+  // The subnet directory: every subnet from the chain, named orders, search, and a tap fills the field.
   await clickEl(page, "#dir-btn");
   await waitText(page, "#dir-rule", /subnets, in subnet-number order|Could not/, 90_000);
   const dirRule = await text(page, "#dir-rule"), total = Number((dirRule.match(/of (\d+) subnets/) || [])[1]);
-  const first = await page.$$eval("#dir-body tr", (trs) => trs.slice(0, 2).map((tr) => [...tr.children].map((td) => td.textContent.trim())));
-  expect("the directory lists every subnet from the chain, root first, with name, price and pool", total > 100 && first[0][0] === "0" && first[0][2] === "1 (root)" && first[1][0] === "1" && first[1][1].length > 0 && parseFloat(first[1][2]) > 0 && parseFloat(first[1][3].replace(/,/g, "")) > 0, `${total} · ${first.map((r) => r.join(" | ")).join(" / ")}`);
+  const dirRows = () => page.$$eval("#dir-body .dir-row", (rows) => rows.map((row) => ({
+    id: row.querySelector(".dir-id").textContent,
+    name: row.querySelector(".dir-name").textContent,
+    price: row.querySelector(".dir-price .dir-v").textContent,
+    pool: row.querySelector(".dir-pool .dir-v").textContent,
+    day: row.querySelector(".dir-day .dir-v").textContent,
+    ch7: row.querySelector(".dir-ch7").textContent.trim(),
+    ch30: row.querySelector(".dir-ch30").textContent.trim(),
+    spark: Boolean(row.querySelector(".dir-ch30 svg.spark")),
+  })));
+  const first = await dirRows();
+  expect("the directory lists every subnet from the chain, root first, with name, price and pool", total > 100 && first[0].id === "0" && first[0].price === "1 (root)" && first[1].id === "1" && first[1].name.length > 0 && parseFloat(first[1].price) > 0 && parseFloat(first[1].pool.replace(/,/g, "")) > 0, `${total} · ${first.slice(0, 2).map((r) => [r.id, r.name, r.price, r.pool].join(" | ")).join(" / ")}`);
   expect("…and says its order, that names are not endorsements, and when it read them", /in subnet-number order\. "TAO added per day" is the TAO the chain put into that pool in the last block, times 7,200 blocks \(12 seconds each\); it moves from block to block\. The 7 and 30 day changes compare today's price with soltao's daily readings to \d+ \w{3} \d{4}; a past move says nothing about the next one\. Names are what each owner registered on-chain; a name is not an endorsement\. Read \d\d:\d\d UTC\./.test(dirRule), dirRule);
   await setFieldE(page, "#dir-search", "7");
-  expect("search by number finds that subnet", (await page.$$eval("#dir-body tr", (trs) => trs.map((tr) => tr.firstChild.textContent))).includes("7"));
+  expect("search by number finds that subnet", (await dirRows()).some((r) => r.id === "7"));
   await setFieldE(page, "#dir-search", "");
   await page.select("#dir-sort", "pool");
-  const pools = await page.$$eval("#dir-body tr", (trs) => trs.map((tr) => [tr.children[0].textContent, parseFloat(tr.children[3].textContent.replace(/,/g, ""))]));
+  const pools = (await dirRows()).map((r) => [r.id, parseFloat(r.pool.replace(/,/g, ""))]);
   expect("sorting by TAO in the pool orders it so, leaves root out, and says so", pools.every((p, i) => i === 0 || pools[i - 1][1] >= p[1]) && !pools.some((p) => p[0] === "0") && /sorted by TAO in each subnet's pool, most first \(root has no pool and is left out\)/.test(await text(page, "#dir-rule")), `${pools.slice(0, 3).map((p) => p.join(":")).join(" ")}`);
   await page.select("#dir-sort", "emission");
-  const daily = await page.$$eval("#dir-body tr", (trs) => trs.map((tr) => [tr.children[0].textContent, parseFloat(tr.children[4].textContent.replace(/,/g, ""))]));
+  const daily = (await dirRows()).map((r) => [r.id, parseFloat(r.day.replace(/,/g, ""))]);
   expect("sorting by TAO added per day orders it so, leaves root out, and says so", daily.length > 100 && daily[0][1] > 0 && daily.every((p, i) => i === 0 || daily[i - 1][1] >= p[1]) && !daily.some((p) => p[0] === "0") && /sorted by TAO the chain adds to each subnet's pool per day, most first \(root is left out\)/.test(await text(page, "#dir-rule")), `${daily.slice(0, 3).map((p) => p.join(":")).join(" ")}`);
   // 7 and 30 day changes from soltao's daily history, with a 30-day sparkline.
-  const pct = (s) => (s === "—" ? null : Number(s.replace("−", "-").replace(/[+%]/g, "")));
+  const pct = (s) => { const m = s.match(/[+−-]?\d+\.\d%/); return m ? Number(m[0].replace("−", "-").replace(/[+%]/g, "")) : null; };
   await page.select("#dir-sort", "change7");
-  const moves = await page.$$eval("#dir-body tr", (trs) => trs.map((tr) => [tr.children[0].textContent, tr.children[5].textContent.trim(), tr.children[6].textContent.trim(), Boolean(tr.children[6].querySelector("svg.spark"))]));
-  const ch = moves.map((m) => pct(m[1])).filter((v) => v !== null);
-  expect("each subnet shows its 7 and 30 day price change, with a 30-day sparkline", ch.length > 100 && moves.filter((m) => m[3]).length > 100 && moves.slice(0, 3).every((m) => /^[+−]?\d+\.\d%$/.test(m[1]) && /[+−]?\d+\.\d%$/.test(m[2])), moves.slice(0, 3).map((m) => m.join(":")).join(" "));
-  expect("sorting by 7-day change orders it so, leaves root out, and says a past move predicts nothing", ch.every((v, i) => i === 0 || ch[i - 1] >= v) && !moves.some((m) => m[0] === "0") && /most risen first/.test(await text(page, "#dir-rule")) && /a past move says nothing about the next one/.test(await text(page, "#dir-rule")), ch.slice(0, 3).join(", "));
+  const moves = await dirRows();
+  const ch = moves.map((m) => pct(m.ch7)).filter((v) => v !== null);
+  expect("each subnet shows its 7 and 30 day price change, with a 30-day sparkline", ch.length > 100 && moves.filter((m) => m.spark).length > 100 && moves.slice(0, 3).every((m) => /^[+−]?\d+\.\d%$/.test(m.ch7) && /[+−]?\d+\.\d%$/.test(m.ch30)), moves.slice(0, 3).map((m) => [m.id, m.ch7, m.ch30].join(":")).join(" "));
+  expect("sorting by 7-day change orders it so, leaves root out, and says a past move predicts nothing", ch.every((v, i) => i === 0 || ch[i - 1] >= v) && !moves.some((m) => m.id === "0") && /most risen first/.test(await text(page, "#dir-rule")) && /a past move says nothing about the next one/.test(await text(page, "#dir-rule")), ch.slice(0, 3).join(", "));
   await page.select("#dir-sort", "pool");
   const pickNet = pools[0][0];
-  await page.$$eval("#dir-body tr", (trs) => trs[0].querySelector("button").click());
+  await page.$$eval("#dir-body .dir-row", (rows) => rows[0].click());
   expect("choosing a subnet fills the field and runs the usual check", (await page.$eval("#netuid-in", (el) => el.value)) === pickNet, await page.$eval("#netuid-in", (el) => el.value));
   await waitText(page, "#netuid-note", /registered hotkeys|Could not reach/);
 

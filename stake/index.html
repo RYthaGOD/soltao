@@ -26,8 +26,8 @@
 <link rel="icon" href="../favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="../logo.png">
 <link rel="stylesheet" href="../styles.css">
-<link rel="stylesheet" href="stake.css?v=25a3abdb">
-<script src="stake.js?v=fb9b5ffc" defer></script>
+<link rel="stylesheet" href="stake.css?v=1c83d7a1">
+<script src="stake.js?v=e7db6b9a" defer></script>
 </head>
 <body>
 <a class="skip" href="#steps">Skip to the steps</a>
@@ -358,12 +358,8 @@
             </select>
           </div>
           <p class="step-note" id="dir-rule" role="status"></p>
-          <div class="pick-scroll">
-            <table class="pick">
-              <thead><tr><th scope="col">Subnet</th><th scope="col">Name</th><th scope="col">Price, TAO per Alpha</th><th scope="col">TAO in pool</th><th scope="col">TAO added per day</th><th scope="col">7 days</th><th scope="col">30 days</th><th scope="col"><span class="sr">Choose</span></th></tr></thead>
-              <tbody id="dir-body"></tbody>
-            </table>
-          </div>
+          <p class="step-note">Tap a row to choose it. The same figures as before — price, pool, TAO added per day, and the 7 and 30 day moves — sit under the name.</p>
+          <div class="dir-list" id="dir-body" role="listbox" aria-label="Subnets"></div>
         </div>
       </div>
       <label class="field">

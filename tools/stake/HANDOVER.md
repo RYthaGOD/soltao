@@ -866,6 +866,12 @@ This is **not** git-push-triggered. Steps, in order, every time:
     not. No subnet is named on the page. JS bundle unchanged (`stake.js?v=fb9b5ffc`). Live as `5738c89`
     on the first poll.
 
+37. **Subnet browse is a tappable list (30 Sep 2026).** The first outside subnet staker (`@breakb0nes__`)
+    typed the number themselves and said the mobile subnet picker was a wide table. Browse subnets
+    is now one row per subnet: number, name, 7-day move, then price, pool, TAO added per day, and
+    the 30-day move with its sparkline. Tapping the row fills the subnet field and runs the same
+    check. Search and the four sort orders are unchanged. No subnet is featured.
+
 ## Link previews and SEO
 
 `index.html` and `stake/index.html` each carry their own `og:`/`twitter:` block; they are hand-
