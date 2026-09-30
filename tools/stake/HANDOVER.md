@@ -4,8 +4,9 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-09-30 (items 32–33 live). **Live on soltao.xyz:** commit `bd1ad57`, `stake.js?v=f5b87523`,
-`return.js?v=7ac428cd`, `stake.css?v=25a3abdb`. Quote errors, live ATA check, copy/CSS polish. **Still off:** Top up Chutes
+Last updated: 2026-09-30 (item 34). Built as `stake.js?v=b8533f54` (confirm, forget, and the OFT
+blockhash stay on the primary Solana RPC). **Live on soltao.xyz until this rolls:** commit `bd1ad57`,
+`stake.js?v=f5b87523`, `return.js?v=7ac428cd`, `stake.css?v=25a3abdb`. **Still off:** Top up Chutes
 (`chutesLive: false`).
 **Not yet with real funds:** Move, the batched Bittensor fee, unstake, Chutes, a subnet stake through
 the live page, and a first-time Solana token-account arrival.
@@ -837,6 +838,12 @@ This is **not** git-push-triggered. Steps, in order, every time:
     - Live as `bd1ad57` / `stake.js?v=f5b87523` / `stake.css?v=25a3abdb` / `return.js?v=7ac428cd`.
       Served on the first poll. `npm test`, page-test runs C and F, and `test:live` all passed.
 
+34. **Confirm and forget stay on the primary Solana RPC (30 Sep 2026).** Review finding: mixed
+    failover reads could pair height from one PublicNode host with status from the other.
+    `createClients()` now exposes `primary`; `confirmSignature`, the pending-forget status read, and
+    `getLatestBlockhash` for the signed OFT send use it. Signed sends were already bound to the first
+    URL. Reads still walk the pool. Built as `stake.js?v=b8533f54`. CSS and `return.js` unchanged.
+
 ## Link previews and SEO
 
 `index.html` and `stake/index.html` each carry their own `og:`/`twitter:` block; they are hand-
@@ -910,8 +917,8 @@ Avoided: token-first thinking; the $SOLTAO gate was rejected and the conflict is
 
 ## Current state
 
-**As of 30 Sep 2026.** Production is `bd1ad57` / `stake.js?v=f5b87523` / `stake.css?v=25a3abdb` /
-`return.js?v=7ac428cd`. Items 32–33 are live. `chutesLive` stays false.
+**As of 30 Sep 2026.** This commit builds `stake.js?v=b8533f54` (item 34). Production is still
+`bd1ad57` / `stake.js?v=f5b87523` until Railway serves the new hash. `chutesLive` stays false.
 
 ### What has real-funds proof
 - Wallet connect, SIWS, derivation, quotes, simulation.

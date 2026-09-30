@@ -42,8 +42,7 @@ function connectionFor(url) {
   return new Connection(url, { commitment: "confirmed", fetch: timedFetch(), disableRetryOnRateLimit: true });
 }
 
-function failoverConnection(urls) {
-  const pool = urls.map(connectionFor);
+function failoverConnection(pool) {
   const primary = pool[0];
   return new Proxy(primary, {
     get(target, prop, receiver) {
@@ -70,8 +69,12 @@ function umiRpc(url, connection) {
 
 export function createClients(rpcUrl) {
   const urls = rpcUrl == null ? solanaRpcs() : Array.isArray(rpcUrl) ? rpcUrl : [rpcUrl];
-  const connection = urls.length > 1 ? failoverConnection(urls) : connectionFor(urls[0]);
-  return { connection, rpc: umiRpc(urls[0], connection), urls };
+  const pool = urls.map(connectionFor);
+  const primary = pool[0];
+  const connection = urls.length > 1 ? failoverConnection(pool) : primary;
+  // Reads may walk the pool. Confirm and forget must not: mixing height from one host with
+  // status from another is how a lagged RPC used to look like "nothing was sent".
+  return { connection, primary, rpc: umiRpc(urls[0], primary), urls };
 }
 
 async function withUmi(clients, fn) {
@@ -188,7 +191,8 @@ export async function buildRouteTransaction(clients, { user, transit, amountLd, 
 
   const table = (await clients.connection.getAddressLookupTable(new PublicKey(CONFIG.lookupTable))).value;
   if (!table) throw new Error("LayerZero lookup table not found");
-  const { blockhash, lastValidBlockHeight } = await clients.connection.getLatestBlockhash("confirmed");
+  const confirmRpc = clients.primary || clients.connection;
+  const { blockhash, lastValidBlockHeight } = await confirmRpc.getLatestBlockhash("confirmed");
   const message = new TransactionMessage({ payerKey: owner, recentBlockhash: blockhash, instructions }).compileToV0Message([table]);
   return { transaction: new VersionedTransaction(message), blockhash, lastValidBlockHeight };
 }

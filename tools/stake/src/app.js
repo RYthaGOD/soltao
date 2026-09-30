@@ -341,7 +341,7 @@ async function forget() {
   const sig = rec?.route?.sig;
   if (sig) {
     let status;
-    try { ({ value: [status] } = await clients.connection.getSignatureStatuses([sig])); }
+    try { ({ value: [status] } = await clients.primary.getSignatureStatuses([sig])); }
     catch { status = undefined; }
     if (!mayForgetPending({ holds: Boolean(u.holds), sig, status, sentAt: rec.route.at })) {
       note("derive-note", "That Solana transaction may have landed. Wait for the bridge instead of sending again.", "warn");
@@ -1819,7 +1819,7 @@ async function send() {
     $("track-links").replaceChildren(link(`https://solscan.io/tx/${signature}`, "Solscan ↗"), text("  ·  "), link(`https://layerzeroscan.com/tx/${signature}`, "LayerZero Scan ↗"), text("  ·  "), link(`https://taostats.io/account/${state.coldkeyAddress}`, "your Bittensor wallet ↗"));
     track("solana", "busy", "confirming…");
 
-    const confirmed = await confirmSignature(clients.connection, signature, lastValidBlockHeight);
+    const confirmed = await confirmSignature(clients.primary, signature, lastValidBlockHeight);
     if (confirmed.failed) { clearPending(w.transitAddress); track("solana", "bad", confirmed.why); throw new Error(confirmed.why); }
     if (confirmed.uncertain) {
       track("solana", "busy", "unconfirmed; waiting for the bridge in case it landed");

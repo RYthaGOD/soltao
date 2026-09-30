@@ -31,6 +31,12 @@ const TRANSIT = "0xe00a4459090378cfbe2f8c7c93a993237911cbcc";
 // A wallet seen holding both TAO and SOL on 21 Sep 2026, used only as a simulation identity.
 const HOLDER = process.env.SIM_HOLDER || "E7wdV5qCYL1fZJf6YfvHEyheAeow67Mf7BTpByX89mNQ";
 const clients = createClients();
+expect("createClients exposes a primary Connection for confirm and forget", typeof clients.primary?.getSignatureStatuses === "function");
+expect(
+  "with two Solana RPCs, reads fail over but primary is a single host",
+  clients.urls.length < 2 || clients.primary !== clients.connection,
+  `${clients.urls.length} urls`,
+);
 
 // soltao's fee (src/fees.js): 0.25% of the TAO sent, valued at the Orca TAO/SOL pool's price, at least
 // 0.0035 SOL; and on Bittensor 0.25% in TAO, at least 0.001 TAO.

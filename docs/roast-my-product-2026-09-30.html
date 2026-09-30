@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>soltao roast — 30 September 2026</title>
+<style>
+  body { max-width: 920px; margin: 48px auto; padding: 0 24px 64px; background: #10151b; color: #e1e8ef; font: 16px/1.6 system-ui, sans-serif; }
+  h1 { font-size: 28px; letter-spacing: -0.03em; color: #e8a07a; }
+  h2 { margin-top: 36px; font-size: 18px; color: #c5d0d8; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid #24303a; }
+  th { color: #8b9aa6; font-weight: 500; }
+  code { font: 13px/1.4 ui-monospace, monospace; color: #9bddc5; }
+  .muted { color: #8b9aa6; font-size: 13.5px; }
+  strong { color: #e8a07a; }
+</style>
+</head>
+<body>
+<h1>soltao — roast</h1>
+<p class="muted">30 September 2026. Live product: <a href="https://soltao.xyz/stake/">soltao.xyz/stake/</a> and the board. For people who already hold canonical Solana TAO and want it staked on Bittensor. Launched. Compared with the 24 Sep roast (65/110).</p>
+<p class="muted">Product, audience, stage, and the unproven-money-path concern are taken from the live site and HANDOVER, not a fresh questionnaire.</p>
+
+<h2>Verdict</h2>
+<p><strong>A meticulously built doorway between two chains, with live buttons on the far side that have never carried a stranger’s money, and no evidence ten people need to walk through it twice.</strong></p>
+
+<h2>Scorecard</h2>
+<table>
+  <thead><tr><th>Dimension</th><th>Score</th><th>Justification</th></tr></thead>
+  <tbody>
+    <tr><td>Value Proposition (2x)</td><td>7/10</td><td>Headline is one sentence: stake Solana TAO on Bittensor, come back to send it home. Still assumes you know what Bittensor staking is.</td></tr>
+    <tr><td>Crypto Necessity</td><td>10/10</td><td>Settlement is the product. Postgres cannot replace OFT + coldkey custody.</td></tr>
+    <tr><td>Target User Clarity</td><td>6/10</td><td>Canonical Solana TAO holders is a real niche. No named cohort, no DM list, no partner who will send people.</td></tr>
+    <tr><td>First-Time User Experience</td><td>5/10</td><td>Hero and hops are readable. Five steps, SIWS as a second key, recovery phrase, transit account. A crypto-native can finish. A mom cannot.</td></tr>
+    <tr><td>Core Loop</td><td>5/10</td><td>Holdings exist. Rewards accrue without opening the page. Nothing pings you. “Come back here” is a caption, not a habit.</td></tr>
+    <tr><td>Competitive Moat</td><td>3/10</td><td>Public OFT, public precompiles, replicable SIWS trick. A funded clone ships the corridor. Distribution is the only possible moat and it is empty.</td></tr>
+    <tr><td>Technical Execution</td><td>8/10</td><td>Rare quality for a static client: HMAC pending, confirm <code>uncertain</code>, live CSP, page and live tests. Not 9 while unstake/Move/subnet stake are unproven.</td></tr>
+    <tr><td>Naming &amp; Messaging</td><td>6/10</td><td><code>soltao.xyz</code> is a good URL. The SOLTAO coin, the board, and the stake route share a name. Disclosure exists; confusion still exists.</td></tr>
+    <tr><td>Monetization Path</td><td>7/10</td><td>0.25% on every action, shown before sign, paid in the same transaction. Not a token. Unproven at volume. Up from 4 on 24 Sep when the fee was a flat 0.003 SOL outbound.</td></tr>
+    <tr><td>Market Timing</td><td>6/10</td><td>Canonical TAO has been live since May 2026. The book is thin. No search or inbound evidence that this week is the week.</td></tr>
+    <tr><td><strong>Weighted Total</strong></td><td><strong>70/110</strong></td><td>Strong-enough engineering, weak demand proof. Up 5 from 24 Sep, almost all from fee model and loop copy, none from users.</td></tr>
+  </tbody>
+</table>
+
+<h2>The Worst Issues</h2>
+<h3>1. Live buttons without live money</h3>
+<p><strong>What’s wrong:</strong> Unstake, Move, Claim, subnet stake through this page, and first-time ATA arrival are on for everyone. Only a root forward stake and a free-TAO return to an existing token account have actually landed.</p>
+<p><strong>Why it matters:</strong> The next real user is the pilot. If Move or a fresh ATA return reverts in a way the page mishandles, they lose trust and maybe gas, and you find out in production.</p>
+<p><strong>What good looks like:</strong> One Craig-approved run each, then the honesty line can shrink because it is no longer true.</p>
+
+<h3>2. Access is not acquisition</h3>
+<p><strong>What’s wrong:</strong> The page is a complete corridor. There is still no named Solana audience, no subnet promoter, no ten people who already hold <code>taoC…BRrBY</code> and asked for this.</p>
+<p><strong>Why it matters:</strong> 0.25% of zero is zero. Engineering cannot create the holders.</p>
+<p><strong>What good looks like:</strong> A list of ten people or one subnet that will send a cohort through <code>?netuid=</code> this month. Until then, do not call this a growth product.</p>
+
+<h3>3. The name is doing three jobs</h3>
+<p><strong>What’s wrong:</strong> Board, gateway, and a StonkFun coin share “soltao”. The disclosure is honest. The first impression is still “is this the coin?”</p>
+<p><strong>Why it matters:</strong> Partners and cautious holders bounce on conflict, not on the 0.25% fee.</p>
+<p><strong>What good looks like:</strong> One spoken sentence: “soltao.xyz stakes the canonical Solana TAO mint; the SOLTAO coin is unrelated and optional.” The header almost says it. The URL still does not.</p>
+
+<h3>4. SIWS is the entire custody model</h3>
+<p><strong>What’s wrong:</strong> One domain-bound signature is the Bittensor wallet. That is elegant and it is a loaded gun. Phishing soltao.xyz, or a third-party script, is catastrophic.</p>
+<p><strong>Why it matters:</strong> There is no contract to pause. There is no admin key. There is only CSP and the user’s brain.</p>
+<p><strong>What good looks like:</strong> Keep <code>script-src 'self'</code>. Never add analytics. The warning copy stays. Hardware-wallet non-determinism stays disclosed.</p>
+
+<h3>5. Core loop is a filing cabinet</h3>
+<p><strong>What’s wrong:</strong> Holdings are excellent as a lookup. They are not a reason to open the tab on Tuesday. Alpha compounds on-chain whether you look or not.</p>
+<p><strong>Why it matters:</strong> Utility products without a return trigger get one session and a bookmark that dies.</p>
+<p><strong>What good looks like:</strong> A shareable subnet page someone actually sends, plus a last-look delta people check after emissions. Do not fake notifications you cannot send without their keys.</p>
+
+<h2>Common Sins Detected</h2>
+<ul>
+  <li><strong>Phantom users:</strong> Test wallets and one operator’s return are not traction. Do not report “wallets connected.”</li>
+  <li><strong>Bridge to nowhere (partial):</strong> The tech has a user in mind. Distribution is still a grant-shaped hole: capable corridor, unpaid traffic.</li>
+  <li><strong>Jargon overload (partial):</strong> Hero is plain. Step 3 still says Alpha, take, netuid. Info toggles help; they do not disappear the words.</li>
+  <li><strong>Token-first:</strong> Avoided for the route. The listed SOLTAO coin is the remaining smell. Keep it marked <em>ours</em> and never required.</li>
+  <li><strong>Wallet gate (partial):</strong> Value is visible before connect. Doing anything still requires a wallet in step 1. Correct for a signer product; still a bounce for browsers.</li>
+</ul>
+
+<h2>UX Red Flags</h2>
+<ul>
+  <li><strong>Wallet before value:</strong> Softened. Hero and hops show the trip. Connect is still the first action.</li>
+  <li><strong>Simulation / fees:</strong> Present. Review quotes LayerZero, priority, 0.25%, USD. This is not the failure mode.</li>
+  <li><strong>Error recovery:</strong> Resume and “do not send again” exist. Uncertain confirm is correct and anxiety-inducing. Keep it.</li>
+  <li><strong>Mobile:</strong> Deep links exist. A newcomer completing the full phone journey has not been evidenced.</li>
+  <li><strong>Shareable state:</strong> <code>?netuid=</code> and <code>?hotkey=</code> work. That is the growth surface. It is unused if no one posts the link.</li>
+  <li><strong>Token without USD:</strong> Review has a dollars row. Holdings worth is in TAO with an optional USD total. Acceptable.</li>
+</ul>
+
+<h2>Fix These Now</h2>
+<ol>
+  <li><strong>Highest impact:</strong> One real-funds unstake (and, if it frees enough, return) plus one subnet stake through the live origin. Until those land, the product’s honest sentence is still “the doorway works; the back rooms are simulated.”</li>
+  <li><strong>Easiest win:</strong> Give one subnet a <code>?netuid=</code> link and a human who will post it. Copy is already the way in and the way back. The missing piece is a URL in someone else’s channel.</li>
+  <li><strong>Existential:</strong> Name ten people who hold canonical Solana TAO and want it staked. If you cannot, stop adding features. The corridor is built. The market is the open question.</li>
+</ol>
+</body>
+</html>

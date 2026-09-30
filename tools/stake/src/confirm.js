@@ -4,6 +4,15 @@
 const landed = (st) => Boolean(st && (st.confirmationStatus === "confirmed" || st.confirmationStatus === "finalized"));
 
 /**
+ * Pass a single-host Connection (`createClients().primary`). Mixing status from one RPC
+ * with height from another is how a lag used to look like a dropped send.
+ *
+ * Pass a single-host Connection (`createClients().primary`). Mixing status from one RPC
+ * with height from another is how a lag used to look like a dropped send.
+ *
+ * Pass a single-host Connection (`createClients().primary`). Mixing status from one RPC
+ * with height from another is how a lag used to look like a dropped send.
+ *
  * Wait until `signature` is confirmed, failed, uncertain past its blockhash, or `maxWaitMs` elapses.
  *
  * `processed` is not landed. A height past `lastValidBlockHeight` is not proof the transaction
