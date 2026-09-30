@@ -8,7 +8,7 @@
 .brand-link { text-decoration: none; color: inherit; }
 
 .wallet-pill {
-  display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 0 12px;
+  display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px;
   border: 1px solid var(--line-2); border-radius: 999px; background: var(--panel);
   font: 500 12px/1 var(--mono); color: var(--ink);
 }
@@ -39,7 +39,7 @@
 .step[data-state="active"] .rs-n { color: var(--copper-txt); border-color: var(--copper-mid); background: var(--copper-dim); }
 .step[data-state="done"] .rs-n { color: var(--green); border-color: var(--green-mid); background: var(--green-dim); }
 .step-p { margin: 0 0 14px; color: var(--ink-2); font-size: 14px; max-width: 72ch; }
-.step-p.small { font-size: 12px; color: var(--ink-3); }
+.step-p.small { font-size: 13px; color: var(--ink-2); }
 .step-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
 .step-note { font: 400 12.5px/1.5 var(--sans); font-variant-numeric: tabular-nums; color: var(--ink-3); min-width: 0; overflow-wrap: anywhere; }
 .step-note[data-tone="ok"] { color: var(--green); }
@@ -58,6 +58,8 @@
 .kv-total { border-bottom: 0 !important; }
 .kv-total { padding-top: 4px; }
 .kv-total dt, .kv-total dd { color: var(--copper-txt); font-weight: 650; font-size: 15px; }
+.kv .kv-prose { flex-direction: column; align-items: flex-start; gap: 4px; }
+.kv .kv-prose dd { text-align: left; font-size: 13.5px; color: var(--ink-2); max-width: 72ch; }
 
 .skel { display: inline-block; width: 72px; height: 11px; border-radius: 3px; background: linear-gradient(90deg, var(--panel-2), var(--line), var(--panel-2)); background-size: 200% 100%; }
 @media (prefers-reduced-motion: no-preference) { .skel { animation: skel 1.2s linear infinite; } }
@@ -144,6 +146,9 @@
   box-shadow: var(--shadow), 0 0 0 1px rgba(44, 202, 181, 0.10) inset, 0 0 48px -16px rgba(44, 202, 181, 0.22);
 }
 .step { transition: border-color 300ms var(--ease), box-shadow 300ms var(--ease), opacity 300ms var(--ease); }
+@media (prefers-reduced-motion: reduce) {
+  .step, .choice-opt, .track li, .field input { transition: none; }
+}
 
 .stake-hero h1 em {
   font-style: normal;
@@ -193,24 +198,26 @@
 .holdings-change { display: block; font-size: 11.5px; color: var(--ink-3); }
 .pick td.num { text-align: right; }
 .pick tr[aria-current="true"] td { background: var(--green-dim); color: var(--ink); }
-.pick button { font: inherit; color: var(--green-txt); background: none; border: 1px solid var(--green-mid); border-radius: 6px; padding: 3px 9px; cursor: pointer; }
-.pick button:hover, .pick button:focus-visible { background: var(--green-dim); outline: none; }
+.pick button { font: inherit; color: var(--green-txt); background: none; border: 1px solid var(--green-mid); border-radius: 6px; padding: 8px 12px; min-height: 40px; cursor: pointer; }
+.pick button:hover { background: var(--green-dim); }
+.pick button:focus-visible { background: var(--green-dim); outline: 2px solid var(--green); outline-offset: 2px; }
 
 /* holdings: what the Bittensor wallet on screen holds, read from the chain on request */
 .holdings { display: grid; gap: 8px; margin-top: 10px; justify-items: start; }
 .holdings #holdings-prompt { margin: 0; max-width: 52ch; }
+.holdings #holdings-limits { margin: 0; }
 .holdings #holdings-wrap { width: 100%; display: grid; gap: 8px; }
 .move-panel { width: 100%; display: grid; gap: 8px; padding: 14px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--panel-2); }
 .move-panel h3 { margin: 0; font-size: 14px; }
 .dir-controls { gap: 8px; flex-wrap: wrap; }
-.dir-controls input, .dir-controls select { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line-2); border-radius: 8px; padding: 7px 10px; min-width: 0; }
+.dir-controls input, .dir-controls select { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line-2); border-radius: 8px; padding: 8px 12px; min-width: 0; min-height: 40px; }
 .dir-controls input { flex: 1 1 200px; }
 .dir-controls input:focus, .dir-controls select:focus { border-color: var(--green-mid); outline: none; }
 
 /* ── info toggles: the short line stays visible, the explanation opens in place ── */
 .stake-trust { margin: 0; color: var(--ink-3); font-size: 13.5px; letter-spacing: 0.01em; }
 .info { max-width: 72ch; margin: 2px 0 6px; }
-.info > summary { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; list-style: none; color: var(--ink-3); font-size: 13px; padding: 4px 0; min-height: 28px; border-radius: 6px; }
+.info > summary { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; list-style: none; color: var(--ink-3); font-size: 13px; padding: 4px 0; min-height: 40px; border-radius: 6px; }
 .info > summary::-webkit-details-marker { display: none; }
 .info > summary:hover, .info[open] > summary { color: var(--ink-2); }
 .info > summary:focus-visible { outline: 2px solid var(--green-mid); outline-offset: 2px; }
@@ -224,7 +231,7 @@
 .info-block .info-body { border-left: 0; padding: 12px 0 0; }
 .info-row { display: flex; flex-wrap: wrap; gap: 0 22px; align-items: flex-start; }
 .info-row .info { margin: 0; }
-.info-row .info[open] { flex-basis: 100%; }
+.info-row .info[open] { flex-basis: 100%; max-width: none; }
 .direction-toggle { margin-top: 20px; }
 
 /* the trust toggle sits alone between the steps and the footer: no full section padding around it */
@@ -244,13 +251,13 @@
 .profile { display: grid; gap: 10px; min-width: 0; }
 .profile:empty { display: none; }
 .profile-box { margin: 10px 0 4px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--panel-2); padding: 12px 14px; }
-.profile-box > summary { cursor: pointer; font-weight: 600; font-size: 14px; color: var(--ink); min-height: 28px; }
+.profile-box > summary { cursor: pointer; font-weight: 600; font-size: 14px; color: var(--ink); min-height: 40px; }
 .profile-box[open] > summary { margin-bottom: 8px; }
 .profile-what { margin: 0; color: var(--ink); font-size: 14.5px; line-height: 1.55; max-width: 72ch; }
 .profile-src { margin: 0; }
 .profile-src a { color: var(--green-txt); }
 .range { display: flex; flex-wrap: wrap; gap: 6px; }
-.range button { font: 500 12.5px/1 var(--sans); color: var(--ink-2); background: none; border: 1px solid var(--line-2); border-radius: 999px; padding: 7px 12px; min-height: 32px; cursor: pointer; }
+.range button { font: 500 12.5px/1 var(--sans); color: var(--ink-2); background: none; border: 1px solid var(--line-2); border-radius: 999px; padding: 8px 14px; min-height: 40px; cursor: pointer; }
 .range button[aria-pressed="true"] { color: var(--ink); border-color: var(--green-mid); background: var(--green-dim); }
 .range button:hover { color: var(--ink); }
 .range-chg { font: 600 13px/1 var(--sans); font-variant-numeric: tabular-nums; margin-left: auto; align-self: center; }

@@ -7,7 +7,7 @@ import { PublicKey } from "@solana/web3.js";
 import { ed25519 } from "@noble/curves/ed25519";
 import { CONFIG } from "./config.js";
 import { derivationMessage, signInFields, walletFromSignature, ss58Decode, ss58Encode, toHex } from "./derive.js";
-import { createClients, getTaoBalance, quoteNativeFee, quotePriorityFee, priorityFeeLamports, buildRouteTransaction, removeDust } from "./solana.js";
+import { createClients, getTaoBalance, taoAccountExists, quoteNativeFee, quotePriorityFee, priorityFeeLamports, buildRouteTransaction, removeDust } from "./solana.js";
 import { confirmSignature, mayForgetPending } from "./confirm.js";
 import { findOnSubnet, getDelegate, getFreeBalance, getUidCount, subnetValidators } from "./bittensor.js";
 import { getGasPrice } from "./evm.js";
@@ -982,7 +982,10 @@ async function quotePlanAlpha() {
     if (seq !== planQuoteSeq || planQuote !== q0) return;
     const big = bigImpact(Number(impactPct(q)));
     $("r-plan").append(` Today that buys about ${fmtUnits(q.out, 9)} Alpha: ${swapCosts(q, "TAO")}.${big ? ` ${BIG_IMPACT_TEXT}` : ""}`);
-  } catch { /* the review stands without it */ }
+  } catch (e) {
+    if (seq !== planQuoteSeq || planQuote !== q0) return;
+    $("r-plan").append(` Could not quote today's Alpha (${e.message}). The 2% limit still applies.`);
+  }
 }
 
 function renderReview(ready) {
@@ -991,7 +994,7 @@ function renderReview(ready) {
   if (state.direction === "reverse") {
     set("r-send", () => tao(state.amountLd));
     set("r-dest", () => `${state.user} (your Solana wallet)`);
-    if (!ready) { for (const id of ["r-gas", "r-lzfee", "r-rfee", "r-cost", "r-receive"]) $(id).textContent = "—"; showShare(NaN); }
+    if (!ready) { for (const id of ["r-gas", "r-lzfee", "r-rfee", "r-cost", "r-receive", "r-ata"]) $(id).textContent = "—"; showShare(NaN); }
     return;
   }
   $("r-huge-dest").textContent = ready ? state.coldkeyAddress : "—";
@@ -1181,7 +1184,7 @@ async function showHoldings() {
       : owedTotal ? ` Root rewards do not add to the stake on their own: ${tao(owedTotal)} is waiting to be claimed, and "Claim" adds it to your root stake. Each claim pays a Bittensor fee (about 0.008 TAO on 25 Sep 2026), so it only pays off once more than that has built up.`
       : rootHotkeys.size ? " Root rewards wait with the validator until claimed, and each claim pays a Bittensor fee (about 0.008 TAO on 25 Sep 2026); none is waiting yet." : "";
     const paidNote = paidShown ? ` ${paidRule(paidShown)} Moving to another validator on the same subnet swaps nothing: "Move" does it with the one chosen in step 3.` : "";
-    note("holdings-note", `Read ${new Date().toISOString().slice(11, 16)} UTC. ${positions.length ? `${positions.length} stake position${positions.length === 1 ? "" : "s"}. Subnet stakes are in that subnet's Alpha and collect their rewards in the stake itself; root stakes are in TAO.` : "No stake positions."}${yieldNote}${inAll}${changed ? " Changes since you last looked here include rewards and anything added or taken out elsewhere." : ""}${paidNote}${smallFree}${canMove() ? " Unstake, Move, Stake and Claim from this table have been checked against Bittensor's real runtime at zero cost; they have not yet carried real funds through this page." : ""}`);
+    note("holdings-note", `Read ${new Date().toISOString().slice(11, 16)} UTC. ${positions.length ? `${positions.length} stake position${positions.length === 1 ? "" : "s"}. Subnet stakes are in that subnet's Alpha and collect their rewards in the stake itself; root stakes are in TAO.` : "No stake positions."}${yieldNote}${inAll}${changed ? " Changes since you last looked here include rewards and anything added or taken out elsewhere." : ""}${paidNote}${smallFree}${canMove() ? " Unstake, Move, Stake and Claim here have not yet carried real funds through this page." : ""}`);
   } catch (e) {
     if (seq === holdingsSeq) note("holdings-note", `Could not read it from Bittensor: ${e.message}`, "bad");
   } finally {
@@ -1579,10 +1582,11 @@ function requestReturnQuote() {
     try {
       const lib = await loadReturnLib();
       const w = state.signed.wallet;
-      const [q, price, t] = await Promise.all([
+      const [q, price, t, hasAta] = await Promise.all([
         lib.quoteReturn({ amountRao: state.amountLd, solanaRecipient: solanaRecipient() }),
         getGasPrice(),
         transitState(w.transitKey, null),
+        taoAccountExists(clients.connection, state.user),
       ]);
       const plan = lib.planReturnFunding({ amountRao: state.amountLd, nativeFeeWei: q.nativeFee, gasPriceWei: price, transitNativeWei: t.native, transitWtaoWei: t.wtao });
       // soltao's fee rides with the funding transfer; with no funding transfer needed, none is charged.
@@ -1595,6 +1599,9 @@ function requestReturnQuote() {
       $("r-gas").textContent = `up to ${tao(plan.gasReserveWei / RAO)} held for gas; what is not used stays yours`;
       $("r-cost").textContent = tao(plan.fundingRao + fq.feeRao + soltaoFee);
       $("r-receive").textContent = `${fmtUnits(q.solanaAmountLd, 9)} canonical TAO`;
+      $("r-ata").textContent = hasAta
+        ? "Already open."
+        : "None yet. The bridge is built to pay the rent to open one; that path has not been observed on a live return.";
       // The bridge fee, the funding transfer's fee and soltao's, all in TAO; unused gas stays the user's, so it is left out.
       const feeRao = q.nativeFee / RAO + fq.feeRao + soltaoFee;
       showShare(state.amountLd > 0n ? Number(feeRao) / Number(state.amountLd) : NaN, { cost: `${tao(feeRao)} in fees to move ${tao(state.amountLd)}`, tenPctRao: feeRao * 10n });
@@ -1650,10 +1657,10 @@ async function runReturn({ amountRao: chosen = null, retryReverted = false, afte
       trackRev("finish", "busy", `waiting for it on Solana · ${Math.round((Date.now() - start) / 1000)}s`);
       await new Promise((r) => setTimeout(r, 8000));
     }
-    trackRev("finish", "ok", `${tao(arrivingLd(amountRao))} observed in your wallet`);
+    trackRev("finish", "ok", `${tao(arrivingLd(amountRao))} seen in your wallet`);
     clearReturn(w);
     $("sign").textContent = "Sign and send";
-    note("track-note", `Done. Your Solana TAO balance rose by ${tao(arrivingLd(amountRao))}. That is this page watching the token account, not LayerZero's delivery record — LayerZero Scan is the record of the bridge.`, "ok");
+    note("track-note", `Done. Your Solana TAO rose by ${tao(arrivingLd(amountRao))}. This page watched the token account; LayerZero Scan is the bridge record.`, "ok");
     setStep("step-status", "done");
   } catch (e) {
     const busy = document.querySelector('#track-rev li[data-s="busy"]');

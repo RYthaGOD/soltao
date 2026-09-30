@@ -540,7 +540,7 @@ if (want("F")) {
   await waitText(page, "#holdings-note", /^Read \d\d:\d\d UTC|Could not/, 90_000);
   const holdings = await page.$$eval("#holdings-body tr", (trs) => trs.map((tr) => [...tr.children].map((td) => td.textContent.trim()).join(" | ")));
   expect("holdings show free TAO and each stake position with its worth in TAO, read from the chain", holdings[0] === "Free | — | 2 TAO | 2 TAO | Stake Top up Chutes" && holdings.length === 4 && holdings.slice(1, 3).every((h) => /^Staked on subnet 1 \| 5\w+…\w+(paid stakers [+−]?\d+\.\d% in 30 days; the best here [+−]?\d+\.\d%)? \| [\d,.]+ Alpha \| ≈ [\d,.]+ TAO \| Unstake Move Profile$/.test(h)) && /2 stake positions\. Subnet stakes are in that subnet's Alpha and collect their rewards in the stake itself; root stakes are in TAO\./.test(await text(page, "#holdings-note")), `${holdings.join(" / ")} · ${await text(page, "#holdings-note")}`);
-  expect("holdings disclose Unstake/Move/Stake are runtime-checked, not real-funds-proven", /checked against Bittensor's real runtime at zero cost/.test(await text(page, "#holdings-note")) && /checked against Bittensor's real runtime at zero cost/.test(await text(page, "#holdings-prompt")));
+  expect("holdings disclose Unstake/Move/Stake are runtime-checked, not real-funds-proven", /checked against Bittensor's real runtime at zero cost/.test(await text(page, "#holdings-limits")) && /have not yet carried real funds through this page/.test(await text(page, "#holdings-note")));
   expect("root rewards waiting with a validator are listed with a Claim, and counted in the total", /^Root rewards \| 5\w+…\w+ \| —waiting to be claimed \| ≈ 0\.003 TAO \| Claim$/.test(holdings[3] || "") && /0\.003 TAO is waiting to be claimed, and "Claim" adds it to your root stake\. Each claim pays a Bittensor fee \(about 0\.008 TAO on 25 Sep 2026\), so it only pays off once more than that has built up\. Worth about [\d,.]+ TAO in all.*counting rewards still to claim/.test(await text(page, "#holdings-note")), `${holdings[3]} · ${await text(page, "#holdings-note")}`);
   await page.$eval("#holdings-body tr:nth-child(4) button", (b) => b.click());
   await waitText(page, "#move-quote", /^Claims about|Could not|The Bittensor fee/, 60_000);
@@ -637,6 +637,7 @@ if (want("F")) {
   await waitText(page, "#r-receive", /TAO|—/, 90_000);
   await waitText(page, "#r-cost", /TAO/, 90_000);
   expect("the review states what arrives on Solana", /^0\.5 canonical TAO$/.test(await text(page, "#r-receive")), await text(page, "#r-receive"));
+  expect("…and that this fresh wallet has no TAO token account yet", /^None yet\. The bridge is built to pay the rent to open one; that path has not been observed on a live return\.$/.test(await text(page, "#r-ata")), await text(page, "#r-ata"));
   expect("…and soltao's fee on the return, 0.25% of it in TAO, to soltao's Bittensor wallet", /^0\.00125 TAO → 5Cvj…QG94 \(0\.25%, at least 0\.001 TAO\)$/.test(await text(page, "#r-rfee")), await text(page, "#r-rfee"));
   expect("the return review states its fees as a share of the amount", /^(about [\d.]+%|under 1%)$/.test(await text(page, "#r-share")), await text(page, "#r-share"));
   const lz = parseFloat(await text(page, "#r-lzfee")), cost = parseFloat(await text(page, "#r-cost"));

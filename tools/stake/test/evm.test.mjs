@@ -4,6 +4,7 @@
 
 import { ethers } from "ethers";
 import { signLegacyTx, signTx, rlp, rpc, txHash } from "../src/evm.js";
+import { bittensorRpcs } from "../src/config.js";
 
 let failures = 0;
 const expect = (name, ok, detail = "") => { console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? "  — " + detail : ""}`); if (!ok) failures++; };
@@ -51,12 +52,25 @@ for (const [i, tx] of cases.entries()) {
   expect("…and an unseen one is signed as asked", plain.hash === old && ethers.Transaction.from(plain.raw).gasLimit === 45_000n);
 }
 
-// The real RPC must parse it: a zero-balance sender is refused for funds, never for format. A
-// random nonce keeps this from colliding with the same fixed shape on repeated runs, which the
-// node's mempool dedup reports as "already known" instead of the refusal being checked here.
-const unfunded = { ...cases[2], nonce: BigInt(Math.floor(Math.random() * 1_000_000)) };
-try { await rpc("eth_sendRawTransaction", [signLegacyTx(unfunded, bytes(ethers.Wallet.createRandom().privateKey))]); expect("RPC refuses an unfunded tx", false, "accepted?"); }
-catch (e) { expect("Bittensor RPC parses the transaction", /insufficient funds|already known/i.test(e.message), e.message); }
+// The real RPC must parse it: a zero-balance sender is refused for funds, never for format.
+// Post once: `rpc()` retries the same bytes, so a first "insufficient funds" is overwritten by
+// "already known" on the retry. A leftover mempool hit still is not proof — only funds-refusal is.
+let parsed = false, last = "";
+for (let i = 0; i < 4 && !parsed; i++) {
+  const unfunded = { ...cases[2], nonce: BigInt(Math.floor(Math.random() * 1_000_000)) };
+  const raw = signLegacyTx(unfunded, bytes(ethers.Wallet.createRandom().privateKey));
+  try {
+    const url = bittensorRpcs()[0];
+    const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_sendRawTransaction", params: [raw] }) });
+    const body = await res.json();
+    last = body.error?.message || (res.ok ? "accepted an unfunded sender" : `HTTP ${res.status}`);
+    if (/insufficient funds/i.test(last)) parsed = true;
+  } catch (e) {
+    last = e.message;
+    if (/insufficient funds/i.test(e.message)) parsed = true;
+  }
+}
+expect("Bittensor RPC parses the transaction (refuses an unfunded sender)", parsed, last);
 
 {
   const orig = globalThis.fetch;
@@ -87,6 +101,7 @@ catch (e) { expect("Bittensor RPC parses the transaction", /insufficient funds|a
   expect("official Solana RPC is not in connect-src (it 403s browser Origin)", !headers.includes("api.mainnet-beta.solana.com") && !nginx.includes("api.mainnet-beta.solana.com"));
   const html = readFileSync(join(root, "stake/index.html"), "utf8");
   expect("holdings copy says Unstake/Move/Stake are runtime-checked, not real-funds-proven", html.includes("checked against Bittensor's real runtime at zero cost") && html.includes("have not yet carried real funds through this page"));
+  expect("the return review has a Solana TAO account row", html.includes('id="r-ata"'));
 }
 
 console.log(failures ? `\n${failures} failed` : "\nall passed");

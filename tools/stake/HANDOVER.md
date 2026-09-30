@@ -4,12 +4,12 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-09-29 (item 31 live). **Live on soltao.xyz:** commit `fc4b204`, `stake.js?v=a683574c`,
-`return.js?v=7ac428cd`, `stake.css?v=77e376c9`. Served after `railway up --ci` (CLI exited 1 on log
-stream; Railway status SUCCESS; live poll matched). `npm test` and `test:live` all passed, including
-both PublicNode hosts, archive CSP, holdings disclosure, and subnet 64. **Still off:** Top up Chutes
-(`chutesLive: false`). **Not yet with real funds:** Move, the batched Bittensor fee, unstake, Chutes,
-a subnet stake through the live page, and a first-time Solana token-account arrival.
+Last updated: 2026-09-30 (item 33 unreleased). **Live on soltao.xyz:** commit `fc4b204`, `stake.js?v=a683574c`,
+`return.js?v=7ac428cd`, `stake.css?v=77e376c9`. **Unreleased:** items 32–33, built as `stake.js?v=f5b87523`,
+`stake.css?v=25a3abdb` (quote errors, live ATA check, copy/CSS polish). **Still off:** Top up Chutes
+(`chutesLive: false`).
+**Not yet with real funds:** Move, the batched Bittensor fee, unstake, Chutes, a subnet stake through
+the live page, and a first-time Solana token-account arrival.
 
 Previous live header (29 Sep, late): commit `830ac26`, `stake.js?v=629349d7`. Served on the first
 poll after `railway up --ci`. Shipped bug history item 29 and the first-time / core-loop copy: hero
@@ -813,6 +813,31 @@ This is **not** git-push-triggered. Steps, in order, every time:
     - Chutes stays off. Still not done with real funds: Move, batched Bittensor fee, unstake, a
       subnet stake through the live page, first-time ATA.
 
+32. **Quote errors, RPC parse proof, live ATA check (30 Sep 2026).** Zero-cost follow-up after item 31.
+    - The forward review's Alpha quote (`quotePlanAlpha`) no longer swallows a failed `simulateSwap`:
+      it appends that today's Alpha could not be quoted, and that the 2% limit still applies.
+    - `evm.test.mjs` only treats `insufficient funds` as proof the public RPC parsed a fresh
+      unfunded tx. `already known` retries with a new key/nonce (up to 4); it is not a pass.
+    - The return review reads whether the connected Solana wallet already has a canonical TAO
+      token account (`taoAccountExists`). First-time rent is still unobserved; the copy says so
+      when the account is missing.
+    - Not deployed. Built as `stake.js?v=aa71edbc` / `return.js?v=7ac428cd`. Rebuild again if you
+      edit source before `railway up --ci`.
+
+33. **Copy and hit-target polish before deploy (30 Sep 2026).** Gate on items 31–32 going live.
+    - Holdings: short prompt, disclosure in `#holdings-limits`. Holdings note no longer repeats the
+      lawyerly runtime-checked sentence; it still says Unstake/Move/Stake/Claim have not carried
+      real funds through this page.
+    - Return review: amount stays on `#r-receive`; `#r-ata` is whether the Solana TAO account is
+      already open. Arrival copy is shorter; reverse hops say "in your wallet".
+    - 40px hit targets on `.btn-sm`, holdings/pick/range buttons, info summaries, wallet pill.
+      Subnav/feed/social stay compact so the board topbar still fits "Stake route →".
+      Review prose rows wrap (`.kv-prose`). An open "How it works" takes the full row.
+      `prefers-reduced-motion` drops button and step transitions.
+    - `evm.test` posts the unfunded parse check once (not through `rpc()` retries, which turned a
+      first `insufficient funds` into `already known`).
+    - Built as `stake.js?v=f5b87523` / `stake.css?v=25a3abdb` / `return.js?v=7ac428cd`.
+
 ## Link previews and SEO
 
 `index.html` and `stake/index.html` each carry their own `og:`/`twitter:` block; they are hand-
@@ -886,8 +911,9 @@ Avoided: token-first thinking; the $SOLTAO gate was rejected and the conflict is
 
 ## Current state
 
-**As of 29 Sep 2026, item 31 live.** Production is `fc4b204` / `stake.js?v=a683574c` / `return.js?v=7ac428cd`.
-`chutesLive` stays false. `railway up --ci` exited 1 on log stream; poll the live script hash.
+**As of 30 Sep 2026.** Production is `fc4b204` / `stake.js?v=a683574c` / `return.js?v=7ac428cd`.
+Unreleased: items 32–33 (quote errors, live ATA check, copy/CSS polish), built as `stake.js?v=f5b87523`
+/ `stake.css?v=25a3abdb`. `chutesLive` stays false.
 
 ### What has real-funds proof
 - Wallet connect, SIWS, derivation, quotes, simulation.
@@ -907,11 +933,10 @@ Avoided: token-first thinking; the $SOLTAO gate was rejected and the conflict is
 - Top up Chutes (item 18). Needs one ≥0.01 TAO real top-up credited by Chutes before flipping the flag.
 
 ### Still open (not a deploy, needs Craig)
-- First-time Solana token-account rent path on a return (inferred, never observed).
-- A large subnet stake that moves the pool more than 2% by itself (review does not estimate impact;
-  exact swap quotes now warn from 1% simulated impact).
-- `evm.test.mjs`: public RPC answering "already known" for a fresh unfunded tx, so that string is
-  not proof a transaction is in the pool.
+- First-time Solana token-account rent path on a return (inferred, never observed). The return
+  review now reads whether this wallet already has a TAO token account and says so.
+- A large subnet stake that moves the pool more than 2% by itself can still be refused; the
+  review quotes the chain's own swap simulation and warns from 1% simulated impact.
 
 The 23–24 Sep deploy narrative below is historical. Trust the header and this section over it.
 `railway up --ci` exits before rollout; poll the live script hash.

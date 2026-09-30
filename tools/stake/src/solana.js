@@ -106,6 +106,12 @@ export async function getTaoBalance(connection, owner) {
   return data.readBigUInt64LE(64);
 }
 
+/** Whether this wallet already has a canonical TAO token account (empty still counts). */
+export async function taoAccountExists(connection, owner) {
+  const info = await connection.getAccountInfo(taoTokenAccount(owner));
+  return Boolean(info && info.owner.equals(TOKEN_PROGRAM) && info.data.length >= 72);
+}
+
 /** Trim to what the OFT can carry: multiples of 0.000001 TAO. */
 export const removeDust = (amountLd) => amountLd - (amountLd % CONFIG.dustLd);
 

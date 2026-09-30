@@ -5,7 +5,7 @@
 
 import { PublicKey } from "@solana/web3.js";
 import { Options } from "@layerzerolabs/lz-v2-utilities";
-import { createClients, buildRouteTransaction, quoteNativeFee, lzOptions, h160Bytes32, removeDust, getTaoBalance, quotePriorityFee, priorityFeeLamports } from "../src/solana.js";
+import { createClients, buildRouteTransaction, quoteNativeFee, lzOptions, h160Bytes32, removeDust, getTaoBalance, taoAccountExists, quotePriorityFee, priorityFeeLamports } from "../src/solana.js";
 import { CONFIG } from "../src/config.js";
 import { routeFeeLamports, actionFeeRao } from "../src/fees.js";
 import { readLamportsPerTao, decodeWhirlpool, lamportsPerTao } from "../src/orca.js";
@@ -50,7 +50,8 @@ expect("the TAO/SOL price is read from the Orca pool, and is plausible", perTao 
 // The configured fee wallet, or a stand-in until there is one; the fee as the page would set it for 0.1 TAO.
 const FEE = { wallet: CONFIG.fee.wallet ?? "11111111111111111111111111111112", lamports: routeFeeLamports(100_000_000n, perTao) };
 
-const [bal, lamports] = await Promise.all([getTaoBalance(clients.connection, HOLDER), clients.connection.getBalance(new PublicKey(HOLDER))]);
+const [bal, lamports, hasAta] = await Promise.all([getTaoBalance(clients.connection, HOLDER), clients.connection.getBalance(new PublicKey(HOLDER)), taoAccountExists(clients.connection, HOLDER)]);
+expect("the simulation holder has a canonical TAO token account", hasAta && bal > 0n, `${hasAta} · ${bal}`);
 console.log(`simulating as ${HOLDER} (${Number(bal) / 1e9} TAO, ${lamports / 1e9} SOL)`);
 
 const sim = (tx) => clients.connection.simulateTransaction(tx, { sigVerify: false, replaceRecentBlockhash: true });

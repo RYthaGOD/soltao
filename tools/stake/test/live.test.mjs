@@ -143,7 +143,7 @@ try {
   }
   expect("the plain stake page shows no subnet card", await page.$eval("#subnet-card", (el) => el.hidden));
   expect("the return direction is open (CONFIG.returnLive)", await page.evaluate(() => document.querySelector('input[name="direction"][value="reverse"]')?.disabled === false));
-  expect("holdings copy says Unstake/Move/Stake are not yet real-funds-proven", /checked against Bittensor's real runtime at zero cost/.test(await text(page, "#holdings-prompt")));
+  expect("holdings copy says Unstake/Move/Stake are not yet real-funds-proven", /checked against Bittensor's real runtime at zero cost/.test(await text(page, "#holdings-limits")));
   const csp = await page.evaluate(() => window.__csp);
   expect("/stake/: no CSP violations", csp.length === 0, csp.join(" | "));
   expect("/stake/: no page or console errors", problems.length === 0, problems.join(" | "));
