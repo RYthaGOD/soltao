@@ -313,8 +313,9 @@ PublicNode (`solana-rpc` and `solana.publicnode.com`), Helius (kept for a plan r
 Live on `soltao.xyz` since 23 Sep 2026. The fee wallet is
 `BgGFMbwUtKLifQYZogbDorEXTXYp3UKVAZSH41xQ72Na`, checked on chain as an ordinary wallet, and the
 Solana test decodes the fee instruction to confirm exactly the quoted fee goes to it. Root staking has
-been routed end to end with real funds. Subnet staking is verified against real mainnet state at
-zero cost but has not yet carried real funds. `tools/stake/HANDOVER.md` tracks exactly what has
+been routed end to end with real funds. Subnet staking through this page has also carried real
+funds (30 Sep 2026). Unstake, Move, Claim, and staking more from holdings have not.
+`tools/stake/HANDOVER.md` tracks exactly what has
 which kind of proof, and how to deploy.
 
 ## Things this deliberately does not do

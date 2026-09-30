@@ -4,11 +4,11 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-09-30 (item 35 live). **Live on soltao.xyz:** commit `754e8a1`, `stake.js?v=fb9b5ffc`,
-`return.js?v=9d4c32fb`, `stake.css?v=25a3abdb`. Helius is a same-origin `/solana-rpc` fallback.
-**Still off:** Top up Chutes (`chutesLive: false`).
-**Not yet with real funds:** Move, the batched Bittensor fee, unstake, Chutes, a subnet stake through
-the live page, and a first-time Solana token-account arrival.
+Last updated: 2026-09-30 (item 36). **Live on soltao.xyz until this rolls:** commit `754e8a1`,
+`stake.js?v=fb9b5ffc`, `return.js?v=9d4c32fb`, `stake.css?v=25a3abdb`. Page copy now says real funds
+have moved; no subnet is named. **Still off:** Top up Chutes (`chutesLive: false`).
+**Not yet with real funds:** Move, the batched Bittensor fee, unstake, Claim, staking more from
+holdings, Chutes, and a first-time Solana token-account arrival.
 
 Previous live header (29 Sep, late): commit `830ac26`, `stake.js?v=629349d7`. Served on the first
 poll after `railway up --ci`. Shipped bug history item 29 and the first-time / core-loop copy: hero
@@ -858,6 +858,13 @@ This is **not** git-push-triggered. Steps, in order, every time:
     Served on the first poll. `test:live` all passed, including `https://soltao.xyz/solana-rpc 200`
     from inside the page.
 
+36. **Say real funds have moved; do not promo a subnet (30 Sep 2026).** A stranger completed a
+    subnet stake through the live page (30 Sep 2026, Solana `FXNTL46d…`, `addStakeLimit` on netuid 4)
+    and posted the route in public. Craig did not know them. Policy: subnets come to us; we do not
+    feature one for clout. The stake page now says real funds have moved (hero trust line, who-runs,
+    holdings disclosure). It still says Unstake, Move, Claim, and staking more from holdings have
+    not. No subnet is named on the page. JS bundle unchanged (`stake.js?v=fb9b5ffc`).
+
 ## Link previews and SEO
 
 `index.html` and `stake/index.html` each carry their own `og:`/`twitter:` block; they are hand-
@@ -930,8 +937,8 @@ Avoided: token-first thinking; the $SOLTAO gate was rejected and the conflict is
 
 ## Current state
 
-**As of 30 Sep 2026.** Production is `754e8a1` / `stake.js?v=fb9b5ffc` / `stake.css?v=25a3abdb` /
-`return.js?v=9d4c32fb`. Item 35 is live (Helius behind `/solana-rpc`). `chutesLive` stays false.
+**As of 30 Sep 2026.** Item 36 ships the real-funds copy. Production is still `754e8a1` until
+Railway serves this HTML. `chutesLive` stays false. Do not feature a subnet unless they asked.
 
 ### What has real-funds proof
 - Wallet connect, SIWS, derivation, quotes, simulation.
@@ -939,12 +946,12 @@ Avoided: token-first thinking; the $SOLTAO gate was rejected and the conflict is
 - Free-TAO return to Solana (24 Sep 2026, item 17): wrap + LayerZero send landed, existing token account.
 - Error recovery / resume from chain state.
 - One hand-held third-party "Just deliver it" route (item 23). Keep-alive sweep (item 20) on that run.
+- Another Just-deliver (29 Sep 2026, `FH9zKYUT…`, not Craig).
+- Subnet stake through the live page (30 Sep 2026, stranger, `addStakeLimit` on netuid 4).
 
 ### Live on soltao.xyz, not yet with real funds
-- Subnet staking (metagraph check + `addStakeLimit`; zero-cost mainnet replay only).
-- Unstake / Stake / Move from holdings (items 13, 26).
+- Unstake / Stake / Move / Claim from holdings (items 13, 26, 21).
 - Batched 0.25% Bittensor fee (item 28).
-- Root reward claim (item 21).
 - Subnet directory, profiles, validator 30-day record (items 14, 25, 27).
 
 ### Built, gated off (`chutesLive: false`)
