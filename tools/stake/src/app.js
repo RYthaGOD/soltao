@@ -464,7 +464,8 @@ function renderDirectory() {
   }[order];
   const hist = dirSummary?.lastTime ? ` The 7 and 30 day changes compare today's price with soltao's daily readings to ${dayText(dirSummary.lastTime)}; a past move says nothing about the next one.` : " The price history could not be read, so the change columns are empty.";
   note("dir-rule", `${rows.length} of ${directory.rows.length} subnets, ${rule}. "TAO added per day" is the TAO the chain put into that pool in the last block, times 7,200 blocks (12 seconds each); it moves from block to block.${hist} Names are what each owner registered on-chain; a name is not an endorsement. Read ${at} UTC.`);
-  const current = state.netuidValid ? Number(state.netuid) : null;
+  const typed = $("netuid-in").value.trim();
+  const current = /^\d+$/.test(typed) ? Number(typed) : null;
   const fact = (cls, label, value) => {
     const s = el("span", cls);
     s.append(el("span", "dir-k", label), document.createTextNode(" "), el("span", "dir-v", value));
