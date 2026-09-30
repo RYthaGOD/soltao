@@ -4,9 +4,9 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-09-30 (item 36). **Live on soltao.xyz until this rolls:** commit `754e8a1`,
-`stake.js?v=fb9b5ffc`, `return.js?v=9d4c32fb`, `stake.css?v=25a3abdb`. Page copy now says real funds
-have moved; no subnet is named. **Still off:** Top up Chutes (`chutesLive: false`).
+Last updated: 2026-09-30 (item 36 live). **Live on soltao.xyz:** commit `5738c89`, `stake.js?v=fb9b5ffc`,
+`return.js?v=9d4c32fb`, `stake.css?v=25a3abdb`. Page copy says real funds have moved; no subnet is named.
+**Still off:** Top up Chutes (`chutesLive: false`).
 **Not yet with real funds:** Move, the batched Bittensor fee, unstake, Claim, staking more from
 holdings, Chutes, and a first-time Solana token-account arrival.
 
@@ -863,7 +863,8 @@ This is **not** git-push-triggered. Steps, in order, every time:
     and posted the route in public. Craig did not know them. Policy: subnets come to us; we do not
     feature one for clout. The stake page now says real funds have moved (hero trust line, who-runs,
     holdings disclosure). It still says Unstake, Move, Claim, and staking more from holdings have
-    not. No subnet is named on the page. JS bundle unchanged (`stake.js?v=fb9b5ffc`).
+    not. No subnet is named on the page. JS bundle unchanged (`stake.js?v=fb9b5ffc`). Live as `5738c89`
+    on the first poll.
 
 ## Link previews and SEO
 
@@ -937,8 +938,8 @@ Avoided: token-first thinking; the $SOLTAO gate was rejected and the conflict is
 
 ## Current state
 
-**As of 30 Sep 2026.** Item 36 ships the real-funds copy. Production is still `754e8a1` until
-Railway serves this HTML. `chutesLive` stays false. Do not feature a subnet unless they asked.
+**As of 30 Sep 2026.** Production is `5738c89` / `stake.js?v=fb9b5ffc` / `stake.css?v=25a3abdb` /
+`return.js?v=9d4c32fb`. Item 36 is live. `chutesLive` stays false. Do not feature a subnet unless they asked.
 
 ### What has real-funds proof
 - Wallet connect, SIWS, derivation, quotes, simulation.
