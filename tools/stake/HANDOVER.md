@@ -4,9 +4,8 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-09-30 (item 33 unreleased). **Live on soltao.xyz:** commit `fc4b204`, `stake.js?v=a683574c`,
-`return.js?v=7ac428cd`, `stake.css?v=77e376c9`. **Unreleased:** items 32–33, built as `stake.js?v=f5b87523`,
-`stake.css?v=25a3abdb` (quote errors, live ATA check, copy/CSS polish). **Still off:** Top up Chutes
+Last updated: 2026-09-30 (items 32–33 live). **Live on soltao.xyz:** commit `bd1ad57`, `stake.js?v=f5b87523`,
+`return.js?v=7ac428cd`, `stake.css?v=25a3abdb`. Quote errors, live ATA check, copy/CSS polish. **Still off:** Top up Chutes
 (`chutesLive: false`).
 **Not yet with real funds:** Move, the batched Bittensor fee, unstake, Chutes, a subnet stake through
 the live page, and a first-time Solana token-account arrival.
@@ -821,8 +820,7 @@ This is **not** git-push-triggered. Steps, in order, every time:
     - The return review reads whether the connected Solana wallet already has a canonical TAO
       token account (`taoAccountExists`). First-time rent is still unobserved; the copy says so
       when the account is missing.
-    - Not deployed. Built as `stake.js?v=aa71edbc` / `return.js?v=7ac428cd`. Rebuild again if you
-      edit source before `railway up --ci`.
+    - Live as `bd1ad57` with item 33, `stake.js?v=f5b87523`. `test:live` all passed.
 
 33. **Copy and hit-target polish before deploy (30 Sep 2026).** Gate on items 31–32 going live.
     - Holdings: short prompt, disclosure in `#holdings-limits`. Holdings note no longer repeats the
@@ -836,7 +834,8 @@ This is **not** git-push-triggered. Steps, in order, every time:
       `prefers-reduced-motion` drops button and step transitions.
     - `evm.test` posts the unfunded parse check once (not through `rpc()` retries, which turned a
       first `insufficient funds` into `already known`).
-    - Built as `stake.js?v=f5b87523` / `stake.css?v=25a3abdb` / `return.js?v=7ac428cd`.
+    - Live as `bd1ad57` / `stake.js?v=f5b87523` / `stake.css?v=25a3abdb` / `return.js?v=7ac428cd`.
+      Served on the first poll. `npm test`, page-test runs C and F, and `test:live` all passed.
 
 ## Link previews and SEO
 
@@ -911,9 +910,8 @@ Avoided: token-first thinking; the $SOLTAO gate was rejected and the conflict is
 
 ## Current state
 
-**As of 30 Sep 2026.** Production is `fc4b204` / `stake.js?v=a683574c` / `return.js?v=7ac428cd`.
-Unreleased: items 32–33 (quote errors, live ATA check, copy/CSS polish), built as `stake.js?v=f5b87523`
-/ `stake.css?v=25a3abdb`. `chutesLive` stays false.
+**As of 30 Sep 2026.** Production is `bd1ad57` / `stake.js?v=f5b87523` / `stake.css?v=25a3abdb` /
+`return.js?v=7ac428cd`. Items 32–33 are live. `chutesLive` stays false.
 
 ### What has real-funds proof
 - Wallet connect, SIWS, derivation, quotes, simulation.
