@@ -4,10 +4,9 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-09-30 (item 34). Built as `stake.js?v=b8533f54` (confirm, forget, and the OFT
-blockhash stay on the primary Solana RPC). **Live on soltao.xyz until this rolls:** commit `bd1ad57`,
-`stake.js?v=f5b87523`, `return.js?v=7ac428cd`, `stake.css?v=25a3abdb`. **Still off:** Top up Chutes
-(`chutesLive: false`).
+Last updated: 2026-09-30 (item 34 live). **Live on soltao.xyz:** commit `b8bdaf2`, `stake.js?v=b8533f54`,
+`return.js?v=7ac428cd`, `stake.css?v=25a3abdb`. Confirm, forget, and the OFT blockhash stay on the
+primary Solana RPC. **Still off:** Top up Chutes (`chutesLive: false`).
 **Not yet with real funds:** Move, the batched Bittensor fee, unstake, Chutes, a subnet stake through
 the live page, and a first-time Solana token-account arrival.
 
@@ -843,6 +842,9 @@ This is **not** git-push-triggered. Steps, in order, every time:
     `createClients()` now exposes `primary`; `confirmSignature`, the pending-forget status read, and
     `getLatestBlockhash` for the signed OFT send use it. Signed sends were already bound to the first
     URL. Reads still walk the pool. Built as `stake.js?v=b8533f54`. CSS and `return.js` unchanged.
+    Served on the first poll as `b8bdaf2`. `npm test` all passed. `test:live` matched the hash, CSP,
+    return toggle, and subnet-1 checks; it then timed out waiting on Bittensor (hotkey-note / subnet
+    64 navigation) — public RPC, not a missed deploy.
 
 ## Link previews and SEO
 
@@ -917,8 +919,8 @@ Avoided: token-first thinking; the $SOLTAO gate was rejected and the conflict is
 
 ## Current state
 
-**As of 30 Sep 2026.** This commit builds `stake.js?v=b8533f54` (item 34). Production is still
-`bd1ad57` / `stake.js?v=f5b87523` until Railway serves the new hash. `chutesLive` stays false.
+**As of 30 Sep 2026.** Production is `b8bdaf2` / `stake.js?v=b8533f54` / `stake.css?v=25a3abdb` /
+`return.js?v=7ac428cd`. Item 34 is live. `chutesLive` stays false.
 
 ### What has real-funds proof
 - Wallet connect, SIWS, derivation, quotes, simulation.
