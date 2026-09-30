@@ -4,9 +4,9 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-09-30 (item 34 live). **Live on soltao.xyz:** commit `b8bdaf2`, `stake.js?v=b8533f54`,
-`return.js?v=7ac428cd`, `stake.css?v=25a3abdb`. Confirm, forget, and the OFT blockhash stay on the
-primary Solana RPC. **Still off:** Top up Chutes (`chutesLive: false`).
+Last updated: 2026-09-30 (item 35). Built as `stake.js?v=fb9b5ffc` / `return.js?v=9d4c32fb` (Helius
+behind `POST /solana-rpc`). **Live on soltao.xyz until this rolls:** commit `b8bdaf2`,
+`stake.js?v=b8533f54`. **Still off:** Top up Chutes (`chutesLive: false`).
 **Not yet with real funds:** Move, the batched Bittensor fee, unstake, Chutes, a subnet stake through
 the live page, and a first-time Solana token-account arrival.
 
@@ -846,6 +846,15 @@ This is **not** git-push-triggered. Steps, in order, every time:
     return toggle, and subnet-1 checks; it then timed out waiting on Bittensor (hotkey-note / subnet
     64 navigation) — public RPC, not a missed deploy.
 
+35. **Helius as a same-origin Solana fallback (30 Sep 2026).** Craig supplied a working mainnet
+    Helius key. It is **not** in `config.js` or the bundle (the page is public). nginx on
+    `soltao.xyz` proxies `POST /solana-rpc` to Helius with `HELIUS_API_KEY` from Railway. Only
+    requests whose `Origin` is `https://soltao.xyz` are forwarded, so the path is not a public
+    faucet. `solanaRpcs` is PublicNode, PublicNode's second host, then `https://soltao.xyz/solana-rpc`.
+    Signed sends still never leave the first URL. Both CSPs list the proxy URL. `npm run usage`
+    uses Helius when `HELIUS_API_KEY` is set, otherwise the official Solana RPC.
+    Built as `stake.js?v=fb9b5ffc` / `return.js?v=9d4c32fb`. CSS unchanged.
+
 ## Link previews and SEO
 
 `index.html` and `stake/index.html` each carry their own `og:`/`twitter:` block; they are hand-
@@ -869,13 +878,11 @@ or a page's positioning, change these too or the shared link silently starts lyi
 - **`/stake/` only runs on `soltao.xyz` or a local host.** The SIWS message names `soltao.xyz`, and
   the GitHub Pages and Railway-generated mirrors serve no CSP, so `init()` redirects any other host
   to the canonical page. `test/live.test.mjs` checks both mirrors hand off.
-- **The Solana RPC is PublicNode (25 Sep 2026; Origin probe 29 Sep).** The Helius URL `config.js`
-  used from `fc630a3` began answering every request with `403 Secure URLs are not available on your
-  current plan`, so connecting a wallet never loaded a balance. `solanaRpcs` is both PublicNode
-  hostnames (`solana-rpc.publicnode.com`, `solana.publicnode.com`): `api.mainnet-beta.solana.com`
-  403s browser Origin, and Helius still 403s on the lapsed plan. Helius remains in both CSPs so
-  restoring the plan is a one-line change. Every URL in `solanaRpcs` / `bittensorEvmRpcs` must be
-  in **both** CSPs. A new origin that is not in the CSP looks like "Failed to fetch".
+- **The Solana RPC is PublicNode, then a same-origin Helius proxy (30 Sep 2026).** Direct Helius
+  in the browser 403'd on the old joell-lsu6ge plan. The new key is Railway `HELIUS_API_KEY`, not
+  git. `solanaRpcs` is both PublicNode hostnames plus `https://soltao.xyz/solana-rpc`. Every URL in
+  `solanaRpcs` / `bittensorEvmRpcs` must be in **both** CSPs. A new origin that is not in the CSP
+  looks like "Failed to fetch". Do not put the Helius API key in `config.js`.
 - **Space out the live test runs.** `lite.chain.opentensor.ai` rate-limits per client over a 60 s
   window (`429`, `retry-after: 60`, `x-ratelimit-policy: http_60s`), and it limits requests that
   carry a browser `Origin` more readily than bare ones. Running the mainnet replay, the page test and

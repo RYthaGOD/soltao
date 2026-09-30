@@ -6,6 +6,8 @@ FROM nginx:1.27-alpine
 # /etc/nginx/templates/*.template on boot, so the port lands in the config
 # without a custom entrypoint.
 ENV PORT=8080
+# Set on Railway; nginx substitutes it into the /solana-rpc proxy. Never put the key in git.
+ENV HELIUS_API_KEY=""
 
 COPY deploy/nginx.conf.template /etc/nginx/templates/default.conf.template
 

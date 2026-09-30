@@ -19,7 +19,7 @@ server {
     add_header X-Frame-Options          "DENY" always;
     add_header Referrer-Policy          "no-referrer" always;
     add_header Permissions-Policy       "geolocation=(), microphone=(), camera=(), payment=(), usb=()" always;
-    add_header Content-Security-Policy  "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.dexscreener.com https://api.llama.fi https://solana-rpc.publicnode.com https://solana.publicnode.com https://joell-lsu6ge-fast-mainnet.helius-rpc.com https://lite.chain.opentensor.ai https://archive.chain.opentensor.ai; base-uri 'none'; form-action 'self'; frame-ancestors 'none'" always;
+    add_header Content-Security-Policy  "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.dexscreener.com https://api.llama.fi https://solana-rpc.publicnode.com https://solana.publicnode.com https://soltao.xyz/solana-rpc https://joell-lsu6ge-fast-mainnet.helius-rpc.com https://lite.chain.opentensor.ai https://archive.chain.opentensor.ai; base-uri 'none'; form-action 'self'; frame-ancestors 'none'" always;
 
     gzip              on;
     gzip_vary         on;
@@ -52,5 +52,19 @@ server {
         access_log off;
         default_type text/plain;
         return 200 "ok\n";
+    }
+
+    # Helius behind this origin so the API key never ships in stake.js. Same-origin POSTs from
+    # https://soltao.xyz send Origin: https://soltao.xyz; anything else is 403 so this is not a public faucet.
+    location = /solana-rpc {
+        if ($http_origin != "https://soltao.xyz") { return 403; }
+        proxy_http_version 1.1;
+        proxy_set_header Host mainnet.helius-rpc.com;
+        proxy_set_header Origin "";
+        proxy_set_header Referer "";
+        proxy_ssl_server_name on;
+        proxy_read_timeout 30s;
+        proxy_connect_timeout 10s;
+        proxy_pass https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY};
     }
 }

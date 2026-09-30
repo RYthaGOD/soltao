@@ -98,6 +98,8 @@ expect("Bittensor RPC parses the transaction (refuses an unfunded sender)", pars
   for (const url of must) {
     expect(`both CSPs list ${url}`, headers.includes(url) && nginx.includes(url));
   }
+  expect("Helius is proxied at /solana-rpc with an env-substituted key", nginx.includes("location = /solana-rpc") && nginx.includes("${HELIUS_API_KEY}"));
+  expect("the Helius API key is not in the page config", !readFileSync(join(root, "tools/stake/src/config.js"), "utf8").includes("mainnet.helius-rpc.com"));
   expect("official Solana RPC is not in connect-src (it 403s browser Origin)", !headers.includes("api.mainnet-beta.solana.com") && !nginx.includes("api.mainnet-beta.solana.com"));
   const html = readFileSync(join(root, "stake/index.html"), "utf8");
   expect("holdings copy says Unstake/Move/Stake are runtime-checked, not real-funds-proven", html.includes("checked against Bittensor's real runtime at zero cost") && html.includes("have not yet carried real funds through this page"));

@@ -3,12 +3,15 @@
 // soltao's is involved: the route uses the canonical TAO OFT, wTAO and Bittensor's precompiles only.
 
 export const CONFIG = {
-  solanaRpc: "https://solana-rpc.publicnode.com", // Helius (joell-lsu6ge) answers 403 since the plan lapsed, 25 Sep 2026
-  // Browser Origin: https://soltao.xyz, measured 29 Sep 2026. PublicNode's two hostnames both return
-  // 200; api.mainnet-beta.solana.com and Helius 403. Helius stays in both CSPs for a plan restore.
+  solanaRpc: "https://solana-rpc.publicnode.com",
+  // Browser Origin: https://soltao.xyz. PublicNode's two hostnames return 200 with CORS.
+  // Helius is not called from the browser: nginx on soltao.xyz proxies POST /solana-rpc with the
+  // API key from HELIUS_API_KEY (Railway), so the key is not in this bundle or in git. Signed
+  // sends stay on the first URL. The old joell-lsu6ge host stays in CSP only.
   solanaRpcs: [
     "https://solana-rpc.publicnode.com",
     "https://solana.publicnode.com",
+    "https://soltao.xyz/solana-rpc",
   ],
   bittensorEvmRpc: "https://lite.chain.opentensor.ai",
   // Lite first (what the page tests intercept); archive when lite 429s or times out.

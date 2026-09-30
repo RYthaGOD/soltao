@@ -91,7 +91,7 @@ try {
     }
     return out;
   }, solanaRpcs());
-  expect("Solana fallback RPCs are allowed by the live CSP", solanaFallbacks.every((s) => !s.includes("blocked:")), solanaFallbacks.join(" | "));
+  expect("Solana fallback RPCs are allowed by the live CSP", solanaFallbacks.every((s) => !s.includes("blocked:") && / 200$/.test(s)), solanaFallbacks.join(" | "));
   const batch = await page.evaluate(async (url) => {
     try {
       const body = [0, 1].map((id) => ({ jsonrpc: "2.0", id, method: "eth_chainId", params: [] }));
