@@ -4,9 +4,9 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-09-30 (item 35). Built as `stake.js?v=fb9b5ffc` / `return.js?v=9d4c32fb` (Helius
-behind `POST /solana-rpc`). **Live on soltao.xyz until this rolls:** commit `b8bdaf2`,
-`stake.js?v=b8533f54`. **Still off:** Top up Chutes (`chutesLive: false`).
+Last updated: 2026-09-30 (item 35 live). **Live on soltao.xyz:** commit `754e8a1`, `stake.js?v=fb9b5ffc`,
+`return.js?v=9d4c32fb`, `stake.css?v=25a3abdb`. Helius is a same-origin `/solana-rpc` fallback.
+**Still off:** Top up Chutes (`chutesLive: false`).
 **Not yet with real funds:** Move, the batched Bittensor fee, unstake, Chutes, a subnet stake through
 the live page, and a first-time Solana token-account arrival.
 
@@ -853,7 +853,9 @@ This is **not** git-push-triggered. Steps, in order, every time:
     faucet. `solanaRpcs` is PublicNode, PublicNode's second host, then `https://soltao.xyz/solana-rpc`.
     Signed sends still never leave the first URL. Both CSPs list the proxy URL. `npm run usage`
     uses Helius when `HELIUS_API_KEY` is set, otherwise the official Solana RPC.
-    Built as `stake.js?v=fb9b5ffc` / `return.js?v=9d4c32fb`. CSS unchanged.
+    Built as `stake.js?v=fb9b5ffc` / `return.js?v=9d4c32fb`. CSS unchanged. Live as `754e8a1`.
+    Served on the first poll. `test:live` all passed, including `https://soltao.xyz/solana-rpc 200`
+    from inside the page.
 
 ## Link previews and SEO
 
@@ -926,8 +928,8 @@ Avoided: token-first thinking; the $SOLTAO gate was rejected and the conflict is
 
 ## Current state
 
-**As of 30 Sep 2026.** Production is `b8bdaf2` / `stake.js?v=b8533f54` / `stake.css?v=25a3abdb` /
-`return.js?v=7ac428cd`. Item 34 is live. `chutesLive` stays false.
+**As of 30 Sep 2026.** Production is `754e8a1` / `stake.js?v=fb9b5ffc` / `stake.css?v=25a3abdb` /
+`return.js?v=9d4c32fb`. Item 35 is live (Helius behind `/solana-rpc`). `chutesLive` stays false.
 
 ### What has real-funds proof
 - Wallet connect, SIWS, derivation, quotes, simulation.
