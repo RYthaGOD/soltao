@@ -5,9 +5,9 @@
 export const CONFIG = {
   solanaRpc: "https://solana-rpc.publicnode.com",
   // Browser Origin: https://soltao.xyz. PublicNode's two hostnames return 200 with CORS.
-  // Helius is not called from the browser: nginx on soltao.xyz proxies POST /solana-rpc with the
-  // API key from HELIUS_API_KEY (Railway), so the key is not in this bundle or in git. Signed
-  // sends stay on the first URL. The old joell-lsu6ge host stays in CSP only.
+  // Helius (free plan) is last: nginx on soltao.xyz proxies POST /solana-rpc with HELIUS_API_KEY
+  // from Railway, so the key is not in this bundle. Signed sends stay on the first URL. The old
+  // joell-lsu6ge host stays in CSP only.
   solanaRpcs: [
     "https://solana-rpc.publicnode.com",
     "https://solana.publicnode.com",

@@ -851,8 +851,9 @@ This is **not** git-push-triggered. Steps, in order, every time:
     `soltao.xyz` proxies `POST /solana-rpc` to Helius with `HELIUS_API_KEY` from Railway. Only
     requests whose `Origin` is `https://soltao.xyz` are forwarded, so the path is not a public
     faucet. `solanaRpcs` is PublicNode, PublicNode's second host, then `https://soltao.xyz/solana-rpc`.
-    Signed sends still never leave the first URL. Both CSPs list the proxy URL. `npm run usage`
-    uses Helius when `HELIUS_API_KEY` is set, otherwise the official Solana RPC.
+    Signed sends still never leave the first URL. Both CSPs list the proxy URL. The Helius plan is
+    **free**, so it stays last and `npm run usage` does not use it (a full signature scan would burn
+    the monthly credits). Pass `--rpc` if you explicitly want Helius for a count.
     Built as `stake.js?v=fb9b5ffc` / `return.js?v=9d4c32fb`. CSS unchanged. Live as `754e8a1`.
     Served on the first poll. `test:live` all passed, including `https://soltao.xyz/solana-rpc 200`
     from inside the page.
@@ -882,9 +883,10 @@ or a page's positioning, change these too or the shared link silently starts lyi
   to the canonical page. `test/live.test.mjs` checks both mirrors hand off.
 - **The Solana RPC is PublicNode, then a same-origin Helius proxy (30 Sep 2026).** Direct Helius
   in the browser 403'd on the old joell-lsu6ge plan. The new key is Railway `HELIUS_API_KEY`, not
-  git. `solanaRpcs` is both PublicNode hostnames plus `https://soltao.xyz/solana-rpc`. Every URL in
-  `solanaRpcs` / `bittensorEvmRpcs` must be in **both** CSPs. A new origin that is not in the CSP
-  looks like "Failed to fetch". Do not put the Helius API key in `config.js`.
+  git. Helius is a **free** plan: it stays last in `solanaRpcs` and `npm run usage` does not use it.
+  `solanaRpcs` is both PublicNode hostnames plus `https://soltao.xyz/solana-rpc`. Every URL in
+  `solanaRpcs` / `bittensorEvmRpcs` must be in **both** CSPs. Do not put the Helius API key in
+  `config.js` (scrapers would burn the free quota in hours).
 - **Space out the live test runs.** `lite.chain.opentensor.ai` rate-limits per client over a 60 s
   window (`429`, `retry-after: 60`, `x-ratelimit-policy: http_60s`), and it limits requests that
   carry a browser `Origin` more readily than bare ones. Running the mainnet replay, the page test and

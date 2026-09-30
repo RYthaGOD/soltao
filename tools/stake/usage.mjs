@@ -11,10 +11,12 @@
 // The fee wallet had ~940 transactions before the stake page existed, so this starts at the page's
 // launch and still filters by what a route looks like, not every inflow.
 //
-// It reads from Helius when HELIUS_API_KEY is set (full address history), otherwise Solana's public
-// RPC. PublicNode is not used here: on 25 Sep 2026 it returned only 8 signatures for the fee wallet
-// and silently dropped the 23 Sep route. A history that ends after --since, or a transaction the RPC
-// cannot return, is an error, never a smaller count.
+// It reads from Solana's public RPC by default, not the page's. PublicNode is not used here: on
+// 25 Sep 2026 it returned only 8 signatures for the fee wallet and silently dropped the 23 Sep
+// route. Helius is a free plan and the page's last-resort proxy; a full signature scan would burn
+// the monthly credits, so this script does not use HELIUS_API_KEY unless you pass --rpc.
+// A history that ends after --since, or a transaction the RPC cannot return, is an error, never a
+// smaller count.
 
 import { Connection, PublicKey } from "@solana/web3.js";
 import { CONFIG } from "./src/config.js";
@@ -25,10 +27,7 @@ const flag = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 
 const since = new Date(flag("--since") || "2026-09-21T00:00:00Z").getTime() / 1000;
 const asJson = args.includes("--json");
 
-const rpcUrl = flag("--rpc") || (process.env.HELIUS_API_KEY
-  ? `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`
-  : "https://api.mainnet-beta.solana.com");
-const connection = new Connection(rpcUrl, "confirmed");
+const connection = new Connection(flag("--rpc") || "https://api.mainnet-beta.solana.com", "confirmed");
 const wallet = new PublicKey(CONFIG.fee.wallet);
 // The route fee was a flat 0.0075 SOL at launch, then 0.003 SOL; since 29 Sep 2026 it is 0.25% of the TAO
 // sent, at least 0.0035 SOL. So a fee is any transfer to the wallet of at least the smallest of those.
