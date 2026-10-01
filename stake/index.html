@@ -26,8 +26,8 @@
 <link rel="icon" href="../favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="../logo.png">
 <link rel="stylesheet" href="../styles.css">
-<link rel="stylesheet" href="stake.css?v=1c83d7a1">
-<script src="stake.js?v=3d1eb62c" defer></script>
+<link rel="stylesheet" href="stake.css?v=50bdc3d0">
+<script src="stake.js?v=10e815f0" defer></script>
 </head>
 <body>
 <a class="skip" href="#steps">Skip to the steps</a>
@@ -126,6 +126,30 @@
     </div>
   </div>
 </div>
+
+<section class="wrap market" id="market" aria-labelledby="market-h">
+  <div class="panel market-in">
+    <h2 id="market-h">Subnets</h2>
+    <p class="step-p">Choose one to see what it does, its Alpha price chart, and the pool. That choice also fills the subnet in step 3. Nothing here is a recommendation.</p>
+    <div class="picker">
+      <button type="button" class="btn btn-ghost btn-sm" id="dir-btn">Browse subnets</button>
+      <div id="dir-wrap" hidden>
+        <div class="field-row dir-controls">
+          <input type="text" id="dir-search" autocomplete="off" spellcheck="false" placeholder="Search by name, number, or what it does" aria-label="Search subnets">
+          <select id="dir-sort" aria-label="Sort subnets">
+            <option value="netuid">By subnet number</option>
+            <option value="pool">By TAO in the pool, most first</option>
+            <option value="emission">By TAO added to the pool each day, most first</option>
+            <option value="change7">By 7-day price change, most risen first</option>
+          </select>
+        </div>
+        <p class="step-note" id="dir-rule" role="status"></p>
+        <div class="market-detail profile" id="dir-detail" hidden></div>
+        <div class="dir-list" id="dir-body" role="listbox" aria-label="Subnets"></div>
+      </div>
+    </div>
+  </div>
+</section>
 
 <ol class="wrap route-steps" id="steps">
 
@@ -345,24 +369,8 @@
         <summary id="plan-profile-h">About this subnet</summary>
         <div class="profile" id="plan-profile"></div>
       </details>
+      <p class="step-p small">The list above is where you look. Choosing a row fills this number and opens that subnet's chart.</p>
       <details class="info"><summary><span class="info-i" aria-hidden="true">i</span><span class="info-l">What's a subnet?</span></summary><div class="info-body"><p>Bittensor is made of subnets, each doing a different AI job. <b>Root (0)</b> stakes your TAO as TAO. Any other subnet converts your TAO into that subnet's own token (its Alpha) at the current price, so its value moves with that subnet.</p><p><b>Collecting rewards:</b> a subnet stake collects its rewards in the stake itself. Root rewards wait with the validator until you claim them from Your Bittensor holdings, and each claim pays a Bittensor fee (about 0.008 TAO on 25 Sep 2026). Small root stakes can take a long time to earn more than that, so root suits larger amounts.</p></div></details>
-      <div class="picker">
-        <button type="button" class="btn btn-ghost btn-sm" id="dir-btn">Browse subnets</button>
-        <div id="dir-wrap" hidden>
-          <div class="field-row dir-controls">
-            <input type="text" id="dir-search" autocomplete="off" spellcheck="false" placeholder="Search by name or number" aria-label="Search subnets">
-            <select id="dir-sort" aria-label="Sort subnets">
-              <option value="netuid">By subnet number</option>
-              <option value="pool">By TAO in the pool, most first</option>
-              <option value="emission">By TAO added to the pool each day, most first</option>
-              <option value="change7">By 7-day price change, most risen first</option>
-            </select>
-          </div>
-          <p class="step-note" id="dir-rule" role="status"></p>
-          <p class="step-note">Tap a row to choose it. The same figures as before — price, pool, TAO added per day, and the 7 and 30 day moves — sit under the name.</p>
-          <div class="dir-list" id="dir-body" role="listbox" aria-label="Subnets"></div>
-        </div>
-      </div>
       <label class="field">
         <span>Validator</span>
         <input type="text" id="hotkey-in" autocomplete="off" spellcheck="false" placeholder="5… (the validator's address)">

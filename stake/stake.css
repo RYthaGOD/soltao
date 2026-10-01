@@ -213,6 +213,10 @@
 .dir-controls input, .dir-controls select { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line-2); border-radius: 8px; padding: 8px 12px; min-width: 0; min-height: 40px; }
 .dir-controls input { flex: 1 1 200px; }
 .dir-controls input:focus, .dir-controls select:focus { border-color: var(--green-mid); outline: none; }
+.market-in { display: grid; gap: 10px; }
+.market-in h2 { margin: 0; font-size: 22px; letter-spacing: -0.02em; }
+.market-detail { border: 1px solid var(--line-2); border-radius: 10px; background: var(--panel-2); padding: 12px 14px; scroll-margin-top: 72px; }
+.market-detail[hidden] { display: none; }
 .dir-list { width: 100%; max-height: 420px; overflow-y: auto; display: grid; gap: 6px; }
 .dir-row {
   display: grid; grid-template-columns: 2.6rem minmax(0, 1fr); gap: 2px 10px; align-items: start;

@@ -505,12 +505,18 @@ async function readDirectory() {
 // Each subnet's last 31 daily prices, from soltao's own origin (`npm run history`), for the directory's
 // change columns and sparklines. A failed read only leaves those columns empty.
 let dirSummary = null;
+let dirProfiles = null;
 async function openDirectory() {
   $("dir-wrap").hidden = false; $("dir-btn").disabled = true;
   try {
     if (!directory || Date.now() - directory.at > DIRECTORY_TTL_MS) note("dir-rule", "reading every subnet from Bittensor…");
-    const [, summary] = await Promise.all([readDirectory(), dirSummary ? dirSummary : fetchJson("/stake/history/summary.json").catch(() => null)]);
+    const [, summary, profiles] = await Promise.all([
+      readDirectory(),
+      dirSummary ? dirSummary : fetchJson("/stake/history/summary.json").catch(() => null),
+      readProfiles().catch(() => null),
+    ]);
     dirSummary = summary;
+    dirProfiles = profiles;
     renderDirectory();
   } catch (e) {
     note("dir-rule", `Could not read the subnets from Bittensor: ${e.message}`, "bad");
@@ -525,7 +531,8 @@ function renderDirectory() {
   // Daily prices from the summary, only while the netuid still holds the subnet they were read for.
   const daysOf = (r) => { const s = dirSummary?.prices?.[r.netuid]; return s && s.registeredAt === r.registeredAt ? s.days : []; };
   const changeOf = (r, days) => (r.netuid === 0 || r.priceRao === null ? null : (() => { const p = priceDaysAgo(daysOf(r), days, nowSec); return p === null ? null : changeBps(p, Number(r.priceRao)); })());
-  let rows = directory.rows.filter((r) => !q || String(r.netuid) === q || r.name.toLowerCase().includes(q) || r.symbol.toLowerCase().includes(q))
+  const aboutOf = (r) => (r.netuid === 0 ? "Root stakes TAO as TAO" : (dirProfiles?.profiles?.[String(r.netuid)]?.what || r.description || ""));
+  let rows = directory.rows.filter((r) => !q || String(r.netuid) === q || r.name.toLowerCase().includes(q) || r.symbol.toLowerCase().includes(q) || aboutOf(r).toLowerCase().includes(q))
     .map((r) => ({ ...r, ch7: changeOf(r, 7), ch30: changeOf(r, 30) }));
   const most = (key) => (a, b) => ((b[key] ?? -1n) > (a[key] ?? -1n) ? 1 : (b[key] ?? -1n) < (a[key] ?? -1n) ? -1 : a.netuid - b.netuid);
   if (order === "pool") rows = rows.filter((r) => r.netuid !== 0).sort(most("taoInRao"));
@@ -554,7 +561,12 @@ function renderDirectory() {
     btn.setAttribute("aria-label", `Use subnet ${r.netuid}, ${r.name}`);
     if (r.netuid === current) btn.setAttribute("aria-current", "true");
     if (r.description) btn.title = r.description;
-    btn.addEventListener("click", () => { $("netuid-in").value = String(r.netuid); onNetuid(); renderDirectory(); });
+    btn.addEventListener("click", () => {
+      $("netuid-in").value = String(r.netuid);
+      showDirDetail(r.netuid);
+      onNetuid();
+      renderDirectory();
+    });
     const ch7 = el("span", "dir-ch7"); ch7.append(bpsNode(r.ch7));
     const top = el("span", "dir-top");
     top.append(el("span", "dir-name", `${r.name}${r.symbol ? ` ${r.symbol}` : ""}`), ch7);
@@ -677,9 +689,38 @@ const taoWhole = (tao) => `${Math.round(tao).toLocaleString("en-US")} TAO`;
 const usdOfTao = (taoAmount) => (lastUsd?.tao ? ` (about ${fmtUsd(taoAmount * lastUsd.tao)})` : "");
 
 function hidePlanProfile() { $("plan-profile-box").hidden = true; $("plan-profile").replaceChildren(); profileSeqs.set("plan-profile", (profileSeqs.get("plan-profile") || 0) + 1); }
+/** The chart and figures for the subnet chosen in the list. Root has no pool, so it gets a short note. */
+function showDirDetail(netuid) {
+  const box = $("dir-detail");
+  const id = String(netuid);
+  const same = !box.hidden && box.dataset.netuid === id && box.dataset.ready === "1";
+  box.hidden = false;
+  box.dataset.netuid = id;
+  if (!same) {
+    if (netuid === 0) {
+      box.dataset.ready = "1";
+      box.replaceChildren(
+        el("p", "profile-what", "Root"),
+        el("p", "step-note", "Root stakes TAO as TAO. It has no Alpha pool, so there is no price chart. Any other subnet converts the TAO you stake into that subnet's Alpha at the pool's price."),
+      );
+    } else {
+      delete box.dataset.ready;
+      renderProfile(box, netuid, { full: true }).then(() => { if (box.dataset.netuid === id) box.dataset.ready = "1"; });
+    }
+  }
+  box.scrollIntoView({ block: "nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+}
 function showPlanProfile(netuid) {
   $("plan-profile-box").hidden = false;
   $("plan-profile-h").textContent = `About subnet ${netuid}`;
+  // The list already opened this chart: point there rather than read it twice.
+  if (!$("dir-detail").hidden && $("dir-detail").dataset.netuid === String(netuid)) {
+    profileSeqs.set("plan-profile", (profileSeqs.get("plan-profile") || 0) + 1);
+    const p = el("p", "step-note");
+    p.append(Object.assign(el("a", "", "Its chart and figures are in the subnet list ↑"), { href: "#dir-detail" }));
+    $("plan-profile").replaceChildren(p);
+    return;
+  }
   // A subnet page already shows this subnet's profile at the top: point there rather than read it twice.
   if (!$("subnet-card").hidden && $("subnet-card-n").textContent === String(netuid)) {
     profileSeqs.set("plan-profile", (profileSeqs.get("plan-profile") || 0) + 1);
