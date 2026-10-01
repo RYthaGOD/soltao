@@ -9,9 +9,9 @@ Solana wallet, including onto a subnet, and bring free TAO back. One stranger ha
 through the page. Unstake, Move, Claim, staking more from holdings, and the batched Bittensor fee are
 open and have not carried real funds.
 
-The $SOLTAO holder discount on the 0.25% fee (HANDOVER item 38) is built as `stake.js?v=3d1eb62c` and
-`return.js?v=cc30346f`, and is not on soltao.xyz yet. Ship that, then prove the holdings actions with
-real funds. Do not start a new feature, and do not name a subnet, until those two are done.
+The $SOLTAO holder discount on the 0.25% fee (HANDOVER item 38) is live as of 1 Oct 2026
+(`stake.js?v=3d1eb62c`). Next is to prove Unstake, Move, Claim, and the batched Bittensor fee with
+real funds. Do not start a new feature, and do not name a subnet, until that is done.
 
 Chutes top-up stays switched off. Marketing assets and the vault research scripts in the working tree
 are not part of the stake route.
