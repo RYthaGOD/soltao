@@ -10,7 +10,7 @@
 // change: the coldkey's free balance and this position's stake, read before and after.
 
 import { CONFIG } from "./config.js";
-import { actionFeeRao } from "./fees.js";
+import { actionFeeRao, feeWithOff } from "./fees.js";
 import { dispatchResult, settleSigned } from "./settle.js";
 import { accountNonce, alphaPriceRao, coldkeySigner, extrinsicOutcome, freeBalance, prepareRootClaim, prepareStakeMove, rootPayout, stakeOf, submitSigned } from "./substrate.js";
 
@@ -37,9 +37,9 @@ export function limitPrice(kind, priceRao, toleranceBps) {
  * soltao's fee on a stake move (src/fees.js), from what it moves in TAO at the pool's price: the TAO staked,
  * or the TAO value of the Alpha unstaked or moved. Paid in TAO with the move, all or nothing.
  */
-export function moveFeeRao(kind, netuid, amount, priceRao) {
+export function moveFeeRao(kind, netuid, amount, priceRao, offBps = 0n) {
   const value = kind === "stake" || Number(netuid) === 0 ? BigInt(amount) : (BigInt(amount) * BigInt(priceRao)) / 1_000_000_000n;
-  return actionFeeRao(value);
+  return actionFeeRao(value, feeWithOff(offBps));
 }
 
 const str = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === "bigint" ? String(v) : v]));
@@ -50,7 +50,7 @@ const str = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, type
  * the change in the position's stake. `progress` is the last checkpoint; pass it back to resume.
  */
 export async function runStakeMove({
-  mnemonic, kind, hotkey, netuid, amount, toleranceBps = CONFIG.subnetPriceToleranceBps, progress = {},
+  mnemonic, kind, hotkey, netuid, amount, toleranceBps = CONFIG.subnetPriceToleranceBps, offBps = 0n, progress = {},
   onStep = () => {}, onCheckpoint = () => {}, waitMs = 2 * 60_000, pollMs = 4_000, ops = realOps,
 }) {
   if (kind !== "stake" && kind !== "unstake") throw new Error(`unknown stake move ${kind}`);
@@ -87,7 +87,7 @@ export async function runStakeMove({
   const amt = BigInt(amount);
   if (amt <= 0n) throw new Error("enter an amount above zero");
   if (kind === "unstake" && amt > stakeBefore) throw new Error("that is more than this position holds");
-  const soltaoFeeRao = moveFeeRao(kind, netuid, amt, price);
+  const soltaoFeeRao = moveFeeRao(kind, netuid, amt, price, offBps);
   if (kind === "stake" && amt + soltaoFeeRao > freeBefore) throw new Error("that and soltao's fee are more free TAO than this wallet holds");
   // An unstake pays the fee out of what it frees, so it has to free more than the fee.
   if (kind === "unstake" && (Number(netuid) === 0 ? amt : (amt * price) / 1_000_000_000n) <= soltaoFeeRao) throw new Error("that is worth less than soltao's fee on it");
@@ -122,7 +122,7 @@ export function moveLimit(fromPriceRao, toPriceRao, toleranceBps) {
  * Returns { done, refused, moved, received }; `progress` is the last checkpoint, pass it back to resume.
  */
 export async function runStakeSwitch({
-  mnemonic, from, to, amount, toleranceBps = CONFIG.subnetPriceToleranceBps, progress = {},
+  mnemonic, from, to, amount, toleranceBps = CONFIG.subnetPriceToleranceBps, offBps = 0n, progress = {},
   onStep = () => {}, onCheckpoint = () => {}, waitMs = 2 * 60_000, pollMs = 4_000, ops = realOps,
 }) {
   const coldkey = ops.signerAddress(mnemonic);
@@ -155,7 +155,7 @@ export async function runStakeSwitch({
   if (amt > fromBefore) throw new Error("that is more than this position holds");
   const limitRao = fromNetuid === toNetuid ? 0n : moveLimit(fromPrice, toPrice, toleranceBps);
   // The fee comes from free TAO, since a move frees none.
-  const soltaoFeeRao = moveFeeRao("move", fromNetuid, amt, fromPrice), free = await ops.free(coldkey);
+  const soltaoFeeRao = moveFeeRao("move", fromNetuid, amt, fromPrice, offBps), free = await ops.free(coldkey);
   if (free <= soltaoFeeRao) throw new Error(`soltao's fee on this move is ${Number(soltaoFeeRao) / 1e9} TAO, paid from free TAO, and this wallet has ${Number(free) / 1e9} TAO free`);
   onStep("move", "busy", "signing");
   const rec = await ops.prepare(mnemonic, { kind: "move", hotkey: from.hotkey, netuid: fromNetuid, toHotkey: to.hotkey, toNetuid, amount: amt, limitRao, soltaoFeeRao });
@@ -179,7 +179,7 @@ export async function runStakeSwitch({
  * Returns { done, refused, gained, stakeAfter }; `progress` is the last checkpoint, pass it back to resume.
  */
 export async function runRootClaim({
-  mnemonic, hotkey, progress = {}, onStep = () => {}, onCheckpoint = () => {}, waitMs = 2 * 60_000, pollMs = 4_000, ops = realOps,
+  mnemonic, hotkey, offBps = 0n, progress = {}, onStep = () => {}, onCheckpoint = () => {}, waitMs = 2 * 60_000, pollMs = 4_000, ops = realOps,
 }) {
   const coldkey = ops.signerAddress(mnemonic);
   let saved = { ...progress };
@@ -208,7 +208,7 @@ export async function runRootClaim({
   const [stakeBefore, payout] = await Promise.all([ops.stakeOf(coldkey, hotkey, 0), ops.rootPayout(coldkey, hotkey)]);
   if (payout <= 0n) throw new Error("no root rewards are waiting with this validator");
   // A claim pays into the root stake, not free TAO, so the fee comes from free TAO.
-  const soltaoFeeRao = actionFeeRao(payout), free = await ops.free(coldkey);
+  const soltaoFeeRao = actionFeeRao(payout, feeWithOff(offBps)), free = await ops.free(coldkey);
   if (free <= soltaoFeeRao) throw new Error(`soltao's fee on this claim is ${Number(soltaoFeeRao) / 1e9} TAO, paid from free TAO, and this wallet has ${Number(free) / 1e9} TAO free`);
   onStep("claim", "busy", "signing");
   const rec = await ops.prepareClaim(mnemonic, hotkey, soltaoFeeRao);

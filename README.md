@@ -248,7 +248,11 @@ never less than 0.0035 SOL, with the TAO valued at the on-chain price of the dee
 `src/orca.js`). On Bittensor (stake, unstake, Move, root claims, Chutes top-ups, the return to Solana)
 it is paid in TAO, never less than 0.001 TAO, to soltao's Bittensor wallet
 `5Cvj3sq8RU2m6vFQmz2jFVix8sqBfWcuqyGKaCnMXyf9QG94`, in one `utility.batchAll` with the action, so an
-action the chain refuses pays nothing. Every fee is shown, with where it goes, before anything is signed.
+action the chain refuses pays nothing. Holding $SOLTAO in the connected Solana wallet's associated
+token account lowers the percentage only: 10 million or more takes 25% off (0.1875%), 50 million or
+more takes half (0.125%). The floors stay. The balance is read when the fee is quoted and again before
+signing; a failed read charges the full 0.25%. No $SOLTAO is required. Every fee is shown, with where
+it goes, before anything is signed.
 With no contract, anyone can bridge to their own address without the page and skip it; the fee pays for
 the page, not for access.
 

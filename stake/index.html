@@ -27,7 +27,7 @@
 <link rel="apple-touch-icon" href="../logo.png">
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="stake.css?v=1c83d7a1">
-<script src="stake.js?v=e3bec6b6" defer></script>
+<script src="stake.js?v=3d1eb62c" defer></script>
 </head>
 <body>
 <a class="skip" href="#steps">Skip to the steps</a>
@@ -80,7 +80,8 @@
     disclosure below). Your keys are made and kept in this browser and never sent to them, and there is no
     soltao contract holding funds. Real funds have moved through this page from Solana onto Bittensor.
     You do trust this page's code, which is open source. Its only charge is
-    0.25% of what you move, shown before you sign.</p></div></details>
+    0.25% of what you move, shown before you sign. Holding 10 million $SOLTAO or more in this Solana
+    wallet takes 25% off that percentage; 50 million takes half off. The minimums stay, and none is required.</p></div></details>
   </div>
 </section>
 
@@ -401,10 +402,10 @@
       <div class="dir-fwd kv-prose"><dt>On arrival</dt><dd id="r-plan">—</dd></div>
       <div class="dir-fwd kv-prose"><dt>To get it back</dt><dd id="r-later">—</dd></div>
       <div><dt>Bittensor fee (TAO)</dt><dd class="num" id="r-gas">—</dd></div>
-      <div class="dir-rev" hidden><dt>soltao fee (0.25%, TAO)</dt><dd class="num" id="r-rfee">—</dd></div>
+      <div class="dir-rev" hidden><dt id="r-rfee-label">soltao fee (0.25%, TAO)</dt><dd class="num" id="r-rfee">—</dd></div>
       <div><dt>Bridge fee</dt><dd class="num" id="r-lzfee">—</dd></div>
       <div class="dir-fwd"><dt>Solana fee</dt><dd class="num" id="r-prio">—</dd></div>
-      <div class="dir-fwd"><dt>soltao fee (0.25%)</dt><dd class="num" id="r-fee">—</dd></div>
+      <div class="dir-fwd"><dt id="r-fee-label">soltao fee (0.25%)</dt><dd class="num" id="r-fee">—</dd></div>
       <div class="kv-total dir-fwd"><dt>Total SOL</dt><dd class="num" id="r-total">—</dd></div>
       <div class="dir-fwd"><dt>In dollars, roughly</dt><dd class="num" id="r-usd">—</dd></div>
       <div><dt>Fees, as a share of what you send</dt><dd class="num" id="r-share">—</dd></div>
@@ -423,7 +424,7 @@
     <p class="dir-rev" hidden>Your Bittensor wallet funds your transit account, which wraps the TAO and sends it
       over LayerZero. Bridge fee and gas are paid in TAO there; unused gas stays yours. If this Solana wallet
       has no TAO account yet, the review says so, and the bridge is built to pay the rent to open one.
-      soltao's fee, 0.25% of what you bring back and at least 0.001 TAO, goes with the first transfer from your Bittensor wallet.</p></div></details>
+      soltao's fee, 0.25% of what you bring back and at least 0.001 TAO, goes with the first transfer from your Bittensor wallet. Holding $SOLTAO in this Solana wallet can lower that percentage; the review shows the rate.</p></div></details>
     <p class="sign-warn"><strong>Keep this page open until step 5 finishes.</strong></p>
     <details class="info"><summary><span class="info-i" aria-hidden="true">i</span><span class="info-l">What if I close it?</span></summary><div class="info-body"><p>Once the bridge delivers, usually within minutes, the page signs the Bittensor steps itself; your wallet will not ask again. If the page closes, come back, sign the same message in step 2, and it finishes. Nothing is lost.</p></div></details>
 
@@ -517,7 +518,9 @@
   <p class="foot-dis">
     <strong>Fees:</strong> soltao charges 0.25% of what you move — in SOL on a route from Solana, at least
       0.0035 SOL, with TAO valued from the Orca TAO/SOL pool; in TAO on Bittensor, at least 0.001 TAO.
-      Shown before you sign and paid in the same transaction. LayerZero's fee is quoted live from the TAO
+      Shown before you sign and paid in the same transaction. Holding 10 million $SOLTAO or more in the
+      connected wallet takes 25% off that percentage; 50 million takes half off. The minimums stay.
+      A balance that cannot be read pays the full 0.25%. None is required. LayerZero's fee is quoted live from the TAO
       program. Bittensor gas is paid in TAO from what arrives. There is no soltao contract.
   </p>
   <p class="foot-dis">

@@ -5,9 +5,9 @@
 
 import { PublicKey } from "@solana/web3.js";
 import { Options } from "@layerzerolabs/lz-v2-utilities";
-import { createClients, buildRouteTransaction, quoteNativeFee, lzOptions, h160Bytes32, removeDust, getTaoBalance, taoAccountExists, quotePriorityFee, priorityFeeLamports } from "../src/solana.js";
+import { createClients, buildRouteTransaction, quoteNativeFee, lzOptions, h160Bytes32, removeDust, getTaoBalance, getSoltaoBalance, readTokenAmount, taoAccountExists, quotePriorityFee, priorityFeeLamports } from "../src/solana.js";
 import { CONFIG } from "../src/config.js";
-import { routeFeeLamports, actionFeeRao } from "../src/fees.js";
+import { routeFeeLamports, actionFeeRao, feeRuleText, feeWithOff, holderOffBps } from "../src/fees.js";
 import { readLamportsPerTao, decodeWhirlpool, lamportsPerTao } from "../src/orca.js";
 
 let failures = 0;
@@ -47,6 +47,14 @@ expect("the TAO/SOL price is read from the Orca pool, and is plausible", perTao 
   expect("the route fee is 0.25% of the TAO sent in SOL", routeFeeLamports(4_000_000_000n, p) === 25_000_000n, String(routeFeeLamports(4_000_000_000n, p)));
   expect("…never less than 0.0035 SOL", routeFeeLamports(100_000_000n, p) === 3_500_000n && routeFeeLamports(0n, p) === 3_500_000n);
   expect("a Bittensor action's fee is 0.25% in TAO, never less than 0.001 TAO", actionFeeRao(10_000_000_000n) === 25_000_000n && actionFeeRao(100_000_000n) === 1_000_000n);
+  // $SOLTAO holding lowers the percentage only. 10 million takes 25% off, 50 million takes half.
+  // Floors stay, so a small route is still 0.0035 SOL and a small action is still 0.001 TAO.
+  const raw = (tokens) => tokens * 1_000_000n;
+  const cut = (tokens) => feeWithOff(holderOffBps(raw(tokens)));
+  expect("under 10 million $SOLTAO the fee is unchanged", holderOffBps(raw(9_999_999n)) === 0n && routeFeeLamports(4_000_000_000n, p, cut(9_999_999n)) === 25_000_000n && feeRuleText("SOL", cut(0n)) === "0.25%, at least 0.0035 SOL");
+  expect("10 million $SOLTAO takes 25% off the percentage", holderOffBps(raw(10_000_000n)) === 2_500n && routeFeeLamports(4_000_000_000n, p, cut(10_000_000n)) === 18_750_000n && actionFeeRao(1_000_000_000n, cut(10_000_000n)) === 1_875_000n && feeRuleText("TAO", cut(10_000_000n)) === "0.1875%, 25% off the 0.25%, at least 0.001 TAO");
+  expect("50 million $SOLTAO takes half off, and a holding between the tiers stays at 25%", holderOffBps(raw(49_999_999n)) === 2_500n && holderOffBps(raw(50_000_000n)) === 5_000n && routeFeeLamports(4_000_000_000n, p, cut(50_000_000n)) === 12_500_000n && actionFeeRao(1_000_000_000n, cut(50_000_000n)) === 1_250_000n && feeRuleText("SOL", cut(50_000_000n)) === "0.125%, 50% off the 0.25%, at least 0.0035 SOL");
+  expect("a holder discount does not lower the floor", routeFeeLamports(100_000_000n, p, cut(50_000_000n)) === 3_500_000n && actionFeeRao(100_000_000n, cut(50_000_000n)) === 1_000_000n);
   // The same pool described with its mints the other way round (and the price inverted) prices the same.
   const real = decodeWhirlpool(await clients.connection.getAccountInfo(new PublicKey(CONFIG.orca.pool)));
   const flipped = lamportsPerTao({ mintA: real.mintB, mintB: real.mintA, sqrtPriceX64: (1n << 128n) / real.sqrtPriceX64 });
@@ -56,9 +64,26 @@ expect("the TAO/SOL price is read from the Orca pool, and is plausible", perTao 
 // The configured fee wallet, or a stand-in until there is one; the fee as the page would set it for 0.1 TAO.
 const FEE = { wallet: CONFIG.fee.wallet ?? "11111111111111111111111111111112", lamports: routeFeeLamports(100_000_000n, perTao) };
 
-const [bal, lamports, hasAta] = await Promise.all([getTaoBalance(clients.connection, HOLDER), clients.connection.getBalance(new PublicKey(HOLDER)), taoAccountExists(clients.connection, HOLDER)]);
+const [bal, lamports, hasAta, soltaoBal, mintInfo] = await Promise.all([
+  getTaoBalance(clients.connection, HOLDER),
+  clients.connection.getBalance(new PublicKey(HOLDER)),
+  taoAccountExists(clients.connection, HOLDER),
+  getSoltaoBalance(clients.connection, HOLDER),
+  clients.connection.getAccountInfo(new PublicKey(CONFIG.soltao.mint)),
+]);
 expect("the simulation holder has a canonical TAO token account", hasAta && bal > 0n, `${hasAta} · ${bal}`);
-console.log(`simulating as ${HOLDER} (${Number(bal) / 1e9} TAO, ${lamports / 1e9} SOL)`);
+expect("the simulation holder is under the $SOLTAO discount, so page tests still see 0.25%", soltaoBal < 10_000_000n * 1_000_000n, String(soltaoBal));
+expect("$SOLTAO is a Token-2022 mint with 6 decimals", Boolean(mintInfo) && mintInfo.owner.equals(new PublicKey(CONFIG.soltao.program)) && mintInfo.data[44] === CONFIG.soltao.decimals, mintInfo ? `${mintInfo.owner.toBase58()} decimals ${mintInfo.data[44]}` : "missing");
+{
+  const data = Buffer.alloc(200);
+  new PublicKey(CONFIG.soltao.mint).toBuffer().copy(data, 0);
+  new PublicKey(HOLDER).toBuffer().copy(data, 32);
+  data.writeBigUInt64LE(12_000_000n * 1_000_000n, 64);
+  const program = new PublicKey(CONFIG.soltao.program);
+  expect("a Token-2022 account's amount is what the discount reads", readTokenAmount({ owner: program, data }, CONFIG.soltao.mint, HOLDER, program) === 12_000_000n * 1_000_000n);
+  expect("the wrong program is not a discount", readTokenAmount({ owner: new PublicKey(CONFIG.taoMint), data }, CONFIG.soltao.mint, HOLDER, program) === 0n);
+}
+console.log(`simulating as ${HOLDER} (${Number(bal) / 1e9} TAO, ${lamports / 1e9} SOL, ${Number(soltaoBal) / 1e6} $SOLTAO)`);
 
 const sim = (tx) => clients.connection.simulateTransaction(tx, { sigVerify: false, replaceRecentBlockhash: true });
 const why = (r) => JSON.stringify(r.value.err) + " " + (r.value.logs || []).filter((l) => /Error|failed|insufficient/i.test(l)).slice(-3).join(" | ");

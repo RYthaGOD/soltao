@@ -71,6 +71,19 @@ export const CONFIG = {
     minLamports: 3_500_000n, // 0.0035 SOL
     minRao: 1_000_000n, // 0.001 TAO
   },
+  // $SOLTAO (README, "The conflict"): not required. A balance in the connected wallet's associated
+  // token account lowers the percentage above and nothing else. Token-2022, 6 decimals, fixed 1e9
+  // supply, read from the mint on 20 Sep 2026. Tiers are whole tokens; the highest match wins.
+  // 10 million takes 25% off (the fee becomes 0.1875%), 50 million takes half (0.125%). Floors stay.
+  soltao: {
+    mint: "8P1XmDhzU8qR3oiXHd2YfmBpB92Rn4hwunMsMGdghvCn",
+    program: "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+    decimals: 6,
+    tiers: [
+      { minTokens: 10_000_000n, offBps: 2_500n },
+      { minTokens: 50_000_000n, offBps: 5_000n },
+    ],
+  },
   // The pool the route's fee values TAO at (src/orca.js): the deepest canonical TAO/SOL pool on Solana.
   orca: { program: "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc", pool: "BM1KpngQa9efH9k6cDvRGatGqE95xbZdLKJHdFKcmBMC" },
 

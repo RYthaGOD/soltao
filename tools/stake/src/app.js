@@ -7,7 +7,7 @@ import { PublicKey } from "@solana/web3.js";
 import { ed25519 } from "@noble/curves/ed25519";
 import { CONFIG } from "./config.js";
 import { derivationMessage, signInFields, walletFromSignature, ss58Decode, ss58Encode, toHex } from "./derive.js";
-import { createClients, getTaoBalance, taoAccountExists, quoteNativeFee, quotePriorityFee, priorityFeeLamports, buildRouteTransaction, removeDust } from "./solana.js";
+import { createClients, getTaoBalance, getSoltaoBalance, taoAccountExists, quoteNativeFee, quotePriorityFee, priorityFeeLamports, buildRouteTransaction, removeDust } from "./solana.js";
 import { confirmSignature, mayForgetPending } from "./confirm.js";
 import { findOnSubnet, getDelegate, getFreeBalance, getUidCount, subnetValidators } from "./bittensor.js";
 import { getGasPrice } from "./evm.js";
@@ -15,7 +15,7 @@ import { usdPrices, fmtUsd } from "./prices.js";
 import { fitReturnAmount } from "./fit.js";
 import { sealRoute, readRoute, untrustedPlan, sealRecord, openRecord } from "./pending.js";
 import { finishRoute, transitState, minStakeAmount, stakeGasReserve, sweepFloor } from "./route.js";
-import { routeFeeLamports, actionFeeRao, feeRuleText } from "./fees.js";
+import { routeFeeLamports, actionFeeRao, feeRuleText, feeRateText, feeCfgFor, holderOffBps } from "./fees.js";
 import { readLamportsPerTao } from "./orca.js";
 import { rangeSeries, changeBps, priceDaysAgo, coversRange, dateText, deregStanding, blockTime, chartGeometry, nearestPoint } from "./subnet_profile.js";
 
@@ -29,7 +29,7 @@ const state = {
   signed: null, mode: "derive",
   coldkey: null, coldkeyAddress: null, mustAck: false,
   plan: "stake", netuid: 0n, netuidValid: true, netuidChecking: false, hotkey: null, amountLd: 0n, reserveRao: CONFIG.defaultReserveRao,
-  gasPrice: null, nativeFee: null, priorityMicro: null, feeLamports: null, quoteSeq: 0,
+  gasPrice: null, nativeFee: null, priorityMicro: null, feeLamports: null, feeOffBps: null, returnFeeRao: null, soltaoRaw: null, quoteSeq: 0,
   running: false, unfinished: null, transitRead: false, direction: "forward",
   chutesPrefill: null, // a Chutes payment address from a ?chutes= link
   ret: { free: null, quote: null }, // the return direction: coldkey free TAO (rao), the current quote
@@ -70,6 +70,81 @@ function parseUnits(input, decimals) {
   return BigInt(w || "0") * 10n ** BigInt(decimals) + BigInt((f + "0".repeat(decimals)).slice(0, decimals));
 }
 const parseTao = (input) => parseUnits(input, 9);
+
+// $SOLTAO in the connected wallet lowers the percentage only. Unread or zero is the full 0.25%.
+// A quote freezes one `holderView` and uses it for the amount, the words, and the tier it will sign.
+// Reading state again after an await can see a newer balance and charge a fee the review did not show.
+function holderView(raw = state.soltaoRaw) {
+  return { raw, cfg: feeCfgFor(raw ?? 0n) };
+}
+function holderFeeRao(value, view = holderView()) { return actionFeeRao(value, view.cfg); }
+function feeWords(unit, view = holderView()) {
+  const rule = feeRuleText(unit, view.cfg);
+  if (!(view.cfg.offBps > 0n) || view.raw == null) return rule;
+  return `${rule}; you hold ${fmtUnits(view.raw, CONFIG.soltao.decimals, 0)} $SOLTAO`;
+}
+function paintFeeLabel(id, withTao, view = holderView()) {
+  const el = $(id);
+  if (!el) return;
+  const rate = feeRateText(view.cfg);
+  el.textContent = withTao ? `soltao fee (${rate}%, TAO)` : `soltao fee (${rate}%)`;
+}
+async function readHolder() { return holderView(await readSoltao()); }
+async function readSoltao() {
+  if (!state.user) { state.soltaoRaw = 0n; return 0n; }
+  try {
+    state.soltaoRaw = await getSoltaoBalance(clients.connection, state.user);
+    return state.soltaoRaw;
+  } catch {
+    state.soltaoRaw = null;
+    return null;
+  }
+}
+/**
+ * The cut to charge, matching the quote the user is looking at. Null means do not sign: the balance
+ * changed, or a discounted fee could not be read again. A failed re-read of a full-fee quote still
+ * signs the full fee. `quotedOff` null means the quote has not landed yet.
+ */
+async function holderOffForSign(quotedOff, noteId, requote) {
+  if (quotedOff == null) {
+    note(noteId, "The fee is still being quoted. Wait a moment, then sign.", "warn");
+    return null;
+  }
+  const raw = await readSoltao();
+  const quoted = BigInt(quotedOff);
+  if (raw === null) {
+    if (quoted === 0n) return 0n;
+    note(noteId, "Could not re-read your $SOLTAO balance, so the discounted fee was not charged. Try again.", "warn");
+    return null;
+  }
+  const off = holderOffBps(raw);
+  if (off !== quoted) {
+    note(noteId, "Your $SOLTAO balance changed the fee. Check the new amount, then sign.", "warn");
+    requote?.();
+    return null;
+  }
+  return off;
+}
+
+// One balance re-read is in flight at a time. It finishes before `state.running` is set, so a second
+// click during that read must not start a second sign. `still` rejects a quote that moved while the
+// read was out: the signed fee has to be the one on screen.
+let feeLock = false;
+async function confirmedOff(quotedOff, noteId, requote, still) {
+  if (feeLock || state.running) return null;
+  feeLock = true;
+  try {
+    const off = await holderOffForSign(quotedOff, noteId, requote);
+    if (off === null) return null;
+    if (!still(off)) {
+      note(noteId, "The fee changed while it was being checked. Check the new amount, then sign.", "warn");
+      return null;
+    }
+    return off;
+  } finally {
+    feeLock = false;
+  }
+}
 
 function note(id, text, tone) {
   const el = $(id); el.textContent = text || ""; if (tone) el.dataset.tone = tone; else delete el.dataset.tone;
@@ -139,11 +214,12 @@ async function connect() {
 }
 
 async function refreshBalances() {
-  const [taoBal, lamports] = await Promise.all([
+  const [taoBal, lamports, soltaoRaw] = await Promise.all([
     getTaoBalance(clients.connection, state.user).catch(() => null),
     clients.connection.getBalance(new PublicKey(state.user)).then(BigInt).catch(() => null),
+    getSoltaoBalance(clients.connection, state.user).catch(() => null),
   ]);
-  state.taoLd = taoBal ?? 0n; state.lamports = lamports ?? 0n;
+  state.taoLd = taoBal ?? 0n; state.lamports = lamports ?? 0n; state.soltaoRaw = soltaoRaw;
   // The staking minimum depends on Bittensor's gas price; read it now so the note below can state it.
   if (state.gasPrice === null) state.gasPrice = await getGasPrice().catch(() => null);
   await readUsd();
@@ -497,6 +573,7 @@ function renderDirectory() {
     return btn;
   }));
 }
+/** A 30-day sparkline. The signed percent next to it carries the direction without colour. */
 function sparkline(values) {
   const w = 64, h = 18, lo = Math.min(...values), hi = Math.max(...values), span = hi - lo || 1;
   const pts = values.map((v, i) => `${((i / (values.length - 1)) * (w - 4) + 2).toFixed(1)},${(h - 2 - ((v - lo) / span) * (h - 4)).toFixed(1)}`);
@@ -1019,9 +1096,13 @@ function renderReview(ready) {
     planQuote = { netuid: Number(state.netuid), stakeRao: stake };
     return `Stake about ${tao(stake)} on subnet ${state.netuid} to ${to}, bought as its Alpha at the pool price. If that price is more than ${pct}% worse when it lands, nothing is staked and the TAO arrives free. ${rest}`;
   });
-  set("r-later", () => (state.plan === "stake"
-    ? "Unstake from Your Bittensor holdings in step 2, then Back to Solana. The return quotes a live bridge fee then, plus 0.25%."
-    : "Back to Solana in the toggle above. The return quotes a live bridge fee then, plus 0.25%."));
+  set("r-later", () => {
+    const view = holderView();
+    const laterFee = view.cfg.offBps > 0n ? `plus soltao's fee at ${feeRateText(view.cfg)}%` : "plus 0.25%";
+    return state.plan === "stake"
+      ? `Unstake from Your Bittensor holdings in step 2, then Back to Solana. The return quotes a live bridge fee then, ${laterFee}.`
+      : `Back to Solana in the toggle above. The return quotes a live bridge fee then, ${laterFee}.`;
+  });
   set("r-gas", () => { const g = bittensorGas(); return g === null ? "—" : `about ${tao(g)}`; });
   // Name the counterparty, not just the amount: the fee is a plain transfer to this address.
   if (!ready) { for (const id of ["r-lzfee", "r-prio", "r-fee", "r-total", "r-usd"]) $(id).textContent = "—"; state.feeLamports = null; showShare(NaN); }
@@ -1210,8 +1291,9 @@ function clearMove(w) { try { localStorage.removeItem(moveKey(w.transitAddress))
 
 let move = null, moveQuoteSeq = 0;
 // "All" for a stake leaves room for soltao's fee, which comes out of the same free TAO.
-const moveAll = (m) => { if (m.kind !== "stake") return m.max; const fee = actionFeeRao(m.max); return m.max > fee ? m.max - fee : 0n; };
-function openMove(m) {
+const moveAll = (m) => { if (m.kind !== "stake") return m.max; const fee = holderFeeRao(m.max); return m.max > fee ? m.max - fee : 0n; };
+async function openMove(m) {
+  await readSoltao();
   $("move-amount-wrap").hidden = m.kind === "claim";
   if (m.kind === "claim") {
     move = m;
@@ -1264,27 +1346,31 @@ function openMove(m) {
 async function quoteClaim() {
   const m = move, seq = ++moveQuoteSeq;
   if (!m || m.kind !== "claim" || m.resume) return;
+  m.feeOffBps = null;
   if (m.minRao && m.payoutRao < m.minRao) {
     note("move-quote", `About ${tao(m.payoutRao)} is waiting, under the chain's ${tao(m.minRao)} minimum for a claim. A claim now would pay nothing and still cost the fee, so wait until more has built up.`, "warn");
     return;
   }
   note("move-quote", "reading the fee from Bittensor…");
   try {
+    const hold = await readHolder();
     // soltao's fee on a claim is on what it pays, and comes from free TAO (the claim pays into root stake).
-    const fee = actionFeeRao(m.payoutRao);
+    const fee = holderFeeRao(m.payoutRao, hold);
     const lib = await loadReturnLib(), q = await lib.quoteRootClaim(state.signed.wallet.mnemonic, m.hotkey, fee);
     if (seq !== moveQuoteSeq || move !== m) return;
+    m.feeOffBps = hold.cfg.offBps;
     if (q.freeRao <= q.feeRao + fee) { note("move-quote", `The Bittensor fee is about ${tao(q.feeRao)} and soltao's ${tao(fee)}, both paid from free TAO, and this wallet has ${tao(q.freeRao)} free.`, "bad"); return; }
     $("move-go").disabled = state.running;
     // A claim's fee is reserved for its declared work (it scans the validator's whole basket), so it can
     // exceed a small payout; the chain charges what the claim actually did, which may be less.
     const costly = q.feeRao + fee >= m.payoutRao;
-    note("move-quote", `Claims about ${tao(m.payoutRao)} of root rewards and adds it to your root stake with this validator. Bittensor reserves a network fee of about ${tao(q.feeRao)} from free TAO and charges what the claim actually used, which can be less. The exact amount is set when it lands. soltao's fee: ${tao(fee)} (${feeRuleText("TAO")}), from free TAO in the same transaction.${costly ? " The fees are more than the rewards waiting, so claiming now can cost more than it pays; letting them build up first is cheaper." : ""} To bring it to Solana afterwards, unstake it with "Then send the freed TAO back to my Solana wallet".`, costly ? "warn" : null);
+    note("move-quote", `Claims about ${tao(m.payoutRao)} of root rewards and adds it to your root stake with this validator. Bittensor reserves a network fee of about ${tao(q.feeRao)} from free TAO and charges what the claim actually used, which can be less. The exact amount is set when it lands. soltao's fee: ${tao(fee)} (${feeWords("TAO", hold)}), from free TAO in the same transaction.${costly ? " The fees are more than the rewards waiting, so claiming now can cost more than it pays; letting them build up first is cheaper." : ""} To bring it to Solana afterwards, unstake it with "Then send the freed TAO back to my Solana wallet".`, costly ? "warn" : null);
   } catch (e) { if (seq === moveQuoteSeq) note("move-quote", `Could not read the fee from Bittensor: ${e.message}`, "bad"); }
 }
 async function quoteMove() {
   if (!move) return;
   if (move.kind === "claim") return quoteClaim();
+  move.feeOffBps = null;
   const amt = parseTao($("move-amount").value), seq = ++moveQuoteSeq;
   if (amt === null || amt <= 0n) { note("move-quote", "Enter an amount like 0.5", "bad"); $("move-go").disabled = true; return; }
   if (amt > move.max) { note("move-quote", `More than the ${fmtUnits(move.max, 9)} available${move.kind === "stake" ? ` (${tao(CONFIG.defaultReserveRao)} stays free for fees)` : ""}`, "bad"); $("move-go").disabled = true; return; }
@@ -1297,16 +1383,18 @@ async function quoteMove() {
     const lib = await loadReturnLib();
     // The chain's own simulation of this exact swap (what it gets, the fee, what price impact takes), and
     // the pool price soltao's fee values it at (src/stake_moves.js moveFeeRao; root is 1 TAO).
-    const [price, q] = await Promise.all([
+    const [price, q, hold] = await Promise.all([
       move.netuid === 0 ? RAO : lib.alphaPriceRao(move.netuid),
       move.netuid === 0 ? null : lib.simulateSwap(move.netuid, move.kind === "stake" ? { taoRao: amt } : { alphaRao: amt }),
+      readHolder(),
     ]);
-    const fee = actionFeeRao(move.kind === "stake" || move.netuid === 0 ? amt : (amt * price) / RAO);
+    const fee = holderFeeRao(move.kind === "stake" || move.netuid === 0 ? amt : (amt * price) / RAO, hold);
     if (seq !== moveQuoteSeq) return;
+    move.feeOffBps = hold.cfg.offBps;
     if (move.kind === "stake" && amt + fee > move.max) { note("move-quote", `That and soltao's ${tao(fee)} fee are more than the ${fmtUnits(move.max, 9)} available (${tao(CONFIG.defaultReserveRao)} stays free for fees). Stake up to ${tao(move.max - fee)}.`, "bad"); $("move-go").disabled = true; return; }
     const proceeds = q ? q.out : amt;
     if (move.kind === "unstake" && proceeds <= fee) { note("move-quote", `That frees about ${tao(proceeds)}, not more than soltao's ${tao(fee)} fee on it. Unstake more.`, "bad"); $("move-go").disabled = true; return; }
-    const feeText = ` soltao's fee: ${tao(fee)} (${feeRuleText("TAO")}), in the same transaction${move.kind === "unstake" ? ", out of what it frees" : ""}; if the chain refuses the ${move.kind}, no fee is paid.`;
+    const feeText = ` soltao's fee: ${tao(fee)} (${feeWords("TAO", hold)}), in the same transaction${move.kind === "unstake" ? ", out of what it frees" : ""}; if the chain refuses the ${move.kind}, no fee is paid.`;
     // The bridge fee for a return of about that much, so the chained choice is priced before it is made.
     const lz = then ? (await lib.quoteReturn({ amountRao: removeDust(proceeds - fee), solanaRecipient: solanaRecipient() })).nativeFee / RAO : null;
     if (seq !== moveQuoteSeq) return;
@@ -1337,10 +1425,11 @@ async function quoteSwitch(amt, seq) {
   try {
     const lib = await loadReturnLib();
     // soltao's fee is on the TAO value moved, at the origin pool's price, and comes from free TAO.
-    const [price, free] = await Promise.all([m.netuid === 0 ? RAO : lib.alphaPriceRao(m.netuid), lib.freeBalance(state.signed.wallet.address)]);
-    const fee = actionFeeRao(m.netuid === 0 ? amt : (amt * price) / RAO);
+    const [price, free, hold] = await Promise.all([m.netuid === 0 ? RAO : lib.alphaPriceRao(m.netuid), lib.freeBalance(state.signed.wallet.address), readHolder()]);
+    const fee = holderFeeRao(m.netuid === 0 ? amt : (amt * price) / RAO, hold);
     if (seq !== moveQuoteSeq || move !== m) return;
-    const feeText = ` soltao's fee: ${tao(fee)} (${feeRuleText("TAO")}), from your free TAO in the same transaction; if the chain refuses the move, no fee is paid.`;
+    m.feeOffBps = hold.cfg.offBps;
+    const feeText = ` soltao's fee: ${tao(fee)} (${feeWords("TAO", hold)}), from your free TAO in the same transaction; if the chain refuses the move, no fee is paid.`;
     if (free <= fee) { note("move-quote", `soltao's fee on this move is ${tao(fee)}, paid from free TAO, and this wallet has ${tao(free)} free. Unstake a little first, or move less.`, "bad"); $("move-go").disabled = true; return; }
     if (m.netuid === to.netuid) {
       note("move-quote", `Moves ${stakeAmount(amt, m.netuid)} to validator ${short(to.hotkey, 6)} on ${place(m.netuid)}. Nothing is sold or bought, so there is no price risk; only a small Bittensor network fee.${feeText}`);
@@ -1386,12 +1475,17 @@ function resumeMove() {
 }
 async function runClaim() {
   const w = state.signed.wallet, m = move, saved = m.resume ?? null;
+  if (!saved) {
+    const off = await confirmedOff(m.feeOffBps, "move-note", () => quoteClaim(), (next) => move === m && m.feeOffBps === next);
+    if (off === null) return;
+    m.signOff = off;
+  }
   state.running = true; $("move-go").disabled = true; $("move-cancel").disabled = true; gate();
   const meta = { kind: "claim", hotkey: m.hotkey };
   try {
     const lib = await loadReturnLib();
     const res = await lib.runRootClaim({
-      mnemonic: w.mnemonic, hotkey: m.hotkey, progress: saved?.progress ?? {},
+      mnemonic: w.mnemonic, hotkey: m.hotkey, offBps: saved ? 0n : m.signOff, progress: saved?.progress ?? {},
       onStep: (_k, s, msg) => note("move-note", msg, s === "bad" ? "warn" : s === "ok" ? "ok" : null),
       onCheckpoint: (progress) => saveMove(w, { ...meta, progress }),
     });
@@ -1412,6 +1506,11 @@ async function runMove() {
   const saved = m.resume ?? null;
   const amount = saved ? BigInt(saved.amount) : parseTao($("move-amount").value);
   if (amount === null || amount <= 0n) return;
+  if (!saved) {
+    const off = await confirmedOff(m.feeOffBps, "move-note", () => quoteMove(), (next) => move === m && m.feeOffBps === next && parseTao($("move-amount").value) === amount);
+    if (off === null) return;
+    m.signOff = off;
+  }
   state.running = true; $("move-go").disabled = true; $("move-cancel").disabled = true; gate();
   const thenReturn = m.kind === "unstake" && $("move-then").checked && !loadReturn(w);
   const meta = { kind: m.kind, hotkey: m.hotkey, netuid: String(m.netuid), amount: String(amount), thenReturn, ...(m.to ? { toHotkey: m.to.hotkey, toNetuid: String(m.to.netuid) } : {}) };
@@ -1425,8 +1524,8 @@ async function runMove() {
       onCheckpoint: (progress) => saveMove(w, { ...meta, progress }),
     };
     const res = m.kind === "move"
-      ? await lib.runStakeSwitch({ ...common, from: { hotkey: m.hotkey, netuid: m.netuid }, to: m.to })
-      : await lib.runStakeMove({ ...common, kind: m.kind, hotkey: m.hotkey, netuid: m.netuid });
+      ? await lib.runStakeSwitch({ ...common, from: { hotkey: m.hotkey, netuid: m.netuid }, to: m.to, offBps: saved ? 0n : m.signOff })
+      : await lib.runStakeMove({ ...common, kind: m.kind, hotkey: m.hotkey, netuid: m.netuid, offBps: saved ? 0n : m.signOff });
     clearMove(w);
     if (res.done) note("move-note", m.kind === "unstake"
       ? `Done: ${stakeAmount(res.moved, m.netuid)} unstaked into free TAO.${thenReturn ? " Now bringing it to Solana: step 5, \"Where it is\", follows it." : ` "Bridge to Solana" can bring it home.`}`
@@ -1486,6 +1585,7 @@ function gatePay() {
 }
 async function quotePayNow() {
   if (!pay || pay.resume) return;
+  pay.feeOffBps = null;
   const seq = ++payQuoteSeq, lib = await loadReturnLib();
   if (!pay || seq !== payQuoteSeq) return;
   const to = $("pay-to").value.trim(), amt = parseTao($("pay-amount").value);
@@ -1496,11 +1596,13 @@ async function quotePayNow() {
   if (amt < lib.CHUTES_MIN_RAO) { note("pay-quote", `Send at least ${tao(lib.CHUTES_MIN_RAO)}: Chutes ignores smaller payments.`, "bad"); return; }
   if (amt > pay.max) { note("pay-quote", `More than the ${tao(pay.max)} available (${tao(CONFIG.defaultReserveRao)} stays free for fees).`, "bad"); return; }
   try {
-    const q = await lib.quotePayment(state.signed.wallet.mnemonic, to, amt);
+    const hold = await readHolder();
+    const q = await lib.quotePayment(state.signed.wallet.mnemonic, to, amt, hold.cfg.offBps);
     if (seq !== payQuoteSeq) return;
+    pay.feeOffBps = hold.cfg.offBps;
     if (q.remainingRao < 0n) { note("pay-quote", `That plus the ${tao(q.feeRao)} network fee and soltao's ${tao(q.soltaoFeeRao)} fee is more than this wallet holds.`, "bad"); return; }
     pay.quoted = true; gatePay();
-    note("pay-quote", `Sends ${tao(amt)} to ${short(to, 6)}. Bittensor network fee about ${tao(q.feeRao)}; soltao's fee ${tao(q.soltaoFeeRao)} (${feeRuleText("TAO")}), in the same transaction; ${tao(q.remainingRao)} stays free here. Chutes adds it to your balance in dollars at the TAO price when it lands, usually within a minute. It carries a public "via soltao" tag, so top-ups through this page can be counted.`);
+    note("pay-quote", `Sends ${tao(amt)} to ${short(to, 6)}. Bittensor network fee about ${tao(q.feeRao)}; soltao's fee ${tao(q.soltaoFeeRao)} (${feeWords("TAO", hold)}), in the same transaction; ${tao(q.remainingRao)} stays free here. Chutes adds it to your balance in dollars at the TAO price when it lands, usually within a minute. It carries a public "via soltao" tag, so top-ups through this page can be counted.`);
   } catch (e) { if (seq === payQuoteSeq) note("pay-quote", `Could not read the fee from Bittensor: ${e.message}`, "bad"); }
 }
 function resumePay() {
@@ -1517,12 +1619,18 @@ async function runPay() {
   const to = saved ? saved.to : $("pay-to").value.trim();
   const amount = saved ? BigInt(saved.amount) : parseTao($("pay-amount").value);
   if (!saved && (payeeProblem(to) || amount === null || !$("pay-ack").checked)) return;
+  if (!saved) {
+    const payNow = pay;
+    const off = await confirmedOff(pay.feeOffBps, "pay-note", () => quotePay(), (next) => pay === payNow && pay.feeOffBps === next && parseTao($("pay-amount").value) === amount && $("pay-to").value.trim() === to);
+    if (off === null) return;
+    pay.signOff = off;
+  }
   state.running = true; $("pay-go").disabled = true; $("pay-cancel").disabled = true; gate();
   const meta = { to, amount: String(amount) };
   try {
     const lib = await loadReturnLib();
     const res = await lib.runPayment({
-      mnemonic: w.mnemonic, to, amount, progress: saved?.progress ?? {},
+      mnemonic: w.mnemonic, to, amount, offBps: saved ? 0n : pay.signOff, progress: saved?.progress ?? {},
       onStep: (_k, s, msg) => note("pay-note", msg, s === "bad" ? "warn" : s === "ok" ? "ok" : null),
       onCheckpoint: (progress) => savePay(w, { ...meta, progress }),
     });
@@ -1551,6 +1659,7 @@ async function returnAfterUnstake(freedRao) {
   const w = state.signed.wallet;
   try {
     if (loadReturn(w)) throw new Error("an earlier return from this browser has not finished; finish that one first from \"Bridge to Solana\"");
+    const hold = await readHolder();
     const lib = await loadReturnLib();
     const free = await lib.freeBalance(w.address);
     const amount = await fitReturnAmount({
@@ -1560,7 +1669,7 @@ async function returnAfterUnstake(freedRao) {
           lib.quoteReturn({ amountRao: amt, solanaRecipient: solanaRecipient() }), getGasPrice(), transitState(w.transitKey, null),
         ]);
         const plan = lib.planReturnFunding({ amountRao: amt, nativeFeeWei: q.nativeFee, gasPriceWei: price, transitNativeWei: t.native, transitWtaoWei: t.wtao });
-        return plan.fundingRao > 0n ? (await lib.quoteTransfer(w.mnemonic, ss58Encode(t.self), plan.fundingRao, actionFeeRao(amt))).remainingRao : free;
+        return plan.fundingRao > 0n ? (await lib.quoteTransfer(w.mnemonic, ss58Encode(t.self), plan.fundingRao, holderFeeRao(amt, hold))).remainingRao : free;
       },
     });
     if (amount === 0n) throw new Error("what the unstake freed does not cover the bridge fee and gas, so it stays as free TAO on Bittensor");
@@ -1583,25 +1692,33 @@ function requestReturnQuote() {
   clearTimeout(quoteTimer);
   $("r-lzfee").replaceChildren(Object.assign(document.createElement("span"), { className: "skel" }));
   $("sign").disabled = true;
+  state.feeOffBps = null;
+  state.returnFeeRao = null;
   quoteTimer = setTimeout(async () => {
     const seq = ++state.quoteSeq;
     try {
       const lib = await loadReturnLib();
       const w = state.signed.wallet;
-      const [q, price, t, hasAta] = await Promise.all([
+      const [q, price, t, hasAta, raw] = await Promise.all([
         lib.quoteReturn({ amountRao: state.amountLd, solanaRecipient: solanaRecipient() }),
         getGasPrice(),
         transitState(w.transitKey, null),
         taoAccountExists(clients.connection, state.user),
+        readSoltao(),
       ]);
+      const hold = holderView(raw);
       const plan = lib.planReturnFunding({ amountRao: state.amountLd, nativeFeeWei: q.nativeFee, gasPriceWei: price, transitNativeWei: t.native, transitWtaoWei: t.wtao });
       // soltao's fee rides with the funding transfer; with no funding transfer needed, none is charged.
-      const soltaoFee = plan.fundingRao > 0n ? actionFeeRao(state.amountLd) : 0n;
+      // Publish it only after this quote is still the current one, so an older read cannot replace it.
+      const soltaoFee = plan.fundingRao > 0n ? holderFeeRao(state.amountLd, hold) : 0n;
       const fq = plan.fundingRao > 0n ? await lib.quoteTransfer(w.mnemonic, ss58Encode(t.self), plan.fundingRao, soltaoFee) : { feeRao: 0n, remainingRao: state.ret.free ?? 0n };
       if (seq !== state.quoteSeq) return;
+      state.feeOffBps = hold.cfg.offBps;
+      state.returnFeeRao = soltaoFee;
       state.ret.quote = { q, plan, fq };
       $("r-lzfee").textContent = tao(q.nativeFee / RAO);
-      $("r-rfee").textContent = soltaoFee ? `${tao(soltaoFee)} → ${short(CONFIG.fee.bittensor, 4)} (${feeRuleText("TAO")})` : "none: no transfer from your wallet is needed";
+      $("r-rfee").textContent = soltaoFee ? `${tao(soltaoFee)} → ${short(CONFIG.fee.bittensor, 4)} (${feeWords("TAO", hold)})` : "none: no transfer from your wallet is needed";
+      paintFeeLabel("r-rfee-label", true, hold);
       $("r-gas").textContent = `up to ${tao(plan.gasReserveWei / RAO)} held for gas; what is not used stays yours`;
       $("r-cost").textContent = tao(plan.fundingRao + fq.feeRao + soltaoFee);
       $("r-receive").textContent = `${fmtUnits(q.solanaAmountLd, 9)} canonical TAO`;
@@ -1619,7 +1736,11 @@ function requestReturnQuote() {
       if (!loadReturn(w)) note("sign-note", "");
       $("sign").disabled = state.running || state.shareBlocks;
     } catch (e) {
-      if (seq === state.quoteSeq) { $("r-lzfee").textContent = "unavailable"; note("sign-note", `Could not quote the return: ${e.message}`, "bad"); }
+      if (seq === state.quoteSeq) {
+        state.feeOffBps = null; state.returnFeeRao = null;
+        $("r-lzfee").textContent = "unavailable";
+        note("sign-note", `Could not quote the return: ${e.message}`, "bad");
+      }
     }
   }, 350);
 }
@@ -1634,9 +1755,27 @@ async function runReturn({ amountRao: chosen = null, retryReverted = false, afte
   const lib = await loadReturnLib();
   const saved = loadReturn(w);
   const amountRao = saved ? BigInt(saved.amountRao) : chosen ?? state.amountLd;
+  let soltaoFeeRao;
+  if (saved?.soltaoFeeRao != null) soltaoFeeRao = BigInt(saved.soltaoFeeRao);
+  else if (saved) soltaoFeeRao = actionFeeRao(amountRao); // unfinished return from before holder discounts: the full fee, and a signed transfer already carries its own
+  else if (afterUnstake) {
+    // The unstake quote said this fee is read again here. A failed read charges the full fee
+    // rather than stopping a return of TAO that is already free.
+    const hold = await readHolder();
+    soltaoFeeRao = holderFeeRao(amountRao, hold);
+  } else {
+    const quotedOff = state.feeOffBps, quotedFee = state.returnFeeRao, quotedAmount = amountRao;
+    if (quotedFee == null || quotedOff == null) {
+      note("sign-note", "The fee is still being quoted. Wait a moment, then sign.", "warn");
+      return;
+    }
+    const off = await confirmedOff(quotedOff, "sign-note", requestReturnQuote, (next) => state.returnFeeRao === quotedFee && state.feeOffBps === next && state.amountLd === quotedAmount);
+    if (off === null) return;
+    soltaoFeeRao = quotedFee;
+  }
   const recipient = saved ? saved.recipient : solanaRecipient();
   const baseline = saved ? BigInt(saved.baseline) : await getTaoBalance(clients.connection, state.user);
-  const meta = { amountRao: String(amountRao), baseline: String(baseline), recipient, at: saved?.at ?? Date.now() };
+  const meta = { amountRao: String(amountRao), baseline: String(baseline), recipient, soltaoFeeRao: String(soltaoFeeRao), at: saved?.at ?? Date.now() };
   saveReturn(w, { ...meta, progress: saved?.progress ?? {} });
 
   state.running = true; $("sign").disabled = true; setStep("step-status", "active"); gate();
@@ -1647,7 +1786,7 @@ async function runReturn({ amountRao: chosen = null, retryReverted = false, afte
   note("track-note", "");
   try {
     const res = await lib.finishFreeReturn({
-      mnemonic: w.mnemonic, transitKey: w.transitKey, solanaRecipient: recipient, amountRao, soltaoFeeRao: actionFeeRao(amountRao), expectedColdkey: w.address,
+      mnemonic: w.mnemonic, transitKey: w.transitKey, solanaRecipient: recipient, amountRao, soltaoFeeRao, expectedColdkey: w.address,
       progress: saved?.progress ?? {}, retryReverted, onStep: trackRev,
       onCheckpoint: (progress) => saveReturn(w, { ...meta, progress }),
     });
@@ -1735,26 +1874,30 @@ function showShare(frac, { cost = "", tenPctRao = null } = {}) {
 function requestQuote() {
   clearTimeout(quoteTimer);
   for (const id of ["r-lzfee", "r-fee"]) $(id).replaceChildren(Object.assign(document.createElement("span"), { className: "skel" }));
-  $("sign").disabled = true; state.feeLamports = null;
+  $("sign").disabled = true; state.feeLamports = null; state.feeOffBps = null;
   quoteTimer = setTimeout(async () => {
     const seq = ++state.quoteSeq;
     if (state.netuid !== 0n) quotePlanAlpha();
     try {
-      const [fee, priority, lamportsPerTao] = await Promise.all([
+      const [fee, priority, lamportsPerTao, raw] = await Promise.all([
         quoteNativeFee(clients, { user: state.user, transit: state.signed.wallet.transitAddress, amountLd: state.amountLd }),
         // A failed estimate is not worth blocking the route over: fall back to the configured floor.
         quotePriorityFee(clients.connection).catch(() => CONFIG.priorityFee.minMicroLamports),
         // soltao's fee values the TAO at the Orca TAO/SOL pool's own price. Unreadable, it blocks the
-        // route rather than guess a fee.
+        // route rather than guess a fee. A failed $SOLTAO read does not: that pays the full 0.25%.
         readLamportsPerTao(clients.connection).catch((e) => { throw new Error(`could not read the TAO/SOL price soltao's fee is set from (${e.message})`); }),
+        readSoltao(),
       ]);
       if (seq !== state.quoteSeq) return;
       state.nativeFee = fee; state.priorityMicro = priority;
-      state.feeLamports = routeFeeLamports(state.amountLd, lamportsPerTao);
+      const hold = holderView(raw);
+      state.feeOffBps = hold.cfg.offBps;
+      state.feeLamports = routeFeeLamports(state.amountLd, lamportsPerTao, hold.cfg);
       const prio = priorityFeeLamports(priority);
       const total = fee + prio + state.feeLamports;
       $("r-lzfee").textContent = sol(fee); $("r-prio").textContent = sol(prio); $("r-total").textContent = sol(total);
-      $("r-fee").textContent = `${sol(state.feeLamports)}${CONFIG.fee.wallet ? ` → ${short(CONFIG.fee.wallet, 4)}` : ""} (${feeRuleText("SOL")}; 1 TAO = ${fmtUnits(lamportsPerTao, 9, 4)} SOL at the Orca TAO/SOL pool)`;
+      paintFeeLabel("r-fee-label", false, hold);
+      $("r-fee").textContent = `${sol(state.feeLamports)}${CONFIG.fee.wallet ? ` → ${short(CONFIG.fee.wallet, 4)}` : ""} (${feeWords("SOL", hold)}; 1 TAO = ${fmtUnits(lamportsPerTao, 9, 4)} SOL at the Orca TAO/SOL pool)`;
       await showUsd(seq, total); // settles the fee share, which can keep signing shut
       if (seq !== state.quoteSeq) return;
       const lacking = state.lamports < total + 100_000n;
@@ -1764,7 +1907,7 @@ function requestQuote() {
       $("sign").disabled = !LIVE || lacking || state.running || !$("review-ack-check").checked || state.shareBlocks;
     } catch (e) {
       if (seq === state.quoteSeq) {
-        state.feeLamports = null;
+        state.feeLamports = null; state.feeOffBps = null;
         for (const id of ["r-lzfee", "r-fee"]) if ($(id).querySelector(".skel")) $(id).textContent = "unavailable";
         note("sign-note", `Could not quote the fees: ${e.message}`, "bad");
       }
@@ -1785,8 +1928,10 @@ async function send() {
   if (state.direction === "reverse") return runReturn();
   if (!LIVE || state.running || state.unfinished) return;
   // soltao's fee is exactly what the review showed; without one the route does not go.
-  const feeLamports = state.feeLamports;
-  if (feeLamports === null) { note("sign-note", "The fee is still being quoted; try again in a moment.", "warn"); return; }
+  const feeLamports = state.feeLamports, quotedOff = state.feeOffBps;
+  if (feeLamports === null || quotedOff == null) { note("sign-note", "The fee is still being quoted; try again in a moment.", "warn"); return; }
+  const off = await confirmedOff(quotedOff, "sign-note", requestQuote, (next) => state.feeLamports === feeLamports && state.feeOffBps === next);
+  if (off === null) return;
   const w = state.signed.wallet;
   state.running = true; $("sign").disabled = true; note("sign-note", "building and simulating…");
   resetTrack(state.plan); setStep("step-status", "active");

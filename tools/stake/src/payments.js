@@ -26,7 +26,7 @@ import { blake2b } from "@noble/hashes/blake2b";
 import { dispatchResult, settleSigned } from "./settle.js";
 import { ss58Decode } from "./derive.js";
 import { CONFIG } from "./config.js";
-import { actionFeeRao } from "./fees.js";
+import { actionFeeRao, feeWithOff } from "./fees.js";
 import { accountNonce, coldkeySigner, extrinsicOutcome, freeBalance, getApi, prepareCall, submitSigned } from "./substrate.js";
 
 /** Chutes ignores smaller payments as dust (DUST_THRESHOLD_RAO in chutesai/chutes-api). */
@@ -48,10 +48,10 @@ export function paymentCall(api, to, amount, soltaoFeeRao = 0n) {
 }
 
 /** Read-only fee and balance check for a tagged top-up: { freeRao, feeRao, soltaoFeeRao, remainingRao }. */
-export async function quotePayment(mnemonic, to, amount) {
+export async function quotePayment(mnemonic, to, amount, offBps = 0n) {
   const api = await getApi();
   const { address } = coldkeySigner(mnemonic);
-  const soltaoFeeRao = actionFeeRao(amount);
+  const soltaoFeeRao = actionFeeRao(amount, feeWithOff(offBps));
   const [payment, account] = await Promise.all([paymentCall(api, to, amount, soltaoFeeRao).paymentInfo(address), api.query.system.account(address)]);
   const feeRao = payment.partialFee.toBigInt(), freeRao = account.data.free.toBigInt();
   return { freeRao, feeRao, soltaoFeeRao, remainingRao: freeRao - BigInt(amount) - feeRao - soltaoFeeRao };
@@ -82,7 +82,7 @@ const str = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, type
  * `progress` is the last checkpoint; pass it back to resume.
  */
 export async function runPayment({
-  mnemonic, to, amount, min = CHUTES_MIN_RAO, progress = {},
+  mnemonic, to, amount, min = CHUTES_MIN_RAO, offBps = 0n, progress = {},
   onStep = () => {}, onCheckpoint = () => {}, waitMs = 2 * 60_000, pollMs = 4_000, ops = realOps,
 }) {
   const coldkey = ops.signerAddress(mnemonic);
@@ -113,7 +113,7 @@ export async function runPayment({
   const amt = BigInt(amount);
   if (amt < BigInt(min)) throw new Error(`send at least ${Number(min) / 1e9} TAO: Chutes ignores smaller payments`);
   const freeBefore = await ops.free(coldkey);
-  const soltaoFeeRao = actionFeeRao(amt);
+  const soltaoFeeRao = actionFeeRao(amt, feeWithOff(offBps));
   if (amt + soltaoFeeRao > freeBefore) throw new Error("that and soltao's fee are more free TAO than this wallet holds");
   onStep("pay", "busy", "signing");
   const rec = await ops.prepare(mnemonic, String(to).trim(), amt, soltaoFeeRao);

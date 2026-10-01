@@ -143,6 +143,11 @@ expect("an empty address is refused", payeeProblem("", OWN) !== null);
   await run({ amount: 800_000_000n });
   expect("a top-up signs in soltao's fee: 0.25% of what it sends, at least 0.001 TAO", [...s.signed.values()][0].soltaoFeeRao === actionFeeRao(800_000_000n) && actionFeeRao(800_000_000n) === 2_000_000n);
 }
+{
+  const { s, run } = chain();
+  await run({ amount: 800_000_000n, offBps: 2_500n });
+  expect("a holder discount is signed into a top-up: 25% off 0.25% of 0.8 TAO", [...s.signed.values()][0].soltaoFeeRao === 1_500_000n, String([...s.signed.values()][0].soltaoFeeRao));
+}
 
 {
   // TAO arriving in the same block as the top-up hides the balance drop; the batch's own event does not lie.

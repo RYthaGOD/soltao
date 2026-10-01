@@ -127,6 +127,15 @@ expect("unstake floor and stake ceiling sit 2% either side of the price", limitP
   let tight = ""; try { await run({ kind: "stake", netuid: 0, amount: s.free - 100n }, {}); } catch (e) { tight = e.message; }
   expect("a stake that leaves too little free TAO for the fee is refused before signing", /soltao's fee are more free TAO/.test(tight), tight);
 }
+{
+  const { s, run, saved } = chain();
+  s.autoInclude = false; s.crashAfterSubmit = true;
+  try { await run({ kind: "stake", netuid: 1, amount: 1_000_000_000n, offBps: 5_000n }); } catch { /* closed */ }
+  expect("a holder discount is signed into the stake: half off 0.25% of 1 TAO", [...s.signed.values()][0].soltaoFeeRao === 1_250_000n, String([...s.signed.values()][0].soltaoFeeRao));
+  s.autoInclude = true;
+  const r = await run({ kind: "stake", netuid: 1, amount: 1_000_000_000n, offBps: 0n }, saved());
+  expect("resuming that stake settles the signed fee and does not sign a second one at the full rate", r.done && s.signed.size === 1 && [...s.signed.values()][0].soltaoFeeRao === 1_250_000n, `signed ${s.signed.size}`);
+}
 
 // ── root rewards: a claim pays the coldkey's slice of the validator's basket into its root stake ──
 function claimChain({ rootStake = 100_000_000n, owed = 2_000_000n, minRao = 500_000n } = {}) {

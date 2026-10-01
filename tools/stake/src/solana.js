@@ -2,7 +2,8 @@
 //   1. compute budget: the unit limit, and a priority fee shown in the review before signing
 //   2. the canonical TAO OFT `send` to the user's own transit account on Bittensor EVM, asking
 //      LayerZero's executor to drop a little native TAO there for gas
-//   3. soltao's fee (0.25% of the TAO, valued in SOL, at least 0.0035 SOL), a plain SOL transfer
+//   3. soltao's fee (0.25% of the TAO, valued in SOL, at least 0.0035 SOL, less when this wallet
+//      holds $SOLTAO), a plain SOL transfer
 
 import {
   Connection, PublicKey, TransactionMessage, VersionedTransaction, ComputeBudgetProgram, SystemProgram,
@@ -15,7 +16,22 @@ import { CONFIG, solanaRpcs } from "./config.js";
 
 // Both read from chain, not recalled: the TAO mint's owner, and the ATA program itself.
 const TOKEN_PROGRAM = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const TOKEN_2022 = new PublicKey(CONFIG.soltao.program);
 const ATA_PROGRAM = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+
+/**
+ * Amount held in a token account, or 0. SPL and Token-2022 share the base layout: mint 0..32,
+ * owner 32..64, amount u64 LE at 64. Extensions, including $SOLTAO's transfer fee, sit after byte
+ * 165 and do not move the amount. A missing account, the wrong program, or a mint/owner mismatch
+ * reads as 0 so a fee quote never treats someone else's tokens as a discount.
+ */
+export function readTokenAmount(info, mint, owner, program) {
+  if (!info || !info.owner.equals(program) || info.data.length < 72) return 0n;
+  const data = info.data;
+  if (!new PublicKey(data.subarray(0, 32)).equals(new PublicKey(mint))) return 0n;
+  if (!new PublicKey(data.subarray(32, 64)).equals(new PublicKey(owner))) return 0n;
+  return data.readBigUInt64LE(64);
+}
 
 // A signed send must not retry on another RPC: a timeout after the first accepted it would
 // double-broadcast. Reads try each URL in CONFIG.solanaRpcs.
@@ -97,16 +113,29 @@ export function taoTokenAccount(owner) {
 
 /**
  * The wallet's canonical TAO, read from its token account with getAccountInfo. The public RPC
- * refuses getTokenAccountBalance as an "indexed" call, so the SPL layout is decoded here:
- * mint 0..32, owner 32..64, amount u64 LE at 64. Anything that is not this wallet's TAO reads as 0.
+ * refuses getTokenAccountBalance as an "indexed" call, so the account is decoded by readTokenAmount.
+ * Anything that is not this wallet's TAO reads as 0.
  */
 export async function getTaoBalance(connection, owner) {
   const info = await connection.getAccountInfo(taoTokenAccount(owner));
-  if (!info || !info.owner.equals(TOKEN_PROGRAM) || info.data.length < 72) return 0n;
-  const data = info.data;
-  if (!new PublicKey(data.subarray(0, 32)).equals(new PublicKey(CONFIG.taoMint))) return 0n;
-  if (!new PublicKey(data.subarray(32, 64)).equals(new PublicKey(owner))) return 0n;
-  return data.readBigUInt64LE(64);
+  return readTokenAmount(info, CONFIG.taoMint, owner, TOKEN_PROGRAM);
+}
+
+/** This wallet's $SOLTAO associated token account. Only this account counts toward the fee discount. */
+export function soltaoTokenAccount(owner) {
+  return PublicKey.findProgramAddressSync(
+    [new PublicKey(owner).toBuffer(), TOKEN_2022.toBuffer(), new PublicKey(CONFIG.soltao.mint).toBuffer()],
+    ATA_PROGRAM,
+  )[0];
+}
+
+/**
+ * $SOLTAO held by `owner`, in raw units (6 decimals). getAccountInfo, same as the TAO balance: the
+ * public RPC refuses the indexed token calls. No account reads as 0, which is the full fee.
+ */
+export async function getSoltaoBalance(connection, owner) {
+  const info = await connection.getAccountInfo(soltaoTokenAccount(owner));
+  return readTokenAmount(info, CONFIG.soltao.mint, owner, TOKEN_2022);
 }
 
 /** Whether this wallet already has a canonical TAO token account (empty still counts). */

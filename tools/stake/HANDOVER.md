@@ -4,11 +4,16 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-09-30 (item 37 live). **Live on soltao.xyz:** commit `29cca29`, `stake.js?v=e3bec6b6`,
-`return.js?v=9d4c32fb`, `stake.css?v=1c83d7a1`. Browse subnets is a tappable list. No subnet is named.
+Last updated: 2026-10-01. **Live on soltao.xyz:** commit `29cca29`, `stake.js?v=e3bec6b6`,
+`return.js?v=9d4c32fb`, `stake.css?v=1c83d7a1` (item 37). Browse subnets is a tappable list. No subnet is named.
+**Built, not yet on soltao.xyz:** item 38, the $SOLTAO holder discount. `stake.js?v=3d1eb62c`,
+`return.js?v=cc30346f`, `stake.css` still `1c83d7a1`. `npm test` passed 1 Oct 2026.
 **Still off:** Top up Chutes (`chutesLive: false`).
 **Not yet with real funds:** Move, the batched Bittensor fee, unstake, Claim, staking more from
 holdings, Chutes, and a first-time Solana token-account arrival.
+**Next:** ship item 38 only after `npm test` and a build, on Craig's go-ahead. Do not mix the marketing
+files or the research scripts into that deploy. After it, the open product work is a real-funds pass
+on Unstake, Move, Claim, and the batched Bittensor fee — not a new feature.
 
 Previous live header (29 Sep, late): commit `830ac26`, `stake.js?v=629349d7`. Served on the first
 poll after `railway up --ci`. Shipped bug history item 29 and the first-time / core-loop copy: hero
@@ -876,6 +881,21 @@ This is **not** git-push-triggered. Steps, in order, every time:
     rows stacked with no sideways scroll; tapping subnet 2 filled the field and marked that row.
     Page-test run E passed. Served on the first load after `railway up --ci`.
 
+38. **$SOLTAO holder discount on the 0.25% fee — written, not shipped (30 Sep 2026; polished 1 Oct).** Craig's decision,
+    after rejecting a 1m–1.5m / 5m ladder as too cheap at this price. The percentage drops and the floors
+    do not. 10 million $SOLTAO or more takes 25% off (0.1875%). 50 million or more takes half (0.125%).
+    None is required. The balance is the connected Solana wallet's associated token account for mint
+    `8P1XmDhz…vCn` (Token-2022), read with `getAccountInfo` when a fee is quoted and again before the
+    signature. A failed read charges the full 0.25%. If the balance changed tier since the quote, the
+    page shows the new fee and does not sign the old one. A second click during that re-read does not
+    start a second sign, and a quote that moved (amount, price, or a newer return fee) is not signed.
+    The return publishes its fee only after that quote is still current. An already-signed Bittensor
+    action is not repriced on resume. The stake page (who-runs, fee note, footer) and the board's route
+    callout say the discount. Built 1 Oct 2026 as `stake.js?v=3d1eb62c` and `return.js?v=cc30346f`.
+    `npm test` passed. A page-test the same morning passed the fee quote, the who-runs sentence, and
+    `return.js?v=cc30346f`; the holdings run then died on `lite.chain.opentensor.ai` answering the
+    browser with no CORS header, the usual busy-RPC failure, and did not finish. Not deployed yet.
+
 ## Link previews and SEO
 
 `index.html` and `stake/index.html` each carry their own `og:`/`twitter:` block; they are hand-
@@ -944,12 +964,19 @@ user 5, first-time experience 4, core loop 2, moat 3, technical execution 8, nam
 | No shareable state | Done: `?netuid=` and `?hotkey=` prefill step 3 and run the normal checks; a checked validator offers "link to this choice" |
 
 Sins flagged: phantom users, bridge to nowhere, jargon overload, and MEV bait (fixed in item 11).
-Avoided: token-first thinking; the $SOLTAO gate was rejected and the conflict is disclosed.
+Avoided: token-first thinking; the $SOLTAO gate was rejected and the conflict is disclosed. A holder discount (item 38) is optional and does not gate the route. It is not live.
 
 ## Current state
 
-**As of 30 Sep 2026.** Production is `29cca29` / `stake.js?v=e3bec6b6` / `stake.css?v=1c83d7a1` /
-`return.js?v=9d4c32fb`. Item 37 is live. `chutesLive` stays false. Do not feature a subnet unless they asked.
+**As of 1 Oct 2026.** Production is still `29cca29` / `stake.js?v=e3bec6b6` / `stake.css?v=1c83d7a1` /
+`return.js?v=9d4c32fb`. Item 37 is live. Item 38 is built locally as `stake.js?v=3d1eb62c` /
+`return.js?v=cc30346f` and is not on soltao.xyz yet. `chutesLive` stays false.
+Do not feature a subnet unless they asked.
+
+**Next, in order.** (1) Deploy item 38 — the page copy and both bundles together. (2) One real-funds
+pass through Unstake, Move, Claim, and the batched Bittensor fee. (3) Leave Chutes off until one
+≥0.01 TAO top-up is credited. Marketing and the two research scripts stay out of the deploy
+(`.railwayignore` already drops `marketing/`, `docs/`, and `tools/`).
 
 ### What has real-funds proof
 - Wallet connect, SIWS, derivation, quotes, simulation.

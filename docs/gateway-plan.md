@@ -1,6 +1,20 @@
 # soltao Gateway Plan
 
-Last updated: 2026-09-29
+Last updated: 2026-10-01
+
+## Where we are
+
+The gateway described below is live at soltao.xyz/stake (commit `29cca29`). People can stake from a
+Solana wallet, including onto a subnet, and bring free TAO back. One stranger has staked onto a subnet
+through the page. Unstake, Move, Claim, staking more from holdings, and the batched Bittensor fee are
+open and have not carried real funds.
+
+The $SOLTAO holder discount on the 0.25% fee (HANDOVER item 38) is built as `stake.js?v=3d1eb62c` and
+`return.js?v=cc30346f`, and is not on soltao.xyz yet. Ship that, then prove the holdings actions with
+real funds. Do not start a new feature, and do not name a subnet, until those two are done.
+
+Chutes top-up stays switched off. Marketing assets and the vault research scripts in the working tree
+are not part of the stake route.
 
 ## Product promise
 
