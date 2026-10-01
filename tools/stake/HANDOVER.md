@@ -4,9 +4,10 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-10-01 (item 38 live). **Live on soltao.xyz:** commit `13a64c8`, `stake.js?v=3d1eb62c`,
-`return.js?v=cc30346f`, `stake.css?v=1c83d7a1`. The 0.25% fee drops for a connected wallet that holds
-$SOLTAO: 10 million takes 25% off, 50 million takes half off. The minimums stay. No subnet is named.
+Last updated: 2026-10-01 (item 39 live). **Live on soltao.xyz:** commit `24de4e1`, `stake.js?v=10e815f0`,
+`return.js?v=cc30346f`, `stake.css?v=50bdc3d0`. Choosing a subnet row opens its chart and pool figures
+above the list, before sign-in. The 0.25% fee still drops for a connected wallet that holds $SOLTAO.
+No subnet is named.
 **Still off:** Top up Chutes (`chutesLive: false`).
 **Not yet with real funds:** Move, the batched Bittensor fee, unstake, Claim, staking more from
 holdings, Chutes, and a first-time Solana token-account arrival.
@@ -895,6 +896,14 @@ This is **not** git-push-triggered. Steps, in order, every time:
     holdings run died on `lite.chain.opentensor.ai` answering the browser with no CORS header, the usual
     busy-RPC failure, before it reached the move quotes.
 
+39. **Choosing a subnet opens its chart (1 Oct 2026).** Browse subnets sits above the steps, so the
+    list is readable before sign-in. Tapping a row fills the subnet field and opens that subnet's
+    summary, Alpha price chart, and pool figures above the list. Root gets a short note and no chart.
+    Step 3 points at that panel instead of drawing the same profile twice. No subnet is featured.
+    Live as `24de4e1` (`stake.js?v=10e815f0`, `stake.css?v=50bdc3d0`, `return.js` still `cc30346f`).
+    Served on the first poll after `railway up --ci`. `test:live` all passed. Daily history was 1.9
+    days old, inside the three-day check.
+
 ## Link previews and SEO
 
 `index.html` and `stake/index.html` each carry their own `og:`/`twitter:` block; they are hand-
@@ -967,8 +976,8 @@ Avoided: token-first thinking; the $SOLTAO gate was rejected and the conflict is
 
 ## Current state
 
-**As of 1 Oct 2026.** Production is `13a64c8` / `stake.js?v=3d1eb62c` / `stake.css?v=1c83d7a1` /
-`return.js?v=cc30346f`. Item 38 is live. `chutesLive` stays false. Do not feature a subnet unless they asked.
+**As of 1 Oct 2026.** Production is `24de4e1` / `stake.js?v=10e815f0` / `stake.css?v=50bdc3d0` /
+`return.js?v=cc30346f`. Item 39 is live. `chutesLive` stays false. Do not feature a subnet unless they asked.
 
 **Next, in order.** (1) One real-funds pass through Unstake, Move, Claim, and the batched Bittensor fee.
 (2) Leave Chutes off until one ≥0.01 TAO top-up is credited. Marketing and the two research scripts
