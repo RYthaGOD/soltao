@@ -230,8 +230,21 @@ export async function subnetDirectory() {
 export async function chainInfo() {
   const api = await getApi();
   const q = api.query.subtensorModule;
-  const [header, immunity, limit, total] = await Promise.all([api.rpc.chain.getHeader(), q.networkImmunityPeriod(), q.subnetLimit(), q.totalNetworks()]);
-  return { head: header.number.toNumber(), immunityBlocks: Number(immunity.toString()), subnetLimit: Number(limit.toString()), totalNetworks: Number(total.toString()) };
+  const [header, immunity, limit, total, barRank] = await Promise.all([
+    api.rpc.chain.getHeader(),
+    q.networkImmunityPeriod(),
+    q.subnetLimit(),
+    q.totalNetworks(),
+    q.emissionBarRank ? q.emissionBarRank().catch(() => null) : null,
+  ]);
+  return {
+    head: header.number.toNumber(),
+    immunityBlocks: Number(immunity.toString()),
+    subnetLimit: Number(limit.toString()),
+    totalNetworks: Number(total.toString()),
+    // Live EmissionBarRank. The midpoint of the emission cut: the Nth-largest moving price.
+    emissionBarRank: barRank == null ? 0 : Number(barRank.toString()) || 0,
+  };
 }
 
 /**

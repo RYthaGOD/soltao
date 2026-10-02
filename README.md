@@ -1,8 +1,11 @@
-# soltao — Solana TAO Board
+# soltao
 
-A one-page cheat sheet for the canonical Solana TAO mint. Built to be pasted into a CT reply
-and settle the argument: which contract is real, how deep the book actually is, what the
-look-alikes are, and which TAO-quoted coins exist.
+The Solana front door to Bittensor. Pick a subnet and stake canonical TAO from a Solana wallet,
+held by a Bittensor wallet that comes from your own signature. That page is
+[soltao.xyz/stake](https://soltao.xyz/stake/), and the site root forwards there.
+
+The [Solana TAO Board](board/index.html) is the reference page for the mint: which contract is
+real, how deep the book is, what the look-alikes are, and which TAO-quoted coins exist.
 
 **Canonical mint:** `taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY`
 (A LayerZero V2 OFT listed by Sunrise, issued from Bittensor EVM, live since 5 May 2026.)
@@ -11,8 +14,8 @@ look-alikes are, and which TAO-quoted coins exist.
 
 ## Stack
 
-The board is static HTML5 + CSS3 + vanilla ES6. No framework, no bundler, no npm install, no
-backend, no wallet connection, no analytics. (The separate `/stake/` page does connect a wallet
+The site is static HTML5 + CSS3 + vanilla ES6. No framework, no npm install to serve it, no
+backend, and no analytics. The board never connects a wallet. (The `/stake/` page does connect one
 and is bundled from `tools/stake/`; its built output is committed, so serving still needs no
 build. See "/stake/" below.) Market data comes from the keyless
 [Dexscreener REST API](https://docs.dexscreener.com/api/reference) straight from the browser,
@@ -250,7 +253,11 @@ it is paid in TAO, never less than 0.001 TAO, to soltao's Bittensor wallet
 `5Cvj3sq8RU2m6vFQmz2jFVix8sqBfWcuqyGKaCnMXyf9QG94`, in one `utility.batchAll` with the action, so an
 action the chain refuses pays nothing. Holding $SOLTAO in the connected Solana wallet's associated
 token account lowers the percentage only: 10 million or more takes 25% off (0.1875%), 50 million or
-more takes half (0.125%). The floors stay. The balance is read when the fee is quoted and again before
+more takes half (0.125%). The floors stay, so under about 0.5 TAO the holding changes nothing.
+It is not a coupon: a cut that started on a small balance would have made the fee optional for almost
+anyone who held a little. It is sized for a wallet that uses the route often enough that a quarter or
+half of 0.25% is the reason to hold. Separately, the coin takes 1% on every transfer, and those
+fees accrue in TAO for holders under StonkFun's model (see the conflict section). The balance is read when the fee is quoted and again before
 signing; a failed read charges the full 0.25%. No $SOLTAO is required. Every fee is shown, with where
 it goes, before anything is signed.
 With no contract, anyone can bridge to their own address without the page and skip it; the fee pays for

@@ -1,7 +1,7 @@
 // The arithmetic behind a subnet profile (src/subnet_profile.js): ranges, changes, where a subnet stands
 // for deregistration, and the chart's geometry. Offline; the numbers are made up to be checkable by hand.
 
-import { rangeSeries, changeBps, priceDaysAgo, coversRange, dateText, deregStanding, blockTime, niceTicks, chartGeometry, nearestPoint, DAY_S } from "../src/subnet_profile.js";
+import { rangeSeries, changeBps, priceDaysAgo, coversRange, dateText, deregStanding, blockTime, niceTicks, chartGeometry, nearestPoint, emissionStanding, DAY_S } from "../src/subnet_profile.js";
 
 let failures = 0;
 const expect = (name, ok, detail = "") => { console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? "  — " + detail : ""}`); if (!ok) failures++; };
@@ -64,6 +64,19 @@ const points = Array.from({ length: 91 }, (_, i) => [now - (91 - i) * DAY_S, Mat
   expect("the crosshair snaps to the nearest point", nearestPoint(g.pts, g.pts[5].x + 1).t === g.pts[5].t);
   const one = chartGeometry([{ t: now, price: 1e7 }], { w: 600, h: 200 });
   expect("a single point is drawn in the middle, with no area", Math.abs(one.pts[0].x - (58 + (600 - 58 - 14) / 2)) < 1e-9 && one.area === "");
+}
+
+{
+  const rows = [
+    { netuid: 0, movingPriceBits: 99n },
+    { netuid: 1, movingPriceBits: 10n },
+    { netuid: 2, movingPriceBits: 30n },
+    { netuid: 3, movingPriceBits: 20n },
+    { netuid: 4, movingPriceBits: 0n },
+  ];
+  const s = emissionStanding(rows, 2);
+  expect("rank 2 is the emission midpoint, a higher moving price sits above it, and a lower one sits past it", s.get(2)?.side === "above" && s.get(2)?.rank === 1 && s.get(3)?.side === "mid" && s.get(3)?.rank === 2 && s.get(1)?.side === "below" && s.get(1)?.rank === 3 && !s.has(0) && !s.has(4));
+  expect("a rank of 0 marks nothing", emissionStanding(rows, 0).size === 0);
 }
 
 console.log(failures ? `\n${failures} FAILED` : "\nall passed");

@@ -91,6 +91,26 @@ export function chartGeometry(series, { w, h, left = 58, right = 14, top = 12, b
   return { pts, line, area, yTicks, xTicks, lo, hi, plot: { left, right: w - right, top, bottom: h - bottom } };
 }
 
+/**
+ * Where each subnet sits against the chain's emission midpoint (`EmissionBarRank`).
+ * The chain sets that midpoint to the Nth-largest positive moving price: that subnet keeps half
+ * of what its price alone would earn, those above keep more, and those below keep less.
+ * A rank of 0 means the chain is not using rank mode, so nothing is marked.
+ * Root and a zero moving price are left out. Ties break toward the lower subnet number.
+ */
+export function emissionStanding(rows, barRank) {
+  const n = Number(barRank);
+  if (!Number.isInteger(n) || n <= 0) return new Map();
+  const priced = rows.filter((r) => r.netuid !== 0 && r.movingPriceBits > 0n)
+    .sort((a, b) => (a.movingPriceBits < b.movingPriceBits ? 1 : a.movingPriceBits > b.movingPriceBits ? -1 : a.netuid - b.netuid));
+  const out = new Map();
+  priced.forEach((r, i) => {
+    const rank = i + 1;
+    out.set(r.netuid, { rank, side: rank < n ? "above" : rank === n ? "mid" : "below" });
+  });
+  return out;
+}
+
 /** The point nearest `x` (the crosshair snaps to it). */
 export function nearestPoint(pts, x) {
   let best = pts[0];

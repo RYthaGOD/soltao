@@ -17,7 +17,7 @@ import { sealRoute, readRoute, untrustedPlan, sealRecord, openRecord } from "./p
 import { finishRoute, transitState, minStakeAmount, stakeGasReserve, sweepFloor } from "./route.js";
 import { routeFeeLamports, actionFeeRao, feeRuleText, feeRateText, feeCfgFor, holderOffBps } from "./fees.js";
 import { readLamportsPerTao } from "./orca.js";
-import { rangeSeries, changeBps, priceDaysAgo, coversRange, dateText, deregStanding, blockTime, chartGeometry, nearestPoint } from "./subnet_profile.js";
+import { rangeSeries, changeBps, priceDaysAgo, coversRange, dateText, deregStanding, blockTime, chartGeometry, nearestPoint, emissionStanding } from "./subnet_profile.js";
 
 const $ = (id) => document.getElementById(id);
 const clients = createClients();
@@ -248,6 +248,38 @@ async function refreshBalances() {
   gate();
 }
 
+// Balances, gas and the dollar price, without treating a failed read as an empty wallet.
+// A background tick calls this; Connect and "Check again" still use refreshBalances.
+async function refreshLiveWallet() {
+  if (!state.user || state.running) return;
+  const [taoBal, lamports, soltaoRaw, gas] = await Promise.all([
+    getTaoBalance(clients.connection, state.user).catch(() => null),
+    clients.connection.getBalance(new PublicKey(state.user)).then(BigInt).catch(() => null),
+    getSoltaoBalance(clients.connection, state.user).catch(() => null),
+    getGasPrice().catch(() => null),
+  ]);
+  let changed = false;
+  if (taoBal !== null && taoBal !== state.taoLd) { state.taoLd = taoBal; $("tao-balance").textContent = tao(taoBal); changed = true; }
+  if (lamports !== null && lamports !== state.lamports) { state.lamports = lamports; $("sol-balance").textContent = sol(lamports); changed = true; }
+  if (soltaoRaw !== null && soltaoRaw !== state.soltaoRaw) { state.soltaoRaw = soltaoRaw; changed = true; }
+  if (gas && gas !== state.gasPrice) { state.gasPrice = gas; changed = true; }
+  const reviewLive = $("step-review")?.dataset.state === "active";
+  if (!state.running && (changed || reviewLive)) gate();
+}
+
+let liveTick = 0;
+function refreshLive() {
+  if (document.hidden || state.running) return;
+  const tick = ++liveTick;
+  readUsd().catch(() => null).then(() => {
+    if (tick !== liveTick || document.hidden || state.running) return;
+    return openDirectory({ force: true, quiet: true });
+  }).then(() => {
+    if (tick !== liveTick || state.running) return;
+    return refreshLiveWallet();
+  }).catch(() => {});
+}
+
 // ── step 2: the Bittensor wallet and the transit account ────────────────────
 async function sign() {
   if (state.signed) return checkTransit(); // already signed: this is the retry after a failed read
@@ -313,6 +345,7 @@ function applyMode() {
     const had = state.coldkeyAddress;
     setColdkey(state.signed?.wallet.publicKey ?? null, { mustAck: Boolean(state.signed) });
     if (had !== state.coldkeyAddress) resetPhrase();
+    if (state.signed && had !== state.coldkeyAddress) showPhrase();
   } else onPaste();
 }
 
@@ -333,6 +366,15 @@ function resetPhrase() {
   $("phrase").hidden = true; $("phrase").replaceChildren();
   $("phrase-toggle").setAttribute("aria-expanded", "false"); $("phrase-toggle").textContent = "show recovery phrase";
   $("phrase-ack").checked = false;
+}
+
+function showPhrase() {
+  const words = state.signed?.wallet?.mnemonic;
+  if (!words) return;
+  $("phrase").replaceChildren(...words.split(" ").map((w) => Object.assign(document.createElement("li"), { textContent: w })));
+  $("phrase").hidden = false;
+  $("phrase-toggle").setAttribute("aria-expanded", "true");
+  $("phrase-toggle").textContent = "hide recovery phrase";
 }
 
 function togglePhrase() {
@@ -441,7 +483,7 @@ async function onNetuid() {
   state.netuid = 0n;
   if (!v) {
     $("netuid-in").removeAttribute("aria-invalid");
-    note("netuid-note", "0 is Root, the default.");
+    note("netuid-note", "0 is Root, the default. Your TAO stays TAO. The yield sits in your validator's basket of subnet tokens until you claim it.");
     recheckHotkey();
     return gate();
   }
@@ -454,8 +496,9 @@ async function onNetuid() {
   state.netuid = BigInt(v);
   if (state.netuid === 0n) {
     $("netuid-in").setAttribute("aria-invalid", "false");
-    note("netuid-note", "Root network.", "ok");
+    note("netuid-note", "Root network. Your TAO stays TAO. The yield sits in your validator's basket of subnet tokens until you claim it.", "ok");
     recheckHotkey();
+    showChoice(0);
     return gate();
   }
   // A subnet that does not exist would only be refused at the stake step, after the bridge.
@@ -481,6 +524,7 @@ async function onNetuid() {
       note("netuid-note", `Subnet ${state.netuid} · ${uids} registered hotkeys. Staking here mints its Alpha.`, "ok");
       showPlanProfile(Number(state.netuid));
       recheckHotkey();
+      showChoice(Number(state.netuid));
     }
   } catch (e) {
     if (seq === netuidSeq) { state.netuidChecking = false; note("netuid-note", `Could not reach Bittensor to check it: ${e.message}`, "bad"); }
@@ -493,45 +537,97 @@ async function onNetuid() {
 // on request): name and symbol as the owner registered them, the pool's spot price and its TAO. Two
 // orders, both named on the page; nothing is ranked beyond them. Choosing a row only fills the field.
 let directory = null; // { at, rows }
+let emissionBarRank = 0; // live EmissionBarRank; 0 until the chain answers
 const BLOCKS_PER_DAY = 7_200n; // one block every 12 seconds
 const DIRECTORY_TTL_MS = 5 * 60_000;
-async function readDirectory() {
-  if (!directory || Date.now() - directory.at > DIRECTORY_TTL_MS) {
+// While the tab is open, re-read the live figures on this cadence. One subnet-directory call,
+// the chain's emission rank, and any chart already on screen. Hidden tabs wait.
+const LIVE_REFRESH_MS = 60_000;
+let directoryFlight = null;
+async function readDirectory({ force = false } = {}) {
+  if (!force && directory && Date.now() - directory.at <= DIRECTORY_TTL_MS) return directory;
+  // One chain read at a time, including a "Read again" that starts while a read is already
+  // running. A failed read leaves the previous list in place: the assignment happens only
+  // after subnetDirectory() resolves, so a throw cannot stamp a fresh timestamp on rows
+  // that never arrived.
+  if (directoryFlight) return directoryFlight;
+  const flight = (async () => {
     const lib = await loadReturnLib();
-    directory = { at: Date.now(), rows: await lib.subnetDirectory() };
-  }
-  return directory;
+    const rows = await lib.subnetDirectory();
+    directory = { at: Date.now(), rows };
+    return directory;
+  })();
+  directoryFlight = flight;
+  try { return await flight; }
+  finally { if (directoryFlight === flight) directoryFlight = null; }
 }
 // Each subnet's last 31 daily prices, from soltao's own origin (`npm run history`), for the directory's
 // change columns and sparklines. A failed read only leaves those columns empty.
 let dirSummary = null;
 let dirProfiles = null;
-async function openDirectory() {
-  $("dir-wrap").hidden = false; $("dir-btn").disabled = true;
+let directoryOpen = null;
+async function openDirectory({ force = false, quiet = false } = {}) {
+  if (directoryOpen) return directoryOpen;
+  directoryOpen = runOpenDirectory(force, { quiet });
+  try { return await directoryOpen; }
+  finally { directoryOpen = null; }
+}
+async function runOpenDirectory(force, { quiet = false } = {}) {
+  $("dir-wrap").hidden = false;
+  const btn = $("dir-btn");
+  if (!quiet) btn.disabled = true;
+  let ok = false;
+  const hadList = Boolean(directory);
+  const beforeAt = directory?.at ?? 0;
   try {
-    if (!directory || Date.now() - directory.at > DIRECTORY_TTL_MS) note("dir-rule", "reading every subnet from Bittensor…");
-    const [, summary, profiles] = await Promise.all([
-      readDirectory(),
-      dirSummary ? dirSummary : fetchJson("/stake/history/summary.json").catch(() => null),
+    const stale = force || !directory || Date.now() - directory.at > DIRECTORY_TTL_MS;
+    // A background refresh keeps the list and its explanation on screen. "Read again"
+    // and the first load still say they are reading.
+    if (stale && !quiet) note("dir-rule", "Reading subnets from Bittensor…");
+    if (force) dropOpenFileCache();
+    const [, summary, profiles, chain] = await Promise.all([
+      readDirectory({ force }),
+      force || !dirSummary ? fetchJson("/stake/history/summary.json").catch(() => dirSummary) : dirSummary,
       readProfiles().catch(() => null),
+      readChainInfo({ force }).catch(() => null),
     ]);
-    dirSummary = summary;
-    dirProfiles = profiles;
-    renderDirectory();
+    dirSummary = summary || dirSummary;
+    dirProfiles = profiles || dirProfiles;
+    if (chain) emissionBarRank = chain.emissionBarRank || 0;
+    renderDirectory({ keepScroll: hadList });
+    if (directory && directory.at !== beforeAt) syncOpenFigures();
+    ok = true;
   } catch (e) {
-    note("dir-rule", `Could not read the subnets from Bittensor: ${e.message}`, "bad");
+    // A failed refresh keeps the last good rows on screen, then puts the error
+    // back in the status line (renderDirectory would overwrite it). A quiet
+    // refresh that still has a recent read leaves that status alone.
+    if (directory) renderDirectory({ keepScroll: hadList });
+    const aged = !directory || Date.now() - directory.at > DIRECTORY_TTL_MS;
+    if (!quiet || aged) note("dir-rule", `Could not read the subnets from Bittensor: ${e.message}`, "bad");
   } finally {
-    $("dir-btn").disabled = false;
+    btn.disabled = false;
+    // A failed refresh must leave the button. Hiding it whenever a cache exists
+    // stranded the error: the last good read survived the throw, and nothing on
+    // the page could ask the chain again. After a good read the same button
+    // stays, as "Read again", so the five-minute cache can be replaced.
+    btn.hidden = false;
+    btn.textContent = ok || directory ? "Read again" : "Show subnets";
   }
 }
-function renderDirectory() {
+function viewDirectory() {
+  if (!directory || Date.now() - directory.at > DIRECTORY_TTL_MS) return openDirectory();
+  renderDirectory();
+}
+function renderDirectory({ keepScroll = false } = {}) {
   if (!directory) return;
+  const body = $("dir-body");
+  const scroll = body.scrollTop;
   const q = $("dir-search").value.trim().toLowerCase(), order = $("dir-sort").value;
   const nowSec = Math.floor(Date.now() / 1000);
   // Daily prices from the summary, only while the netuid still holds the subnet they were read for.
   const daysOf = (r) => { const s = dirSummary?.prices?.[r.netuid]; return s && s.registeredAt === r.registeredAt ? s.days : []; };
   const changeOf = (r, days) => (r.netuid === 0 || r.priceRao === null ? null : (() => { const p = priceDaysAgo(daysOf(r), days, nowSec); return p === null ? null : changeBps(p, Number(r.priceRao)); })());
-  const aboutOf = (r) => (r.netuid === 0 ? "Root stakes TAO as TAO" : (dirProfiles?.profiles?.[String(r.netuid)]?.what || r.description || ""));
+  const aboutOf = (r) => (r.netuid === 0 ? "Root keeps TAO as TAO" : (dirProfiles?.profiles?.[String(r.netuid)]?.what || r.description || ""));
   let rows = directory.rows.filter((r) => !q || String(r.netuid) === q || r.name.toLowerCase().includes(q) || r.symbol.toLowerCase().includes(q) || aboutOf(r).toLowerCase().includes(q))
     .map((r) => ({ ...r, ch7: changeOf(r, 7), ch30: changeOf(r, 30) }));
   const most = (key) => (a, b) => ((b[key] ?? -1n) > (a[key] ?? -1n) ? 1 : (b[key] ?? -1n) < (a[key] ?? -1n) ? -1 : a.netuid - b.netuid);
@@ -546,9 +642,12 @@ function renderDirectory() {
     change7: "sorted by the Alpha price's change over 7 days, most risen first; subnets without 7 days of history go last (root is left out)",
   }[order];
   const hist = dirSummary?.lastTime ? ` The 7 and 30 day changes compare today's price with soltao's daily readings to ${dayText(dirSummary.lastTime)}; a past move says nothing about the next one.` : " The price history could not be read, so the change columns are empty.";
-  note("dir-rule", `${rows.length} of ${directory.rows.length} subnets, ${rule}. "TAO added per day" is the TAO the chain put into that pool in the last block, times 7,200 blocks (12 seconds each); it moves from block to block.${hist} Names are what each owner registered on-chain; a name is not an endorsement. Read ${at} UTC.`);
+  const cut = emissionBarRank > 0 ? ` The chain's emission midpoint is rank ${emissionBarRank} by moving price: that subnet keeps half of what its price alone would earn, those above it keep more, and those below keep less, down to a drip.` : "";
+  note("dir-rule", `${rows.length} of ${directory.rows.length} subnets, ${rule}. "TAO added per day" is the TAO the chain put into that pool in the last block, times 7,200 blocks (12 seconds each), after the chain's emission cut; it moves from block to block.${cut}${hist} Names are what each owner registered on-chain; a name is not an endorsement. Read ${at} UTC.`);
+  const standing = emissionStanding(directory.rows, emissionBarRank);
   const typed = $("netuid-in").value.trim();
-  const current = /^\d+$/.test(typed) ? Number(typed) : null;
+  const picked = $("netuid-in").dataset.chosen === "1" || new URLSearchParams(location.search).has("netuid");
+  const current = picked && /^\d+$/.test(typed) ? Number(typed) : null;
   const fact = (cls, label, value) => {
     const s = el("span", cls);
     s.append(el("span", "dir-k", label), document.createTextNode(" "), el("span", "dir-v", value));
@@ -562,10 +661,11 @@ function renderDirectory() {
     if (r.netuid === current) btn.setAttribute("aria-current", "true");
     if (r.description) btn.title = r.description;
     btn.addEventListener("click", () => {
+      $("netuid-in").dataset.chosen = "1";
       $("netuid-in").value = String(r.netuid);
       showDirDetail(r.netuid);
       onNetuid();
-      renderDirectory();
+      renderDirectory({ keepScroll: true });
     });
     const ch7 = el("span", "dir-ch7"); ch7.append(bpsNode(r.ch7));
     const top = el("span", "dir-top");
@@ -574,6 +674,8 @@ function renderDirectory() {
     const ch30 = el("span", "dir-ch30");
     if (days.length > 2) ch30.append(sparkline(days.map((d) => d[1])), " ");
     ch30.append(el("b", "", "30 days "), bpsNode(r.ch30));
+    const stand = standing.get(r.netuid);
+    const pay = stand ? el("span", `dir-pay${stand.side === "above" ? "" : ` ${stand.side}`}`, stand.side === "mid" ? `rank ${stand.rank}, the emission midpoint` : stand.side === "below" ? `rank ${stand.rank}, past the emission midpoint` : `rank ${stand.rank}`) : null;
     const facts = el("span", "dir-facts");
     facts.append(
       fact("dir-price", "Price", r.netuid === 0 ? "1 (root)" : r.priceRao === null ? "—" : fmtUnits(r.priceRao, 9)),
@@ -581,9 +683,11 @@ function renderDirectory() {
       fact("dir-day", "Per day", r.netuid === 0 || r.taoPerBlockRao === null ? "—" : fmtUnits(r.taoPerBlockRao * BLOCKS_PER_DAY, 9, 2)),
       ch30,
     );
+    if (pay) facts.append(pay);
     btn.append(el("span", "dir-id", String(r.netuid)), top, facts);
     return btn;
   }));
+  if (keepScroll) body.scrollTop = scroll;
 }
 /** A 30-day sparkline. The signed percent next to it carries the direction without colour. */
 function sparkline(values) {
@@ -651,12 +755,19 @@ async function fetchJson(path) {
   if (!r.ok) throw new Error(`${path} answered ${r.status}`);
   return r.json();
 }
-async function readChainInfo() {
-  if (!profileData.chain || Date.now() - profileData.chain.at > DIRECTORY_TTL_MS) {
+let chainFlight = null;
+async function readChainInfo({ force = false } = {}) {
+  if (!force && profileData.chain && Date.now() - profileData.chain.at <= DIRECTORY_TTL_MS) return profileData.chain;
+  if (chainFlight) return chainFlight;
+  const flight = (async () => {
     const lib = await loadReturnLib();
-    profileData.chain = { at: Date.now(), ...(await lib.chainInfo()) };
-  }
-  return profileData.chain;
+    const info = await lib.chainInfo();
+    profileData.chain = { at: Date.now(), ...info };
+    return profileData.chain;
+  })();
+  chainFlight = flight;
+  try { return await flight; }
+  finally { if (chainFlight === flight) chainFlight = null; }
 }
 async function readHistory(netuid) {
   if (!profileData.history.has(netuid)) profileData.history.set(netuid, fetchJson(`/stake/history/${netuid}.json`).catch((e) => { profileData.history.delete(netuid); throw e; }));
@@ -667,6 +778,17 @@ const validatorRecords = new Map();
 function readValidatorRecord(netuid) {
   if (!validatorRecords.has(netuid)) validatorRecords.set(netuid, fetchJson(`/stake/history/validators/${netuid}.json`).catch((e) => { validatorRecords.delete(netuid); throw e; }));
   return validatorRecords.get(netuid);
+}
+// A forced re-read must not keep the first response of these files for the whole visit.
+// The chain figures are read again anyway; these are the files a deploy can replace.
+function dropOpenFileCache() {
+  profileData.index = null;
+  const ids = [$("dir-detail")?.dataset.netuid, $("subnet-card-n")?.textContent];
+  for (const id of ids) {
+    if (!id || !/^\d+$/.test(id)) continue;
+    profileData.history.delete(Number(id));
+    validatorRecords.delete(Number(id));
+  }
 }
 /** How the "paid stakers" figures were made, for any list that shows them. */
 const paidRule = (rec) => `"Paid stakers" is how much one share of each validator's stake pool grew, in the subnet's Alpha, from ${dateText(rec.from)} to ${dateText(rec.to)}: what it passed on after its take. 0.0% means it paid its stakers nothing in that time; a dash means its pool was reset, so it can't be read. The Alpha's own price move comes on top.`;
@@ -690,25 +812,82 @@ const usdOfTao = (taoAmount) => (lastUsd?.tao ? ` (about ${fmtUsd(taoAmount * la
 
 function hidePlanProfile() { $("plan-profile-box").hidden = true; $("plan-profile").replaceChildren(); profileSeqs.set("plan-profile", (profileSeqs.get("plan-profile") || 0) + 1); }
 /** The chart and figures for the subnet chosen in the list. Root has no pool, so it gets a short note. */
-function showDirDetail(netuid) {
+function parkPicker() {
+  const picker = document.querySelector("#dir-detail .picker");
+  const detail = $("dir-detail");
+  if (picker && picker.parentElement !== detail) detail.append(picker);
+}
+function showDirDetail(netuid, { refresh = false } = {}) {
   const box = $("dir-detail");
+  const profile = $("dir-profile");
   const id = String(netuid);
-  const same = !box.hidden && box.dataset.netuid === id && box.dataset.ready === "1";
+  // A second tap on the same row keeps the chart. A new chain read must not: the list
+  // would show the new price while the chart still showed the previous one.
+  const same = !refresh && !box.hidden && box.dataset.netuid === id && box.dataset.ready === "1";
   box.hidden = false;
   box.dataset.netuid = id;
+  const share = $("dir-share");
+  share.replaceChildren();
+  if (netuid > 0) {
+    const href = `/stake/?netuid=${netuid}`;
+    const a = el("a", "btn btn-ghost btn-sm", "This subnet's page");
+    a.href = href;
+    const copy = el("button", "btn btn-ghost btn-sm", "Copy link");
+    copy.type = "button";
+    copy.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(new URL(href, location.origin).href);
+        copy.textContent = "Copied";
+        setTimeout(() => { if (copy.isConnected) copy.textContent = "Copy link"; }, 1400);
+      } catch {
+        copy.textContent = "Copy the address from the link";
+      }
+    });
+    share.append(a, copy);
+    share.hidden = false;
+  } else share.hidden = true;
   if (!same) {
     if (netuid === 0) {
       box.dataset.ready = "1";
-      box.replaceChildren(
+      parkPicker();
+      profile.replaceChildren(
         el("p", "profile-what", "Root"),
-        el("p", "step-note", "Root stakes TAO as TAO. It has no Alpha pool, so there is no price chart. Any other subnet converts the TAO you stake into that subnet's Alpha at the pool's price."),
+        el("p", "step-note", "Root keeps your TAO as TAO. It has no Alpha pool, so there is no price chart. The yield sits in subnet tokens your validator's basket holds. Claiming sells that slice at the pool and adds the TAO to your root stake."),
       );
     } else {
       delete box.dataset.ready;
-      renderProfile(box, netuid, { full: true }).then(() => { if (box.dataset.netuid === id) box.dataset.ready = "1"; });
+      renderProfile(profile, netuid, { full: true, fresh: refresh, keep: refresh }).then(() => { if (box.dataset.netuid === id) box.dataset.ready = "1"; });
     }
   }
-  box.scrollIntoView({ block: "nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  if (refresh) return;
+  const r = box.getBoundingClientRect();
+  if (r.top < 72 || r.bottom > innerHeight) {
+    box.scrollIntoView({ block: "nearest", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  }
+}
+/** After a new chain read, redraw any price chart or subnet card still on screen. */
+function syncOpenFigures() {
+  const detail = $("dir-detail");
+  if (!detail.hidden && /^\d+$/.test(detail.dataset.netuid || "")) showDirDetail(Number(detail.dataset.netuid), { refresh: true });
+  const card = $("subnet-card");
+  if (!card.hidden && directory) {
+    const netuid = Number($("subnet-card-n").textContent);
+    const row = directory.rows.find((x) => x.netuid === netuid);
+    if (row) {
+      $("subnet-price").textContent = row.priceRao === null ? "—" : `${fmtUnits(row.priceRao, 9)} TAO`;
+      $("subnet-pool").textContent = `${fmtUnits(row.taoInRao, 9, 0)} TAO`;
+      $("subnet-day").textContent = row.taoPerBlockRao === null ? "—" : `${fmtUnits(row.taoPerBlockRao * BLOCKS_PER_DAY, 9, 2)} TAO`;
+      const at = new Date(directory.at).toISOString().slice(11, 16);
+      const noteEl = $("subnet-note");
+      if (/read at \d\d:\d\d UTC/.test(noteEl.textContent)) noteEl.textContent = noteEl.textContent.replace(/read at \d\d:\d\d UTC/, `read at ${at} UTC`);
+      renderProfile($("subnet-card-profile"), netuid, { fresh: true, keep: true });
+    }
+  }
+  const plan = $("plan-profile-box");
+  if (!plan.hidden && !plan.querySelector("a[href='#dir-detail'], a[href='#subnet-card']")) {
+    const n = $("netuid-in").value.trim();
+    if (/^\d+$/.test(n) && n !== "0") renderProfile($("plan-profile"), Number(n), { full: true, fresh: true, keep: true });
+  }
 }
 function showPlanProfile(netuid) {
   $("plan-profile-box").hidden = false;
@@ -733,11 +912,12 @@ function showPlanProfile(netuid) {
 }
 
 const profileSeqs = new Map();
-async function renderProfile(root, netuid, { full = false } = {}) {
+async function renderProfile(root, netuid, { full = false, fresh = false, keep = false } = {}) {
   const seq = (profileSeqs.get(root.id) || 0) + 1; profileSeqs.set(root.id, seq);
   const current = () => profileSeqs.get(root.id) === seq;
-  root.replaceChildren(el("p", "step-note", `reading subnet ${netuid}…`));
-  const [dirR, chainR, histR, idxR, profR, , valR] = await Promise.allSettled([readDirectory(), readChainInfo(), readHistory(netuid), readHistoryIndex(), readProfiles(), readUsd(), readValidatorRecord(netuid)]);
+  // A live refresh keeps the chart up until the new figures are ready, so the card does not flash blank.
+  if (!(keep && root.childElementCount)) root.replaceChildren(el("p", "step-note", `reading subnet ${netuid}…`));
+  const [dirR, chainR, histR, idxR, profR, , valR] = await Promise.allSettled([readDirectory(), readChainInfo({ force: fresh }), readHistory(netuid), readHistoryIndex(), readProfiles(), readUsd(), readValidatorRecord(netuid)]);
   if (!current()) return;
   const row = dirR.status === "fulfilled" ? dirR.value.rows.find((r) => r.netuid === netuid) : null;
   if (!row) { root.replaceChildren(el("p", "step-note", dirR.status === "rejected" ? `Could not read this subnet from Bittensor: ${dirR.reason?.message}` : `Bittensor has no subnet ${netuid} right now.`)); return; }
@@ -805,6 +985,9 @@ async function renderProfile(root, netuid, { full = false } = {}) {
     if (stale) chartNote.dataset.tone = "warn";
   }
   nodes.push(range, chart, chartNote, table);
+  // On the directory card the validator list is the next choice, so it sits under the chart.
+  // The subnet page and the stake step keep the list where it already is.
+  if (root.id === "dir-profile") nodes.push(el("div", "dir-pick-slot"));
 
   // The numbers.
   const kv = el("dl", "kv subnet-kv profile-kv");
@@ -858,7 +1041,13 @@ async function renderProfile(root, netuid, { full = false } = {}) {
     nodes.push(el("p", "step-note", `Live figures read from Bittensor at ${at} UTC. The name, owner's description and links are what its owner registered on-chain; a listing here is not an endorsement.${lastUsd?.tao ? " Dollar figures use Dexscreener's TAO price." : ""}`));
   }
 
+  if (root.id === "dir-profile") parkPicker();
   root.replaceChildren(...nodes);
+  if (root.id === "dir-profile") {
+    const slot = root.querySelector(".dir-pick-slot");
+    const picker = $("dir-detail").querySelector(":scope > .picker");
+    if (slot && picker) slot.append(picker);
+  }
   draw(30);
   // The example buy, from the chain's own simulation of the swap (fee and price impact included).
   try {
@@ -932,10 +1121,18 @@ function drawChart(box, tip, series, label) {
 }
 
 // ── the validator picker ────────────────────────────────────────────────────
-// Lists the chosen subnet's validator-permit holders from the metagraph, on request (about 13 reads
-// against a rate-limited RPC, so never on every keystroke). It states its one sort rule and picks
-// nothing: choosing a row only fills the hotkey field, which is then checked like a pasted one.
+// Lists the chosen subnet's validator-permit holders from the metagraph once a subnet is chosen
+// (about 13 reads against a rate-limited RPC, so only after typing settles, never on every keystroke).
+// It states its one sort rule and picks nothing: choosing a row only fills the hotkey field.
 let pickSeq = 0;
+function showChoice(netuid) {
+  const chosen = $("netuid-in").dataset.chosen === "1" || new URLSearchParams(location.search).has("netuid");
+  if (!chosen || !state.netuidValid || state.netuidChecking) return;
+  const box = $("dir-detail");
+  if (box.hidden || box.dataset.netuid !== String(netuid)) showDirDetail(netuid);
+  openPicker();
+}
+
 function resetPicker() {
   pickSeq++;
   $("pick-wrap").hidden = true; $("pick-body").replaceChildren();
@@ -989,7 +1186,7 @@ const shareLink = (netuid, hotkey) => Object.assign(document.createElement("a"),
 async function onHotkey() {
   const v = $("hotkey-in").value.trim(); const seq = ++hotkeySeq;
   state.hotkey = null;
-  if (!v) { $("hotkey-in").removeAttribute("aria-invalid"); note("hotkey-note", "Pick one from the list, or paste its address."); return gate(); }
+  if (!v) { $("hotkey-in").removeAttribute("aria-invalid"); note("hotkey-note", "Pick one from the subnet above, or paste its address."); return gate(); }
   let pk;
   try { pk = ss58Decode(v); } catch (e) { $("hotkey-in").setAttribute("aria-invalid", "true"); note("hotkey-note", e.message, "bad"); return gate(); }
   if (state.coldkey && toHex(pk) === toHex(state.coldkey)) { $("hotkey-in").setAttribute("aria-invalid", "true"); note("hotkey-note", "That is your coldkey. Paste the validator's hotkey.", "bad"); return gate(); }
@@ -1083,6 +1280,8 @@ function gate() {
   note("amount-note", blocked ? "Finish the route in step 2 first." : amountErr, amountErr || blocked ? "bad" : null);
   // Stated before anything is typed, so people know how much to buy or send.
   const min = stakeMinRao();
+  const minEl = $("stake-min");
+  if (minEl) minEl.textContent = !reverse && min !== null ? `of ${tao(min)}` : "in step 3";
   note("amount-hint", !reverse && state.plan === "stake" && min !== null && !amountErr ? `Staking needs at least ${tao(min)}${usdOf(min)} at today's gas price. Less can only be delivered unstaked.` : "");
   const acked = $("review-ack-check").checked;
   const forwardReady = state.plan === "deliver" || Boolean(state.hotkey);
@@ -1141,7 +1340,7 @@ function renderReview(ready) {
     const view = holderView();
     const laterFee = view.cfg.offBps > 0n ? `plus soltao's fee at ${feeRateText(view.cfg)}%` : "plus 0.25%";
     return state.plan === "stake"
-      ? `Unstake from Your Bittensor holdings in step 2, then Back to Solana. The return quotes a live bridge fee then, ${laterFee}.`
+      ? `Unstake from Your Bittensor holdings in step 2, then Back to Solana. Unstake has not yet moved real funds through this page. The return quotes a live bridge fee then, ${laterFee}.`
       : `Back to Solana in the toggle above. The return quotes a live bridge fee then, ${laterFee}.`;
   });
   set("r-gas", () => { const g = bittensorGas(); return g === null ? "—" : `about ${tao(g)}`; });
@@ -1172,9 +1371,16 @@ const solanaRecipient = () => toHex(new PublicKey(state.user).toBytes());
 // The OFT carries 6 decimals across, so what lands on Solana is the amount floored to 0.000001 TAO.
 const arrivingLd = (amountRao) => BigInt(amountRao) - (BigInt(amountRao) % CONFIG.dustLd);
 
-/** Loads the return code if needed and reads the derived coldkey's free TAO. */
+/** Loads the return code if needed and reads the derived coldkey's free TAO.
+ *  Those two rows start as loading bars. Before the step 2 signature there is no Bittensor
+ *  wallet to read, so say that instead of leaving the bars up. */
 async function refreshReturn() {
-  if (state.direction !== "reverse" || !state.signed) return;
+  if (state.direction !== "reverse") return;
+  if (!state.signed) {
+    $("tao-staked").textContent = "sign in step 2";
+    $("tao-free").textContent = "sign in step 2";
+    return;
+  }
   $("tao-free").replaceChildren(Object.assign(document.createElement("span"), { className: "skel" }));
   $("tao-staked").textContent = "see step 2 to unstake";
   try {
@@ -1217,10 +1423,13 @@ async function showHoldings() {
     const lib = await loadReturnLib();
     // Root rewards wait with each validator until claimed (substrate.js, "root rewards"); a failed read
     // only hides them, it never hides the positions.
-    const [free, positions, rewards, claimMin] = await Promise.all([
+    const [free, positions, rewards, claimMin, dir, chain] = await Promise.all([
       lib.freeBalance(coldkey), lib.stakePositions(coldkey),
       lib.rootRewards(coldkey).catch(() => null), lib.rootClaimMinRao().catch(() => 0n),
+      readDirectory().catch(() => null), readChainInfo().catch(() => null),
     ]);
+    if (chain?.emissionBarRank) emissionBarRank = chain.emissionBarRank;
+    const standing = emissionStanding(dir?.rows ?? directory?.rows ?? [], emissionBarRank);
     // Each subnet's Alpha price once, and dollars if the feed answers; either failing only hides the worth.
     // Each subnet's validator record too (what they paid stakers over 30 days), which only adds a line.
     const netuids = [...new Set(positions.map((p) => p.netuid))];
@@ -1309,10 +1518,12 @@ async function showHoldings() {
     // validator until claimed, and a claim adds them to the root stake.
     const yieldNote = rewards === null
       ? (rootHotkeys.size ? " Could not read the root rewards waiting to be claimed; try again in a minute." : "")
-      : owedTotal ? ` Root rewards do not add to the stake on their own: ${tao(owedTotal)} is waiting to be claimed, and "Claim" adds it to your root stake. Each claim pays a Bittensor fee (about 0.008 TAO on 25 Sep 2026), so it only pays off once more than that has built up.`
-      : rootHotkeys.size ? " Root rewards wait with the validator until claimed, and each claim pays a Bittensor fee (about 0.008 TAO on 25 Sep 2026); none is waiting yet." : "";
+      : owedTotal ? ` Root rewards do not add to the stake on their own: ${tao(owedTotal)} is waiting in the validator's basket of subnet tokens, and "Claim" sells that slice and adds the TAO to your root stake. Each claim pays a Bittensor fee (about 0.008 TAO on 25 Sep 2026), so it only pays off once more than that has built up.`
+      : rootHotkeys.size ? " Root rewards sit in the validator's basket of subnet tokens until claimed, and each claim pays a Bittensor fee (about 0.008 TAO on 25 Sep 2026); none is waiting yet." : "";
+    const past = [...new Map(positions.filter((p) => standing.get(p.netuid)?.side === "below").map((p) => [p.netuid, p])).values()];
+    const pastNote = past.length ? ` ${past.map((p) => `Subnet ${p.netuid} is past the emission midpoint (moving-price rank ${standing.get(p.netuid).rank})`).join(". ")}. The chain pays those less than their price alone would earn, down to a drip.` : "";
     const paidNote = paidShown ? ` ${paidRule(paidShown)} Moving to another validator on the same subnet swaps nothing: "Move" does it with the one chosen in step 3.` : "";
-    note("holdings-note", `Read ${new Date().toISOString().slice(11, 16)} UTC. ${positions.length ? `${positions.length} stake position${positions.length === 1 ? "" : "s"}. Subnet stakes are in that subnet's Alpha and collect their rewards in the stake itself; root stakes are in TAO.` : "No stake positions."}${yieldNote}${inAll}${changed ? " Changes since you last looked here include rewards and anything added or taken out elsewhere." : ""}${paidNote}${smallFree}${canMove() ? " Unstake, Move, Stake and Claim here have not yet carried real funds through this page." : ""}`);
+    note("holdings-note", `Read ${new Date().toISOString().slice(11, 16)} UTC. ${positions.length ? `${positions.length} stake position${positions.length === 1 ? "" : "s"}. Subnet stakes are in that subnet's Alpha and collect their rewards in the stake itself; root stakes are in TAO.` : "No stake positions."}${yieldNote}${pastNote}${inAll}${changed ? " Changes since you last looked here include rewards and anything added or taken out elsewhere." : ""}${paidNote}${smallFree}${canMove() ? " Unstake, Move, Stake and Claim here have not yet carried real funds through this page." : ""}`);
   } catch (e) {
     if (seq === holdingsSeq) note("holdings-note", `Could not read it from Bittensor: ${e.message}`, "bad");
   } finally {
@@ -1334,6 +1545,25 @@ let move = null, moveQuoteSeq = 0;
 // "All" for a stake leaves room for soltao's fee, which comes out of the same free TAO.
 const moveAll = (m) => { if (m.kind !== "stake") return m.max; const fee = holderFeeRao(m.max); return m.max > fee ? m.max - fee : 0n; };
 async function openMove(m) {
+  // Said before any chain read, so a click never leaves the previous quote on screen.
+  if (m.kind === "stake" && (!state.hotkey || !state.netuidValid || state.netuidChecking)) {
+    $("move-panel").hidden = false; move = null;
+    $("pay-panel").hidden = true; pay = null;
+    $("move-title").textContent = "Stake free TAO";
+    $("move-then").checked = false; $("move-then-wrap").hidden = true;
+    note("move-quote", "Choose the subnet and a checked validator in step 3 first; this stakes to that choice.", "warn");
+    $("move-go").disabled = true; return;
+  }
+  if (m.kind === "move") {
+    const to = state.hotkey && state.netuidValid && !state.netuidChecking ? { hotkey: ss58Encode(state.hotkey), netuid: Number(state.netuid) } : null;
+    if (!to || (to.hotkey === m.hotkey && to.netuid === m.netuid)) {
+      $("move-panel").hidden = false; move = null; $("pay-panel").hidden = true; pay = null;
+      $("move-title").textContent = `Move this stake from ${m.netuid === 0 ? "root" : `subnet ${m.netuid}`}`;
+      note("move-quote", to ? "Step 3 names this same subnet and validator. Choose where to move it in step 3 (its profile opens there), then press Move again." : "Choose where to move it in step 3: a subnet (its profile opens there) and a checked validator. Then press Move again.", "warn");
+      $("move-then-wrap").hidden = true; $("move-go").disabled = true; return;
+    }
+    m = { ...m, to };
+  }
   await readSoltao();
   $("move-amount-wrap").hidden = m.kind === "claim";
   if (m.kind === "claim") {
@@ -1348,25 +1578,8 @@ async function openMove(m) {
   }
   if (m.kind === "stake") {
     // Staking reuses step 3's subnet and validator, which have already passed the on-chain checks.
-    if (!state.hotkey || !state.netuidValid || state.netuidChecking) {
-      $("move-panel").hidden = false; move = null;
-      $("move-title").textContent = "Stake free TAO";
-      note("move-quote", "Choose the subnet and a checked validator in step 3 first; this stakes to that choice.", "warn");
-      $("move-go").disabled = true; return;
-    }
     const reserve = CONFIG.defaultReserveRao; // left free to pay for later moves
     m = { ...m, hotkey: ss58Encode(state.hotkey), netuid: Number(state.netuid), max: m.free > reserve ? m.free - reserve : 0n };
-  }
-  if (m.kind === "move") {
-    // A move goes to step 3's subnet and validator, which have passed the same on-chain checks as a stake.
-    const to = state.hotkey && state.netuidValid && !state.netuidChecking ? { hotkey: ss58Encode(state.hotkey), netuid: Number(state.netuid) } : null;
-    if (!to || (to.hotkey === m.hotkey && to.netuid === m.netuid)) {
-      $("move-panel").hidden = false; move = null; $("pay-panel").hidden = true; pay = null;
-      $("move-title").textContent = `Move this stake from ${m.netuid === 0 ? "root" : `subnet ${m.netuid}`}`;
-      note("move-quote", to ? "Step 3 names this same subnet and validator. Choose where to move it in step 3 (its profile opens there), then press Move again." : "Choose where to move it in step 3: a subnet (its profile opens there) and a checked validator. Then press Move again.", "warn");
-      $("move-then-wrap").hidden = true; $("move-go").disabled = true; return;
-    }
-    m = { ...m, to };
   }
   move = m;
   $("pay-panel").hidden = true; pay = null;
@@ -1405,7 +1618,7 @@ async function quoteClaim() {
     // A claim's fee is reserved for its declared work (it scans the validator's whole basket), so it can
     // exceed a small payout; the chain charges what the claim actually did, which may be less.
     const costly = q.feeRao + fee >= m.payoutRao;
-    note("move-quote", `Claims about ${tao(m.payoutRao)} of root rewards and adds it to your root stake with this validator. Bittensor reserves a network fee of about ${tao(q.feeRao)} from free TAO and charges what the claim actually used, which can be less. The exact amount is set when it lands. soltao's fee: ${tao(fee)} (${feeWords("TAO", hold)}), from free TAO in the same transaction.${costly ? " The fees are more than the rewards waiting, so claiming now can cost more than it pays; letting them build up first is cheaper." : ""} To bring it to Solana afterwards, unstake it with "Then send the freed TAO back to my Solana wallet".`, costly ? "warn" : null);
+    note("move-quote", `Claims about ${tao(m.payoutRao)} by selling your slice of this validator's basket, and adds the TAO to your root stake with this validator. Bittensor reserves a network fee of about ${tao(q.feeRao)} from free TAO and charges what the claim actually used, which can be less. The exact amount is set when it lands. soltao's fee: ${tao(fee)} (${feeWords("TAO", hold)}), from free TAO in the same transaction.${costly ? " The fees are more than the rewards waiting, so claiming now can cost more than it pays; letting them build up first is cheaper." : ""} To bring it to Solana afterwards, unstake it with "Then send the freed TAO back to my Solana wallet".`, costly ? "warn" : null);
   } catch (e) { if (seq === moveQuoteSeq) note("move-quote", `Could not read the fee from Bittensor: ${e.message}`, "bad"); }
 }
 async function quoteMove() {
@@ -2137,12 +2350,11 @@ function init() {
   $("reserve").addEventListener("input", gate);
   $("amount-max").addEventListener("click", () => { $("amount").value = fmtUnits(removeDust(state.taoLd), 9, 9).replace(/,/g, ""); gate(); });
   document.querySelectorAll('input[name="plan"]').forEach((r) => r.addEventListener("change", () => { state.plan = r.value; gate(); }));
-  $("netuid-in").addEventListener("input", onNetuid);
+  $("netuid-in").addEventListener("input", () => { $("netuid-in").dataset.chosen = "1"; onNetuid(); });
   $("hotkey-in").addEventListener("input", onHotkey);
   $("pick-btn").addEventListener("click", openPicker);
-  $("dir-btn").addEventListener("click", openDirectory);
-  $("dir-search").addEventListener("input", renderDirectory);
-  $("dir-sort").addEventListener("change", renderDirectory);
+  $("dir-search").addEventListener("input", () => { viewDirectory(); });
+  $("dir-sort").addEventListener("change", () => { viewDirectory(); });
   $("holdings-btn").addEventListener("click", showHoldings);
   $("move-amount").addEventListener("input", quoteMove);
   $("move-then").addEventListener("change", quoteMove);
@@ -2167,6 +2379,12 @@ function init() {
   addEventListener("pageshow", (e) => { if (e.persisted) location.reload(); }); // restored from the back/forward cache without its keys
   prefillFromLink();
   gate();
+  $("dir-btn").addEventListener("click", () => { openDirectory({ force: $("dir-btn").textContent === "Read again" }); });
+  // The list is the page, so it starts open. That loads return.js (the Bittensor reads live there).
+  // Then the same read repeats while the tab is visible, so a price does not sit at the first snapshot.
+  openDirectory();
+  setInterval(refreshLive, LIVE_REFRESH_MS);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refreshLive(); });
 }
 
 // A shared link can name the subnet and validator: /stake/?netuid=1&hotkey=5F… fills step 3 and runs

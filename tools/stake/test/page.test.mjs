@@ -171,16 +171,19 @@ if (want("A")) {
 
   await clickEl(page, "#phrase-ack");
   expect("step 3 stays locked until the phrase is acknowledged", (await attr(page, "#step-plan", "data-state")) === "locked");
-  await page.click("#phrase-toggle");
   const words = await page.$$eval("#phrase li", (lis) => lis.map((li) => li.textContent).join(" "));
-  expect("the recovery phrase shown is the derived 12 words", words === expected.mnemonic);
+  expect("the recovery phrase is shown as soon as the wallet is created", words === expected.mnemonic);
+  expect("the acknowledgement is that those words were saved", (await text(page, "#phrase-box")).includes("I saved these 12 words.") && !(await text(page, "#phrase-box")).includes("Solana wallet only"));
   await page.click("#phrase-toggle");
   expect("hiding the phrase removes it from the DOM", (await page.$$("#phrase li")).length === 0);
+  await page.click("#phrase-toggle");
+  expect("showing it again puts the same 12 words back", (await page.$$eval("#phrase li", (lis) => lis.map((li) => li.textContent).join(" "))) === expected.mnemonic);
   await clickEl(page, "#phrase-ack");
   expect("acknowledging unlocks step 3", (await attr(page, "#step-plan", "data-state")) === "active");
 
   await clickEl(page, 'input[name="ck-mode"][value="paste"]');
   expect("paste mode hides the derived phrase", await hidden(page, "#phrase-box"));
+  expect("paste mode says this address cannot be brought back to Solana", /cannot be brought back to Solana/.test(await page.$eval('input[name="ck-mode"][value="paste"]', (el) => el.closest("label").textContent)));
   await page.type("#coldkey-in", "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQZ");
   expect("a mistyped SS58 address is rejected", (await attr(page, "#coldkey-note", "data-tone")) === "bad", await text(page, "#coldkey-note"));
   await page.$eval("#coldkey-in", (el) => { el.value = ""; });
@@ -258,7 +261,7 @@ if (want("B")) {
   expect("soltao's fee is 0.25% of the TAO sent in SOL, at least 0.0035 SOL, and says so, with the price it used", soltaoFee >= 0.0035 && /^[\d.]+ SOL( → BgGF…72Na)? \(0\.25%, at least 0\.0035 SOL; 1 TAO = [\d.]+ SOL at the Orca TAO\/SOL pool\)$/.test(feeText), feeText);
   expect("total adds the priority fee and soltao's fee", Math.abs(total - lz - prio - soltaoFee) < 2e-6, `${total} SOL`);
   expect("review names the plan and the stake", /^Stake about 0\.0\d+ TAO on root/.test(await text(page, "#r-plan")), await text(page, "#r-plan"));
-  expect("review names how to get the stake back, and that the return quotes then", /^Unstake from Your Bittensor holdings in step 2, then Back to Solana\. The return quotes a live bridge fee then, plus 0\.25%\.$/.test(await text(page, "#r-later")), await text(page, "#r-later"));
+  expect("review names how to get the stake back, and that unstake has not yet moved real funds", /^Unstake from Your Bittensor holdings in step 2, then Back to Solana\. Unstake has not yet moved real funds through this page\. The return quotes a live bridge fee then, plus 0\.25%\.$/.test(await text(page, "#r-later")), await text(page, "#r-later"));
   expect("review shows the transit account", /^0x[0-9a-f]{40}$/.test(await text(page, "#r-via")));
   expect("review estimates Bittensor gas in TAO", /^about 0\.00\d+ TAO$/.test(await text(page, "#r-gas")), await text(page, "#r-gas"));
   expect("sign stays disabled while the route is not live", await page.$eval("#sign", (b) => b.disabled));
@@ -432,7 +435,8 @@ if (want("E")) {
   await setFieldE(page, "#netuid-in", "2");
   expect("changing the subnet clears the list", (await page.$eval("#pick-wrap", (el) => el.hidden)) && (await text(page, "#pick-btn")) === "List subnet 2's validators");
 
-  // The subnet directory: every subnet from the chain, named orders, search, and a tap fills the field.
+  // The route is on the page. The directory opens itself: every subnet from the chain, named orders, search, and a tap fills the field.
+  expect("the route sits on the page, outside How it works", await page.$eval("ol.stake-hops.dir-fwd", (el) => !el.hidden && !el.closest("details") && el.querySelectorAll("li").length === 4));
   await clickEl(page, "#dir-btn");
   await waitText(page, "#dir-rule", /subnets, in subnet-number order|Could not/, 90_000);
   const dirRule = await text(page, "#dir-rule"), total = Number((dirRule.match(/of (\d+) subnets/) || [])[1]);
@@ -448,7 +452,8 @@ if (want("E")) {
   })));
   const first = await dirRows();
   expect("the directory lists every subnet from the chain, root first, with name, price and pool", total > 100 && first[0].id === "0" && first[0].price === "1 (root)" && first[1].id === "1" && first[1].name.length > 0 && parseFloat(first[1].price) > 0 && parseFloat(first[1].pool.replace(/,/g, "")) > 0, `${total} · ${first.slice(0, 2).map((r) => [r.id, r.name, r.price, r.pool].join(" | ")).join(" / ")}`);
-  expect("…and says its order, that names are not endorsements, and when it read them", /in subnet-number order\. "TAO added per day" is the TAO the chain put into that pool in the last block, times 7,200 blocks \(12 seconds each\); it moves from block to block\. The 7 and 30 day changes compare today's price with soltao's daily readings to \d+ \w{3} \d{4}; a past move says nothing about the next one\. Names are what each owner registered on-chain; a name is not an endorsement\. Read \d\d:\d\d UTC\./.test(dirRule), dirRule);
+  expect("Show subnets stays on the page after a good read, so the list can be read again", await page.$eval("#dir-btn", (el) => !el.hidden && !el.disabled && el.textContent === "Read again"));
+  expect("…and says its order, that names are not endorsements, and when it read them", /in subnet-number order\. "TAO added per day" is the TAO the chain put into that pool in the last block, times 7,200 blocks \(12 seconds each\), after the chain's emission cut; it moves from block to block\. The chain's emission midpoint is rank \d+ by moving price: that subnet keeps half of what its price alone would earn, those above it keep more, and those below keep less, down to a drip\. The 7 and 30 day changes compare today's price with soltao's daily readings to \d+ \w{3} \d{4}; a past move says nothing about the next one\. Names are what each owner registered on-chain; a name is not an endorsement\. Read \d\d:\d\d UTC\./.test(dirRule), dirRule);
   await setFieldE(page, "#dir-search", "7");
   expect("search by number finds that subnet", (await dirRows()).some((r) => r.id === "7"));
   await setFieldE(page, "#dir-search", "");
@@ -469,6 +474,8 @@ if (want("E")) {
   const pickNet = pools[0][0];
   await page.$$eval("#dir-body .dir-row", (rows) => rows[0].click());
   expect("choosing a subnet fills the field and runs the usual check", (await page.$eval("#netuid-in", (el) => el.value)) === pickNet, await page.$eval("#netuid-in", (el) => el.value));
+  const dirLink = await page.$eval("#dir-share a", (a) => a.getAttribute("href")).catch(() => null);
+  expect("…and opens that subnet's chart with a link to its page", dirLink === `/stake/?netuid=${pickNet}` && (await page.$eval("#dir-detail", (el) => el.hidden)) === false, dirLink);
   await waitText(page, "#netuid-note", /registered hotkeys|Could not reach/);
 
   const who = (await text(page, ".stake-who")).replace(/\s+/g, " ");
@@ -534,9 +541,12 @@ if (want("F")) {
   const { page, problems } = await openWith({ pubkey, secret, intercept });
   expect("the return direction opens on a local host", !(await page.$eval('input[name="direction"][value="reverse"]', (el) => el.disabled)));
   const loadedEarly = await page.evaluate(() => performance.getEntriesByType("resource").some((e) => e.name.includes("return.js")));
-  expect("the forward page does not download the return code", !loadedEarly);
+  expect("the open subnet list loads the Bittensor code", loadedEarly);
   await page.click("#connect");
   await waitText(page, "#tao-balance", /TAO/);
+  await clickEl(page, 'input[name="direction"][value="reverse"]');
+  expect("before the signature, the Bittensor rows say to sign instead of spinning", (await text(page, "#tao-staked")) === "sign in step 2" && (await text(page, "#tao-free")) === "sign in step 2");
+  await clickEl(page, 'input[name="direction"][value="forward"]');
   await page.click("#derive");
   await waitText(page, "#coldkey-out", /^5/);
   await page.waitForFunction(() => document.querySelector("#derive")?.textContent === "Signed", { timeout: 60_000 });
@@ -545,17 +555,17 @@ if (want("F")) {
   await waitText(page, "#tao-free", /TAO|unavailable/, 90_000);
   const loaded = await page.evaluate(() => performance.getEntriesByType("resource").filter((e) => e.name.includes("return.js")).map((e) => new URL(e.name).pathname + new URL(e.name).search));
   expect("choosing the return loads its code once, by content hash", loaded.length === 1 && /^\/stake\/return\.js\?v=[0-9a-f]{8}$/.test(loaded[0]), loaded.join(","));
-  expect("it reads the coldkey's free TAO", (await text(page, "#tao-free")) === "2 TAO" && accountReads > 0, `${await text(page, "#tao-free")} · ${accountReads} account reads`);
+  expect("it reads the coldkey's free TAO", (await text(page, "#tao-free")) === "2 TAO" && (await text(page, "#tao-staked")) === "see step 2 to unstake" && accountReads > 0, `${await text(page, "#tao-free")} · ${await text(page, "#tao-staked")} · ${accountReads} account reads`);
   await clickEl(page, "#holdings-btn");
   await waitText(page, "#holdings-note", /^Read \d\d:\d\d UTC|Could not/, 90_000);
   const holdings = await page.$$eval("#holdings-body tr", (trs) => trs.map((tr) => [...tr.children].map((td) => td.textContent.trim()).join(" | ")));
   expect("holdings show free TAO and each stake position with its worth in TAO, read from the chain", holdings[0] === "Free | — | 2 TAO | 2 TAO | Stake Top up Chutes" && holdings.length === 4 && holdings.slice(1, 3).every((h) => /^Staked on subnet 1 \| 5\w+…\w+(paid stakers [+−]?\d+\.\d% in 30 days; the best here [+−]?\d+\.\d%)? \| [\d,.]+ Alpha \| ≈ [\d,.]+ TAO \| Unstake Move Profile$/.test(h)) && /2 stake positions\. Subnet stakes are in that subnet's Alpha and collect their rewards in the stake itself; root stakes are in TAO\./.test(await text(page, "#holdings-note")), `${holdings.join(" / ")} · ${await text(page, "#holdings-note")}`);
   expect("holdings disclose the stake route has carried real funds, and that Unstake/Move/Claim from this list have not", /has carried real funds/.test(await text(page, "#holdings-limits")) && /Unstake, Move, Claim, and staking more from this list/.test(await text(page, "#holdings-limits")) && /Unstake, Move, Stake and Claim here have not yet carried real funds through this page/.test(await text(page, "#holdings-note")));
-  expect("root rewards waiting with a validator are listed with a Claim, and counted in the total", /^Root rewards \| 5\w+…\w+ \| —waiting to be claimed \| ≈ 0\.003 TAO \| Claim$/.test(holdings[3] || "") && /0\.003 TAO is waiting to be claimed, and "Claim" adds it to your root stake\. Each claim pays a Bittensor fee \(about 0\.008 TAO on 25 Sep 2026\), so it only pays off once more than that has built up\. Worth about [\d,.]+ TAO in all.*counting rewards still to claim/.test(await text(page, "#holdings-note")), `${holdings[3]} · ${await text(page, "#holdings-note")}`);
+  expect("root rewards waiting with a validator are listed with a Claim, and counted in the total", /^Root rewards \| 5\w+…\w+ \| —waiting to be claimed \| ≈ 0\.003 TAO \| Claim$/.test(holdings[3] || "") && /0\.003 TAO is waiting in the validator's basket of subnet tokens, and "Claim" sells that slice and adds the TAO to your root stake\. Each claim pays a Bittensor fee \(about 0\.008 TAO on 25 Sep 2026\), so it only pays off once more than that has built up\.(?: Subnet \d+ is past the emission midpoint \(moving-price rank \d+\)\.)*(?: The chain pays those less than their price alone would earn, down to a drip\.)? Worth about [\d,.]+ TAO in all.*counting rewards still to claim/.test(await text(page, "#holdings-note")), `${holdings[3]} · ${await text(page, "#holdings-note")}`);
   await page.$eval("#holdings-body tr:nth-child(4) button", (b) => b.click());
   await waitText(page, "#move-quote", /^Claims about|Could not|The Bittensor fee/, 60_000);
   // The real claim fee (read live, about 0.008 TAO on 25 Sep) is more than the 0.003 TAO served here.
-  expect("Claim is priced before anything is signed, has no amount to enter, and warns when its fee outweighs the rewards", /^Claims about 0\.003 TAO of root rewards and adds it to your root stake with this validator\. Bittensor reserves a network fee of about [\d.]+ TAO from free TAO and charges what the claim actually used, which can be less\..* The fees are more than the rewards waiting, so claiming now can cost more than it pays/.test(await text(page, "#move-quote")) && (await text(page, "#move-title")).startsWith("Claim root rewards from 5") && (await page.$eval("#move-amount-wrap", (el) => el.hidden)) && !(await page.$eval("#move-go", (b) => b.disabled)), await text(page, "#move-quote"));
+  expect("Claim is priced before anything is signed, has no amount to enter, and warns when its fee outweighs the rewards", /^Claims about 0\.003 TAO by selling your slice of this validator's basket, and adds the TAO to your root stake with this validator\. Bittensor reserves a network fee of about [\d.]+ TAO from free TAO and charges what the claim actually used, which can be less\..* The fees are more than the rewards waiting, so claiming now can cost more than it pays/.test(await text(page, "#move-quote")) && (await text(page, "#move-title")).startsWith("Claim root rewards from 5") && (await page.$eval("#move-amount-wrap", (el) => el.hidden)) && !(await page.$eval("#move-go", (b) => b.disabled)), await text(page, "#move-quote"));
   await clickEl(page, "#move-cancel");
   // The next read compares with this one: make the stored look 0.001 Alpha smaller, as if rewards arrived since.
   await page.evaluate(() => {
@@ -581,6 +591,7 @@ if (want("F")) {
   // Stake moves from the holdings view (not confirmed: nothing is signed or sent).
   expect("free TAO offers Stake and Top up Chutes on a local host", (await page.$$eval("#holdings-body tr:first-child button", (b) => b.map((x) => x.textContent))).join() === "Stake,Top up Chutes");
   await page.$eval("#holdings-body tr:first-child button", (b) => b.click());
+  await waitText(page, "#move-quote", /Choose the subnet and a checked validator in step 3 first|Could not/, 30_000);
   expect("staking asks for a checked subnet and validator from step 3 first", /Choose the subnet and a checked validator in step 3 first/.test(await text(page, "#move-quote")) && (await page.$eval("#move-go", (b) => b.disabled)), await text(page, "#move-quote"));
   await setFieldE(page, "#netuid-in", "1");
   await setFieldE(page, "#hotkey-in", SUBNET1_OWNER_HOTKEY);

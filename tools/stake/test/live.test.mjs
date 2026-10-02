@@ -66,7 +66,7 @@ try {
   const { page, problems, status } = await open("/stake/");
   expect("/stake/ loads", status === 200, `HTTP ${status}`);
   const served = await page.evaluate(() => document.querySelector('script[src*="stake.js"]')?.getAttribute("src"));
-  // Until a subnet is chosen (its profile reads Bittensor through it), the return code is not downloaded.
+  // The subnet list is open on load, and its chain read lives in return.js.
   const returnAtLoad = await page.evaluate(() => performance.getEntriesByType("resource").some((e) => e.name.includes("return.js")));
   expect("the served script is the one just built", served?.endsWith(`v=${builtHash}`), `${served} vs v=${builtHash}`);
 
@@ -135,7 +135,7 @@ try {
   // Bug history item 1: the bundle once leaked Node's `process`/`Buffer` onto window and broke Phantom.
   const leaks = await page.evaluate(() => ["process", "Buffer", "global"].filter((k) => k in window));
   expect("the bundle adds no Node globals to window", leaks.length === 0, leaks.join(", "));
-  expect("the forward page does not download the return code until a subnet is chosen", !returnAtLoad);
+  expect("the open subnet list downloads the Bittensor code", returnAtLoad);
   const returnSrc = (await (await fetch(`${SITE}/stake/${served}`)).text()).match(/return\.js\?v=[0-9a-f]{8}/)?.[0];
   if (returnSrc) {
     const res = await fetch(`${SITE}/stake/${returnSrc}`, { method: "HEAD" });
