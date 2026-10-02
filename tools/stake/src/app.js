@@ -277,6 +277,14 @@ function refreshLive() {
   }).then(() => {
     if (tick !== liveTick || state.running) return;
     return refreshLiveWallet();
+  }).then(() => {
+    if (tick !== liveTick || document.hidden || state.running) return;
+    // The open validator table and holdings, in place. A closed panel is left alone,
+    // and a move quote on screen is left alone so a tick cannot wipe it.
+    return openPicker({ quiet: true });
+  }).then(() => {
+    if (tick !== liveTick || document.hidden || state.running) return;
+    return showHoldings({ quiet: true });
   }).catch(() => {});
 }
 
@@ -328,7 +336,7 @@ async function sign() {
 function setColdkey(publicKey, { mustAck = false } = {}) {
   const before = state.coldkeyAddress;
   state.coldkey = publicKey; state.coldkeyAddress = publicKey ? ss58Encode(publicKey) : null; state.mustAck = mustAck;
-  if (state.coldkeyAddress !== before) { holdingsSeq++; $("holdings-wrap").hidden = true; $("holdings-btn").disabled = false; move = null; $("move-panel").hidden = true; pay = null; $("pay-panel").hidden = true; }
+  if (state.coldkeyAddress !== before) { holdingsSeq++; holdingsReading = false; $("holdings-wrap").hidden = true; $("holdings-btn").disabled = false; move = null; $("move-panel").hidden = true; pay = null; $("pay-panel").hidden = true; }
   $("ck-result").hidden = !publicKey || !state.signed;
   if (publicKey) {
     $("coldkey-out").textContent = state.coldkeyAddress;
@@ -541,7 +549,8 @@ let emissionBarRank = 0; // live EmissionBarRank; 0 until the chain answers
 const BLOCKS_PER_DAY = 7_200n; // one block every 12 seconds
 const DIRECTORY_TTL_MS = 5 * 60_000;
 // While the tab is open, re-read the live figures on this cadence. One subnet-directory call,
-// the chain's emission rank, and any chart already on screen. Hidden tabs wait.
+// the chain's emission rank, any chart already on screen, and — when they are open — the
+// validator table and holdings. Hidden tabs wait.
 const LIVE_REFRESH_MS = 60_000;
 let directoryFlight = null;
 async function readDirectory({ force = false } = {}) {
@@ -1125,6 +1134,7 @@ function drawChart(box, tip, series, label) {
 // (about 13 reads against a rate-limited RPC, so only after typing settles, never on every keystroke).
 // It states its one sort rule and picks nothing: choosing a row only fills the hotkey field.
 let pickSeq = 0;
+let pickerReading = false;
 function showChoice(netuid) {
   const chosen = $("netuid-in").dataset.chosen === "1" || new URLSearchParams(location.search).has("netuid");
   if (!chosen || !state.netuidValid || state.netuidChecking) return;
@@ -1135,15 +1145,21 @@ function showChoice(netuid) {
 
 function resetPicker() {
   pickSeq++;
+  pickerReading = false;
   $("pick-wrap").hidden = true; $("pick-body").replaceChildren();
   $("pick-btn").disabled = false;
   $("pick-btn").textContent = state.netuid === 0n ? "List root validators" : `List subnet ${state.netuid}'s validators`;
 }
-async function openPicker() {
+async function openPicker({ quiet = false } = {}) {
   if (state.netuidChecking || !state.netuidValid) return;
+  // A background tick only refreshes a list already on screen, and never one a click is already reading.
+  if (quiet && ($("pick-wrap").hidden || $("pick-btn").disabled || pickerReading)) return;
   const netuid = state.netuid, seq = ++pickSeq;
-  $("pick-btn").disabled = true; $("pick-wrap").hidden = false; $("pick-body").replaceChildren();
-  note("pick-rule", `reading ${netuid === 0n ? "root" : `subnet ${netuid}`}'s validators from Bittensor…`);
+  pickerReading = true;
+  if (!quiet) {
+    $("pick-btn").disabled = true; $("pick-wrap").hidden = false; $("pick-body").replaceChildren();
+    note("pick-rule", `reading ${netuid === 0n ? "root" : `subnet ${netuid}`}'s validators from Bittensor…`);
+  }
   try {
     const list = await subnetValidators(netuid);
     if (seq !== pickSeq) return;
@@ -1176,7 +1192,7 @@ async function openPicker() {
   } catch (e) {
     if (seq === pickSeq) note("pick-rule", `Could not read the validators from Bittensor: ${e.message}. Try again in a minute.`, "bad");
   } finally {
-    if (seq === pickSeq) $("pick-btn").disabled = false;
+    if (seq === pickSeq) { $("pick-btn").disabled = false; pickerReading = false; }
   }
 }
 
@@ -1404,6 +1420,7 @@ async function refreshReturn() {
 // Free TAO plus every stake position, from the chain's own StakeInfo runtime API. Read on request,
 // through the Bittensor-side bundle, so the forward page stays light. Works for a pasted coldkey too.
 let holdingsSeq = 0;
+let holdingsReading = false;
 // The last read of each coldkey's positions, kept in this browser only (a coldkey is public), so the
 // next read can say what changed. It cannot tell rewards from stake added or taken out elsewhere, and says so.
 const lastLookKey = (coldkey) => `soltao.stake.lastlook.${coldkey}`;
@@ -1413,12 +1430,18 @@ function saveLook(coldkey, positions) {
 }
 const signed = (amount, netuid) => `${amount < 0n ? "−" : "+"}${stakeAmount(amount < 0n ? -amount : amount, netuid)}`;
 
-async function showHoldings() {
+async function showHoldings({ quiet = false } = {}) {
   const coldkey = state.coldkeyAddress;
   if (!coldkey) return;
+  // A background tick keeps an open list current. It does not open the panel, blank it,
+  // or touch a move quote, and it does not move the "since you last looked" mark.
+  if (quiet && ($("holdings-wrap").hidden || !$("move-panel").hidden || $("holdings-btn").disabled || holdingsReading)) return;
   const seq = ++holdingsSeq;
-  $("holdings-btn").disabled = true; $("holdings-wrap").hidden = false; $("holdings-body").replaceChildren();
-  note("holdings-note", `reading ${short(coldkey, 6)} from Bittensor…`);
+  holdingsReading = true;
+  if (!quiet) {
+    $("holdings-btn").disabled = true; $("holdings-wrap").hidden = false; $("holdings-body").replaceChildren();
+    note("holdings-note", `reading ${short(coldkey, 6)} from Bittensor…`);
+  }
   try {
     const lib = await loadReturnLib();
     // Root rewards wait with each validator until claimed (substrate.js, "root rewards"); a failed read
@@ -1438,7 +1461,7 @@ async function showHoldings() {
       usdPrices().catch(() => null),
       Promise.all(netuids.map((n) => (n === 0 ? null : readValidatorRecord(n).catch(() => null)))).then((rs) => new Map(netuids.map((n, i) => [n, rs[i]]))),
     ]);
-    if (seq !== holdingsSeq || coldkey !== state.coldkeyAddress) return;
+    if (seq !== holdingsSeq || coldkey !== state.coldkeyAddress || (quiet && !$("move-panel").hidden)) return;
     const worthOf = (p) => (prices.get(p.netuid) == null ? null : (p.stake * prices.get(p.netuid)) / 1_000_000_000n);
     const before = lastLook(coldkey);
     const row = (where, hotkey, amount, worth, change) => {
@@ -1502,9 +1525,11 @@ async function showHoldings() {
         return tr;
       }),
     );
-    resumeMove();
-    resumePay();
-    saveLook(coldkey, positions);
+    if (!quiet) {
+      resumeMove();
+      resumePay();
+      saveLook(coldkey, positions);
+    }
     const owedTotal = [...owedBy.values()].reduce((a, v) => a + v, 0n);
     const worths = positions.map(worthOf), total = worths.includes(null) ? null : worths.reduce((a, w) => a + w, free + owedTotal);
     const inAll = total === null ? "" : ` Worth about ${tao(total)} in all${usd?.tao ? ` (${fmtUsd((Number(total) / 1e9) * usd.tao)})` : ""}, at each pool's current price${owedTotal ? ", counting rewards still to claim" : ""}.`;
@@ -1527,7 +1552,7 @@ async function showHoldings() {
   } catch (e) {
     if (seq === holdingsSeq) note("holdings-note", `Could not read it from Bittensor: ${e.message}`, "bad");
   } finally {
-    if (seq === holdingsSeq) $("holdings-btn").disabled = false;
+    if (seq === holdingsSeq) { $("holdings-btn").disabled = false; holdingsReading = false; }
   }
 }
 
@@ -2271,8 +2296,8 @@ async function runRoute(route, { expectLd = null, fresh = false } = {}) {
     const freeAfter = await getFreeBalance(coldkey).catch(() => null);
     const free = freeBefore !== null && freeAfter !== null && freeAfter > freeBefore ? freeAfter - freeBefore : null;
     track("sweep", "ok", [summary.stakedRao > 0n && `staked ${stakeAmount(summary.stakedRao, netuid)}`, free !== null && `${tao(free)} free`].filter(Boolean).join(" · ") || "done");
-    note("track-note", summary.stakedRao > 0n ? `Done. The ${bittensorStakeAsset(netuid)} stake is owned by your coldkey. Open Your Bittensor holdings in step 2 to unstake or send it home, or use any Bittensor wallet.`
-      : summary.stakeRefused ? `Bittensor refused the stake${netuid === 0n ? "" : ` (the validator changed, or subnet ${netuid}'s price moved past the ${Number(CONFIG.subnetPriceToleranceBps) / 100}% limit)`}, so your TAO arrived unstaked. It is free TAO in your wallet: stake it again at today's price, or bring it back to Solana, from Your Bittensor holdings in step 2, or from any Bittensor wallet.` : "Done. It is free TAO in your Bittensor wallet. Open Your Bittensor holdings in step 2 to stake it or send it home.", summary.stakeRefused ? "warn" : "ok");
+    note("track-note", summary.stakedRao > 0n ? `Done. The ${bittensorStakeAsset(netuid)} stake is owned by your coldkey. Open Your Bittensor holdings in step 2 to unstake or send it home, or use any Bittensor wallet. Unstake has not yet moved real funds through this page.`
+      : summary.stakeRefused ? `Bittensor refused the stake${netuid === 0n ? "" : ` (the validator changed, or subnet ${netuid}'s price moved past the ${Number(CONFIG.subnetPriceToleranceBps) / 100}% limit)`}, so your TAO arrived unstaked. It is free TAO in your wallet: stake it again at today's price, or bring it back to Solana, from Your Bittensor holdings in step 2, or from any Bittensor wallet. Staking more from holdings has not yet moved real funds through this page.` : "Done. It is free TAO in your Bittensor wallet. Open Your Bittensor holdings in step 2 to stake it or send it home. Staking more from holdings has not yet moved real funds through this page.", summary.stakeRefused ? "warn" : "ok");
       
     $("f-dest").textContent = short(route.coldkey, 6);
     $("f-staked-label").textContent = netuid === 0n ? "Staked TAO" : `Staked Alpha, subnet ${netuid}`;
