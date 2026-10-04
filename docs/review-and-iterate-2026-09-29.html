@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>soltao review and iterate — 29 September 2026</title>
+<style>
+  body { max-width: 920px; margin: 48px auto; padding: 0 24px 64px; background: #10151b; color: #e1e8ef; font: 16px/1.6 system-ui, sans-serif; }
+  h1 { font-size: 28px; letter-spacing: -0.03em; color: #9bddc5; }
+  h2 { margin-top: 36px; font-size: 18px; color: #c5d0d8; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid #24303a; }
+  th { color: #8b9aa6; font-weight: 500; }
+  code { font: 13px/1.4 ui-monospace, monospace; color: #9bddc5; }
+  .muted { color: #8b9aa6; font-size: 13.5px; }
+  .sev-h { color: #e8a07a; }
+  .sev-m { color: #e0c56e; }
+  .sev-l { color: #8b9aa6; }
+</style>
+</head>
+<body>
+<h1>soltao — review and iterate</h1>
+<p class="muted">29 September 2026. Live <code>830ac26</code> / <code>stake.js?v=629349d7</code>. Scope: client gateway at <code>tools/stake</code> and <code>stake/</code>. There is no custom Solana program. This is not an audit of LayerZero, Sunrise, or Subtensor.</p>
+
+<h2>Scores</h2>
+<table>
+  <thead><tr><th>Dimension</th><th>Grade</th><th>Note</th></tr></thead>
+  <tbody>
+    <tr><td>Security (3x)</td><td>B</td><td>Client P0s pass. SIWS blast radius is the remaining trust model, not a missing signer check.</td></tr>
+    <tr><td>Correctness (2x)</td><td>B</td><td>Happy paths tested. Several production money paths have never carried real funds.</td></tr>
+    <tr><td>Error handling (2x)</td><td>B</td><td>Plain-language failures and resume. Some quotes swallow RPC errors.</td></tr>
+    <tr><td>Testing (1.5x)</td><td>B</td><td>Unit, page, live, mainnet replay. Public RPC flakes are not extra coverage.</td></tr>
+    <tr><td>Code organization (1x)</td><td>B</td><td><code>app.js</code> is the god object. Modules underneath are clean.</td></tr>
+    <tr><td>Documentation (0.5x)</td><td>A</td><td>HANDOVER is usable. Historical header paragraphs still contradict later ones.</td></tr>
+    <tr><td><strong>Overall</strong></td><td><strong>B (82)</strong></td><td>No critical finding, so no C override. Already on mainnet as a static client.</td></tr>
+  </tbody>
+</table>
+<p class="muted">ready_for_mainnet: true as a deployed static client. Ready for a partner cohort: false until unproven money paths have one real run each.</p>
+
+<h2>Closed since 24 Sep (do not re-open)</h2>
+<ul>
+  <li>Subnet-blind hotkey check — metagraph <code>0x802</code>, item 10.</li>
+  <li>Confirm expiry unlocking a second OFT send — <code>src/confirm.js</code>, item 29, live this deploy.</li>
+  <li>Unsigned pending mutation / HMAC drop of legacy routes — <code>pending.js</code> trusted vs untrusted.</li>
+  <li>Return resume repeating funding/wrap — checkpoints before broadcast, item 12.</li>
+  <li>Reaped transit account replaying an old sweep — keep-alive <code>transferAll</code> plus <code>signTx</code> hash uniquing, items 16 and 20.</li>
+</ul>
+
+<h2>Findings</h2>
+<table>
+  <thead><tr><th>Sev</th><th>Category</th><th>Description</th><th>Fix</th></tr></thead>
+  <tbody>
+    <tr>
+      <td class="sev-h">High</td><td>Security / trust</td>
+      <td>One SIWS signature is stretched into the 12-word coldkey and the transit secp256k1 key. Anyone who obtains that signature owns the Bittensor wallet. Domain-binding is the control. CSP <code>script-src 'self'</code> is load-bearing.</td>
+      <td>Keep <code>signInFields</code> domain/URI frozen (already tested ASCII). Never log signatures. Do not add third-party scripts. Surface the hardware-wallet “non-standard signature” warning; it is already there.</td>
+    </tr>
+    <tr>
+      <td class="sev-h">High</td><td>Correctness</td>
+      <td>Unstake, Move, the batched 0.25% Bittensor fee, a subnet stake through the live page, and first-time Solana token-account arrival are enabled without real-funds proof. Only free-TAO return and a root forward stake are proven.</td>
+      <td>One approved live-origin run each: root stake, subnet stake with <code>addStakeLimit</code>, partial unstake, return to a fresh ATA. Until then, do not tell partners “the full loop works”.</td>
+    </tr>
+    <tr>
+      <td class="sev-h">High</td><td>Correctness</td>
+      <td>Completion is inferred from a Solana TAO balance delta, not from the OFT receive.</td>
+      <td>Parse the LayerZero / OFT receive, or label the tracker as observed balance rather than verified delivery.</td>
+    </tr>
+    <tr>
+      <td class="sev-m">Medium</td><td>Error handling / ops</td>
+      <td>Solana RPC is a single PublicNode URL after Helius 403. Bittensor lite RPC 429s fail directory and page tests. <code>confirmSignature</code> can poll forever if height never advances.</td>
+      <td>Add a fallback origin already allowed in CSP (Helius once the plan is restored, or a second public endpoint). Cap confirm wait. Treat <code>processed</code> as in-flight, not success.</td>
+    </tr>
+    <tr>
+      <td class="sev-m">Medium</td><td>Security</td>
+      <td>Chutes top-up cannot prove the pasted SS58 is a Chutes payment address. Gated (<code>chutesLive: false</code>). Enabling it without a credited test loses funds to a wrong paste.</td>
+      <td>Leave gated until one ≥0.01 TAO top-up is credited by Chutes. Keep the acknowledgement copy.</td>
+    </tr>
+    <tr>
+      <td class="sev-l">Low</td><td>Organization</td>
+      <td><code>app.js</code> owns connect, derive, quotes, send, resume, holdings, return, directory, and Chutes.</td>
+      <td>Split by controller. Do not grow Chutes inside it first.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>What is solid (do not “fix” these into something worse)</h2>
+<ul>
+  <li>No <code>innerHTML</code> for fund UI; phrase rendered as text nodes.</li>
+  <li>Simulate the Solana tx before the wallet prompt; <code>skipPreflight: false</code>.</li>
+  <li>Pending routes HMAC-sealed from the in-memory transit key; untrusted records pay only the wallet on screen.</li>
+  <li>Subnet stakes use <code>addStakeLimit</code> at 2%; hotkeys checked on the chosen netuid.</li>
+  <li>Keys live in memory and are dropped on <code>pagehide</code>.</li>
+  <li>No WalletConnect (standing constraint). SIWS statement is plain ASCII.</li>
+</ul>
+
+<h2>Compute / Solana program notes</h2>
+<p>Not applicable as an on-chain program review. The OFT send is ~1,184 bytes / ~506k CU in tests. Priority fee is quoted and signed. There is nothing to Pinocchio.</p>
+
+<p class="muted">Full product roast scorecard lives in the Cursor canvas <code>soltao-roast-and-review.canvas.tsx</code> (67/110). This HTML is the code-review artifact required by review-and-iterate.</p>
+</body>
+</html>

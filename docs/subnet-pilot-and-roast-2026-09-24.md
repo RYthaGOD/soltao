@@ -1,0 +1,100 @@
+# soltao: next move and product roast
+
+Assessment: 24 September 2026, local HEAD 8b4b664. Recommendation: recruit one subnet design partner and a small Solana cohort while completing evidence for the full round trip. Do not start another broad feature sprint.
+
+## What changed since the earlier Codex review
+
+The earlier review is historical. Its two findings were addressed in acd2080 (legacy recovery) and 9f11bd6 (pending mutations). Today I reran pending.test.mjs, return_route.test.mjs and stake_moves.test.mjs: all passed. These include unsigned-record recovery, pending funding/wrap, lost send response, and stake-move resume. This is focused verification, not a fresh exhaustive security audit.
+
+Built since then: validator picker, shareable subnet/hotkey links, USD review amounts, holdings, subnet directory, separate return bundle, full/partial stake moves and chained unstake-to-return. CONFIG.returnLive is true. Direct production GET and local HTML both name stake.js?v=d0ef8726, with HTTP 200. The HANDOVER header and gateway-plan contain older gated-state descriptions; use later entries and code, not those stale statements.
+
+HANDOVER item 17 records a real 0.0025 TAO return delivered to an existing Solana token account in about 3 minutes 15 seconds. That is evidence of free-TAO return, not proof of every unstake path. Real-funds stake/unstake moves and first-time destination token account creation remain unobserved in the supplied evidence. Do these only on explicit approval.
+
+Today's read-only usage counter found three fee-paying outbound OFT transactions from two wallets since launch, totaling 0.0135 SOL of fees. The documented tests account for those transactions. No outside-user demand is established. This counter measures successful Solana bridge submissions, not Bittensor staking completion or distinct human users.
+
+## Verdict
+
+You have built a credible route, but you have not yet demonstrated that anyone besides its builder wants to use it. A subnet logo will not supply the missing Solana audience by itself.
+
+## Scorecard
+
+Scores are subjective product judgments, not audit grades. Maximum is 110 because value proposition is weighted twice.
+
+| Dimension | Score / 10 | Evidence and implication |
+|---|---:|---|
+| Value proposition (2x) | 7 | Concrete Solana-TAO-to-native-stake journey, now with an exit; buying the starting asset is separate. |
+| Crypto necessity | 10 | Moving and controlling assets on two chains is the actual service; a database cannot replace settlement. |
+| Target user clarity | 6 | Existing Solana TAO holders are precise; the broader Solana audience and partner demand remain untested. |
+| First-time experience | 5 | Picker, dollar amounts and links help; recovery phrase, new wallet concepts and multi-hop execution still demand attention. |
+| Core loop | 5 | Enter/manage/exit is now coherent, but no outside repeat use has been demonstrated. Daily activity is not necessary for this utility. |
+| Competitive moat | 3 | Existing public infrastructure and replicable interface; no demonstrated partner distribution advantage yet. |
+| Technical execution | 7 | Meaningful recovery tests and real free-return evidence; remaining replay risk and untested real stake moves preclude a higher grade. |
+| Naming/messaging | 5 | Short name, but board, gateway and separate SOLTAO coin complicate partner trust. |
+| Monetization | 4 | Implemented 0.003 SOL outbound fee, zero return platform fee; willingness to pay and support economics unproven. |
+| Timing | 6 | Cross-chain subnet access is an existing category; urgency for this precise Solana path remains a hypothesis. |
+| **Weighted total** | **65 / 110** | Engineering has advanced faster than demand evidence. |
+
+## Worst issues and their fixes
+
+1. **Access is not acquisition.** A subnet may like the integration but have no Solana audience to send through it. Secure both a subnet contact and a Solana distribution contact. Ask for a specific pilot cohort and a named promoter; an announcement with no activation plan is not validation.
+2. **“Onboard users” overstates the current service.** soltao onboards native subnet stakers. It does not sell inference/storage subscriptions or onboard miners. Ask which outcome the subnet wants before writing custom integration code. Do not call staking a purchase of the subnet's AI service.
+3. **The route begins after a major onboarding hurdle.** Users must already hold canonical Solana TAO and some SOL. The board links to Jupiter; the staking flow does not start from generic SOL or USDC. Start with existing TAO holders. Add a clear canonical-TAO acquisition link and return-to-subnet instructions before building an embedded swap; only integrate swaps if observed abandonment justifies it.
+4. **Successful owner tests are not partner-grade reliability evidence.** Finish one explicitly approved root and one subnet stake/partial-unstake/return journey, plus fresh token-account arrival and real phone testing. Resolve the documented reaped-account replay exposure (HANDOVER item 16) before expanding the pilot: making new transaction hashes unique fixes stale receipt confusion but does not invalidate old signed transactions. Arrival currently uses a wallet balance delta; tie completion to the actual bridge delivery or clearly distinguish observed balance from verified delivery.
+5. **Flat fees do not establish a business.** At 0.003 SOL per outbound route, 100 routes yield 0.3 SOL and 1,000 yield 3 SOL, before any costs; return support generates no platform fee. Measure support minutes and completion cost. Do not promise referral payouts until attribution and margin exist. The recorded 0.002859118 TAO return bridge fee exceeds the 0.0025 TAO test principal: tiny transfers prove mechanics, not economical use. Quote current all-in costs and cost percentage rather than presenting that old fee as fixed.
+
+Common sins: unproven users (do not confuse test wallets with traction), distribution missing from a technically capable bridge, and technical detail competing with the user outcome. The former one-way journey has been materially improved. This is not ornamental crypto, and the separate SOLTAO token is not required by the route; preserve that separation and disclosure.
+
+UX priorities: make the chosen subnet and plain-language outcome visible before signing, preserve the campaign/subnet selection during TAO acquisition, explain that a message signature derives keys authorizing later Bittensor actions, show entry and estimated exit costs, and keep operational details expandable. Mobile deep links existing is not evidence that a newcomer completed the full phone journey. Do not spend this sprint on another logo redesign.
+
+## Partnership offer
+
+Proposed message: **“Give your community a Solana-wallet path into your subnet's native stake, with holdings and a route back to Solana.”** This describes the product direction; demonstrations should disclose the exact tested flows.
+
+Offer a two-week, non-exclusive design-partner pilot (proposed duration, not a forecast):
+
+- One approved subnet landing page using the existing netuid/hotkey links. Explain the subnet, show the exact validator and take, live fees, exit steps, support contact, and source timestamps. Partner naming needs their consent; a prefilled validator is not an endorsement and the user should retain choice.
+- Partner verifies its identity, current subnet ID, validator details and public copy. Agree who supports each stage and who pauses referrals when execution degrades.
+- Partner supplies a named community contact and a small opt-in cohort; recruit Solana-side participants too. A subnet's existing Bittensor holders alone do not test the intended market.
+- Start with 5–10 outside participants as a proposed learning cohort, excluding team wallets from adoption metrics. No volume guarantee, exclusive routing, required SOLTAO holdings, or promised returns.
+- Track invited/visited/connected/funded/submitted/stake-confirmed/returned separately. Use opt-in pilot records initially; localStorage alone cannot provide aggregate campaign attribution. Count unique wallets and people separately, deduplicate resumed transactions, and do not publish wallet identities without agreement.
+- Evaluate completion, drop-off, failures, fees, time, support minutes, and whether the partner wants to repeat. Proposed continuation gate: at least five non-team completed stakes, two demonstrated exits, no unresolved recovery incident, and one partner willing to repeat. Small-cohort results are learning evidence, not statistically established conversion rates.
+
+## Prospect shortlist — hypotheses, not interested partners
+
+Prioritize a warm introduction over this ordering. None of these teams has been contacted or expressed interest.
+
+| Prospect | Evidence of fit | Opening question / caveat | Official entry point |
+|---|---|---|---|
+| Hippius, SN75 | Public storage product and an explicit referral program show a concrete distribution motion. | Is native-alpha staking access useful, or is their priority paying storage users / hAlpha on their own chain? soltao does not currently complete the latter journey. | https://community.hippius.com/about |
+| Chutes, SN64 | A clear inference product gives a Solana AI audience something understandable to learn about. | Do they want more native stakers, and who owns community growth? API customers and stakers are separate cohorts. | https://docs.chutes.ai/ |
+| Targon, SN4 | Public compute product, Bittensor connection and team contact form. | Is Solana staking access a current priority? Their public positioning is compute, so don't assume it is. | https://targon.com/contact |
+
+Prospect sources: [Hippius referral program](https://hippius.com/blog/hippius-launches-cloud-storage-referral-program), [Hippius alpha versus hAlpha](https://hippius.com/alphanomics), [Chutes SN64 documentation](https://docs.chutes.ai/), [Targon current product](https://targon.com/), [Targon SN4 description](https://targon.com/infrastructure). The SN4 description is older; confirm all partner parameters from chain and the team before configuring links. These are outreach-fit judgments, not investment recommendations or yield rankings.
+
+## Alternatives and defensibility
+
+| Alternative | What the source establishes | Implication |
+|---|---|---|
+| TaoFi | Its docs describe Base-to-subnet purchases and exits, referral fees, and API-selected validators/fees. | Direct category competitor, different source chain. “We bridge to subnets” alone is weak differentiation. |
+| VoidAI | Official docs describe wrapped TAO/Alpha, SDKs and cross-chain paths. Solana availability descriptions conflict across pages. | Adjacent competitor; verify current routes in-product before any feature comparison. Do not claim Solana exclusivity. |
+| Existing bridge plus Bittensor wallet | Manual version of the user's journey; project docs explicitly support independent wallet recovery. | soltao must justify itself through fewer steps, clearer ownership and better recovery. |
+| Hold TAO on Solana / take no action | Avoids another chain, fees and subnet price exposure. | Often the real alternative. Users need a reason to select a subnet before easier access matters. |
+| Subnet's regular paid product onboarding | Hippius and Chutes publish ordinary service purchase flows. | Substitute if the partner wants paying AI/storage users; not a substitute for native staking. |
+
+Sources: [TaoFi swaps](https://docs.taofi.com/swap), [VoidAI SDK](https://docs.voidai.com/sdk), [VoidAI fees](https://docs.voidai.com/reference/fee-structure), [VoidAI overview](https://docs.voidai.com/), [Hippius](https://hippius.com/), [Chutes pricing](https://chutes.ai/pricing).
+
+Colosseum Copilot authenticated and returned six matches for the broad gateway query (five displayed), led by Bolarity Network (0.04486 similarity), then Stakes, Allsto, InfraStaking and Solana CNTT-16. These are weak adjacent matches; none in the five returned was an exact Bittensor gateway. [Bolarity](https://colosseum.com/projects/explore/bolarity-network) and [Allsto](https://colosseum.com/projects/explore/allsto) illustrate the broader cross-chain access category. API result counts/similarities are not proof of demand or absence of competition. Catalog files were not found in the checked installed skill locations. No failed-project postmortem was verified; do not infer a project's failure from stale docs or a missing result. Sunrise docs were inaccessible through the research tool, so no fresh claim about their current roadmap is made.
+
+Crowdedness: moderate provisionally for cross-chain subnet access; exact Solana-native-self-custody segment not sufficiently measured. Plausible long-term advantage: trusted subnet distribution, reliable recovery, verified execution history and low support burden. None is established merely by having more dashboard features.
+
+## Outreach draft — not sent
+
+“Hi [name] — I’m building soltao, a gateway for people holding TAO in a Solana wallet to stake into Bittensor subnets and manage the route back. The site is live, and we've completed a real free-TAO return to Solana; we're completing the full subnet stake-and-exit validation now.
+
+Would easier access for Solana-based stakers be useful to [subnet]? I’d like to explore a small pilot with a subnet-specific entry page, transparent validator selection, visible fees and hands-on onboarding. The first step would be a short demo and a discussion of where interested users currently drop off. Are you the right person for that?”
+
+## Fix these now
+
+1. **Highest impact:** prove the complete subnet entry-and-exit journey and close replay/delivery-verification gaps before sending a cohort through it.
+2. **Easiest win:** package one existing subnet link into a plain-language pilot demo and one-page offer; reconcile stale readiness notes so every pitch uses the same evidence.
+3. **Existential fix:** secure one subnet champion plus real Solana participants, run the small pilot, and measure completed use and support cost before committing to further broad development.

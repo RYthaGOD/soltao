@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>soltao pre-deploy review — 29 September 2026</title>
+<style>
+  body { max-width: 920px; margin: 48px auto; padding: 0 24px 64px; background: #10151b; color: #e1e8ef; font: 16px/1.6 system-ui, sans-serif; }
+  h1 { font-size: 28px; letter-spacing: -0.03em; color: #9bddc5; }
+  h2 { margin-top: 36px; font-size: 18px; color: #c5d0d8; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid #24303a; }
+  th { color: #8b9aa6; font-weight: 500; }
+  code { font: 13px/1.4 ui-monospace, monospace; color: #9bddc5; }
+  .muted { color: #8b9aa6; font-size: 13.5px; }
+  .sev-h { color: #e8a07a; }
+  .sev-m { color: #e0c56e; }
+  .sev-l { color: #8b9aa6; }
+  .sev-ok { color: #9bddc5; }
+</style>
+</head>
+<body>
+<h1>soltao — pre-deploy bug hunt</h1>
+<p class="muted">29 September 2026, after the no-funds complete-sprint and before any Railway deploy. Scope: unreleased item 31 (RPC fallbacks, confirm cap, arrival copy) plus the live client. There is no custom Solana program. Bugbot on the uncommitted diff found no bugs; this review did.</p>
+
+<h2>Scores</h2>
+<table>
+  <thead><tr><th>Dimension</th><th>Grade</th><th>Note</th></tr></thead>
+  <tbody>
+    <tr><td>Security (3x)</td><td>B</td><td>Client P0s pass. SIWS blast radius unchanged. Dead extra <code>connect-src</code> origins removed.</td></tr>
+    <tr><td>Correctness (2x)</td><td>B</td><td>Arrival is labelled as an observed balance. Solana “fallbacks” that 403 under the page Origin were stripped. Bittensor archive is a real second RPC.</td></tr>
+    <tr><td>Error handling (2x)</td><td>B</td><td>Confirm capped at 120s. EVM fetch aborts at 20s so lite hang reaches archive. Solana Connection fetch aborts at 30s.</td></tr>
+    <tr><td>Testing (1.5x)</td><td>B</td><td>Confirm cap, RPC failover, CSP origin list, Origin probe. Page-test C passed; B still flakes when lite is busy.</td></tr>
+    <tr><td>Code organization (1x)</td><td>B</td><td><code>app.js</code> still the god object. Failover lives in <code>solana.js</code> / <code>evm.js</code> / <code>substrate.js</code>.</td></tr>
+    <tr><td>Documentation (0.5x)</td><td>A</td><td>HANDOVER item 31 now matches the Origin probe, not the hoped-for Solana list.</td></tr>
+    <tr><td><strong>Overall</strong></td><td><strong>B (84)</strong></td><td>No critical finding, no C override. Do not deploy until the post-hunt rebuild is the bundle you ship.</td></tr>
+  </tbody>
+</table>
+<p class="muted">ready_for_mainnet: true as a static client. Ready for a partner cohort: false until unproven money paths have one real run each.</p>
+
+<h2>Origin probe (29 Sep 2026, <code>Origin: https://soltao.xyz</code>)</h2>
+<table>
+  <thead><tr><th>URL</th><th>Result</th><th>Use on the page</th></tr></thead>
+  <tbody>
+    <tr><td><code>solana-rpc.publicnode.com</code></td><td>HTTP 200 <code>getHealth</code>, ACAO <code>*</code></td><td>Solana RPC</td></tr>
+    <tr><td><code>api.mainnet-beta.solana.com</code></td><td>HTTP 403 Access forbidden, ACAO <code>*</code></td><td>Not listed. Dead as a browser fallback.</td></tr>
+    <tr><td>Helius <code>joell-lsu6ge</code></td><td>HTTP 403 plan lapsed, ACAO <code>*</code></td><td>CSP only, for a plan restore</td></tr>
+    <tr><td><code>lite.chain.opentensor.ai</code></td><td>200 <code>eth_chainId</code> + <code>system_health</code></td><td>Primary Bittensor</td></tr>
+    <tr><td><code>archive.chain.opentensor.ai</code></td><td>200 <code>eth_chainId</code> + Substrate <code>system_health</code> / runtime / header</td><td>Real fallback</td></tr>
+  </tbody>
+</table>
+
+<h2>Closed in this hunt</h2>
+<ul>
+  <li class="sev-ok">Solana fallback list that could not work in the browser (official 403, Helius 403) — removed from <code>solanaRpcs</code> and from <code>connect-src</code> (official). Helius stays in CSP.</li>
+  <li class="sev-ok">EVM <code>fetch</code> with no timeout — a hung lite node never reached archive. Abort at 20s.</li>
+  <li class="sev-ok">Return tracker claiming “arrived” from a token-account delta — labelled observed balance; LayerZero Scan is the record.</li>
+  <li class="sev-ok"><code>confirmSignature</code> polling forever — <code>maxWaitMs</code> 120s, <code>processed</code> not landed.</li>
+</ul>
+
+<h2>Findings still open</h2>
+<table>
+  <thead><tr><th>Sev</th><th>Category</th><th>Description</th><th>Fix</th></tr></thead>
+  <tbody>
+    <tr>
+      <td class="sev-h">High</td><td>Security / trust</td>
+      <td>One SIWS signature is the Bittensor wallet. Unchanged.</td>
+      <td>Keep domain/URI frozen. No third-party scripts. Never log signatures.</td>
+    </tr>
+    <tr>
+      <td class="sev-h">High</td><td>Correctness</td>
+      <td>Unstake, Move, batched Bittensor fee, live subnet stake, first-time ATA still have no real-funds proof.</td>
+      <td>One live-origin run each. Do not tell partners the full loop works.</td>
+    </tr>
+    <tr>
+      <td class="sev-m">Medium</td><td>Error handling / ops</td>
+      <td>Solana still has one browser-working RPC (PublicNode). Umi quotes use their own fetch, not the 30s Connection timeout. A PublicNode outage still kills connect/quote.</td>
+      <td>Restore Helius (plan) or add a CORS-capable Solana RPC that returns 200 under Origin <code>https://soltao.xyz</code>, then put it in <code>solanaRpcs</code> and both CSPs.</td>
+    </tr>
+    <tr>
+      <td class="sev-m">Medium</td><td>Security</td>
+      <td>Chutes payee cannot be authenticated. Still gated.</td>
+      <td>Leave <code>chutesLive: false</code>.</td>
+    </tr>
+    <tr>
+      <td class="sev-l">Low</td><td>Organization</td>
+      <td><code>app.js</code> god object.</td>
+      <td>Do not split on this deploy.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>What is solid (do not “fix” these into something worse)</h2>
+<ul>
+  <li>Signed Solana sends never retry another URL (timeout after accept would double-broadcast).</li>
+  <li>Wallet <code>signAndSendTransaction</code> uses the wallet’s RPC; our <code>sendRawTransaction</code> stays on PublicNode.</li>
+  <li>Duplicate EVM <code>eth_sendRawTransaction</code> of the same raw is “already known”, treated as success.</li>
+  <li>No <code>innerHTML</code> for fund UI. Simulate before the wallet prompt. HMAC-sealed pending.</li>
+  <li>No WalletConnect. SIWS statement is plain ASCII. <code>chutesLive: false</code>.</li>
+</ul>
+
+<h2>Compute / Solana program notes</h2>
+<p>Not applicable as an on-chain program review. OFT send still ~1,184 bytes / ~506k CU in tests.</p>
+
+<p class="muted">Earlier same-day review: <a href="./review-and-iterate-2026-09-29.html">review-and-iterate-2026-09-29.html</a> (B/82). This hunt is the gate before deploy.</p>
+</body>
+</html>
