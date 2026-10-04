@@ -27,8 +27,32 @@ const flag = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 
 const since = new Date(flag("--since") || "2026-09-21T00:00:00Z").getTime() / 1000;
 const asJson = args.includes("--json");
 
-const connection = new Connection(flag("--rpc") || "https://api.mainnet-beta.solana.com", "confirmed");
+const rpcUrl = flag("--rpc") || "https://api.mainnet-beta.solana.com";
+const connection = new Connection(rpcUrl, "confirmed");
 const wallet = new PublicKey(CONFIG.fee.wallet);
+
+// A version-1 transaction reached the fee wallet by 4 Oct 2026, and @solana/web3.js 1.x cannot parse one, even
+// with a higher maxSupportedTransactionVersion. So transactions are read over plain JSON-RPC, already parsed.
+async function getTransaction(signature) {
+  const wait = (attempt) => new Promise((r) => setTimeout(r, 500 * 2 ** Math.min(attempt, 4)));
+  for (let attempt = 0; ; attempt++) {
+    let res;
+    try {
+      res = await fetch(rpcUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getTransaction", params: [signature, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }] }),
+      });
+    } catch (e) {
+      if (attempt < 8) { await wait(attempt); continue; }
+      throw e;
+    }
+    if (res.status === 429 && attempt < 8) { await wait(attempt); continue; }
+    const body = await res.json();
+    if (body.error) throw new Error(`getTransaction ${signature}: ${body.error.message}`);
+    return body.result;
+  }
+}
 // The route fee was a flat 0.0075 SOL at launch, then 0.003 SOL; since 29 Sep 2026 it is 0.25% of the TAO
 // sent, at least 0.0035 SOL. So a fee is any transfer to the wallet of at least the smallest of those.
 const MIN_FEE = 3_000_000;
@@ -53,10 +77,10 @@ if (oldest >= since) {
 
 const routes = [], missing = [];
 for (const s of candidates) {
-  const tx = await connection.getParsedTransaction(s.signature, { maxSupportedTransactionVersion: 0 });
+  const tx = await getTransaction(s.signature);
   if (!tx) { missing.push(s.signature); continue; }
   const fee = tx.transaction.message.instructions.find((i) => i.parsed?.type === "transfer" && i.parsed.info.destination === CONFIG.fee.wallet && i.parsed.info.lamports >= MIN_FEE);
-  const bridged = tx.transaction.message.accountKeys.some((k) => k.pubkey.toBase58() === CONFIG.taoOftProgram);
+  const bridged = tx.transaction.message.accountKeys.some((k) => k.pubkey === CONFIG.taoOftProgram);
   if (fee && bridged) routes.push({ at: new Date(s.blockTime * 1000).toISOString(), signature: s.signature, from: fee.parsed.info.source, feeLamports: fee.parsed.info.lamports });
 }
 if (missing.length) {

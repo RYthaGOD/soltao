@@ -28,8 +28,15 @@ const TRANSIT = "0xe00a4459090378cfbe2f8c7c93a993237911cbcc";
   expect("dust is trimmed to 0.000001 TAO", removeDust(123_456_789n) === 123_456_000n);
 }
 
-// A wallet seen holding both TAO and SOL on 21 Sep 2026, used only as a simulation identity.
-const HOLDER = process.env.SIM_HOLDER || "E7wdV5qCYL1fZJf6YfvHEyheAeow67Mf7BTpByX89mNQ";
+// Wallets seen holding both TAO and SOL (21 Sep and 4 Oct 2026), used only as simulation identities. The first one
+// that still holds the 0.1 TAO the simulation sends, some SOL, and no $SOLTAO discount is used, so one holder spending
+// down does not fail the suite (E7wd… fell to 0.088 TAO by 4 Oct 2026). SIM_HOLDER pins one.
+const SIM_HOLDERS = process.env.SIM_HOLDER ? [process.env.SIM_HOLDER] : [
+  "D1pmdPxohdDrk45f3gcwfq2EidAPNJkwvq32rBRzKPZk",
+  "FkaLnX17cXZGyeu3kZGdHCNdFMJJzBrPPYVvd18B3MZp",
+  "4muvDhac3U8CqtckUiL7U4EJDucnL1k5AGAxdWh2QV7F",
+  "E7wdV5qCYL1fZJf6YfvHEyheAeow67Mf7BTpByX89mNQ",
+];
 const clients = createClients();
 expect("createClients exposes a primary Connection for confirm and forget", typeof clients.primary?.getSignatureStatuses === "function");
 expect(
@@ -64,14 +71,21 @@ expect("the TAO/SOL price is read from the Orca pool, and is plausible", perTao 
 // The configured fee wallet, or a stand-in until there is one; the fee as the page would set it for 0.1 TAO.
 const FEE = { wallet: CONFIG.fee.wallet ?? "11111111111111111111111111111112", lamports: routeFeeLamports(100_000_000n, perTao) };
 
-const [bal, lamports, hasAta, soltaoBal, mintInfo] = await Promise.all([
-  getTaoBalance(clients.connection, HOLDER),
-  clients.connection.getBalance(new PublicKey(HOLDER)),
-  taoAccountExists(clients.connection, HOLDER),
-  getSoltaoBalance(clients.connection, HOLDER),
-  clients.connection.getAccountInfo(new PublicKey(CONFIG.soltao.mint)),
+const readHolder = (h) => Promise.all([
+  getTaoBalance(clients.connection, h),
+  clients.connection.getBalance(new PublicKey(h)),
+  taoAccountExists(clients.connection, h),
+  getSoltaoBalance(clients.connection, h),
 ]);
-expect("the simulation holder has a canonical TAO token account", hasAta && bal > 0n, `${hasAta} · ${bal}`);
+let HOLDER = SIM_HOLDERS[0], held = await readHolder(HOLDER);
+for (const h of SIM_HOLDERS.slice(1)) {
+  const [tao, sol, , soltao] = held;
+  if (tao >= 100_000_000n && sol >= 50_000_000 && soltao < 10_000_000n * 1_000_000n) break;
+  HOLDER = h; held = await readHolder(h);
+}
+const [bal, lamports, hasAta, soltaoBal] = held;
+const mintInfo = await clients.connection.getAccountInfo(new PublicKey(CONFIG.soltao.mint));
+expect("the simulation holder has a canonical TAO token account holding the 0.1 TAO it sends", hasAta && bal >= 100_000_000n, `${hasAta} · ${bal}`);
 expect("the simulation holder is under the $SOLTAO discount, so page tests still see 0.25%", soltaoBal < 10_000_000n * 1_000_000n, String(soltaoBal));
 expect("$SOLTAO is a Token-2022 mint with 6 decimals", Boolean(mintInfo) && mintInfo.owner.equals(new PublicKey(CONFIG.soltao.program)) && mintInfo.data[44] === CONFIG.soltao.decimals, mintInfo ? `${mintInfo.owner.toBase58()} decimals ${mintInfo.data[44]}` : "missing");
 {
