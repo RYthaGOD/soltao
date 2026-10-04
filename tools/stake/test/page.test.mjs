@@ -13,16 +13,33 @@ import { fileURLToPath } from "node:url";
 import puppeteer from "puppeteer-core";
 import { ed25519 } from "@noble/curves/ed25519";
 import { base58 } from "@scure/base";
-import { VersionedTransaction } from "@solana/web3.js";
+import { VersionedTransaction, PublicKey } from "@solana/web3.js";
 import { derivationMessage, walletFromSignature } from "../src/derive.js";
 import { CONFIG, bittensorRpcs } from "../src/config.js";
 import { sealRoute } from "../src/pending.js";
+import { createClients, getTaoBalance, getSoltaoBalance } from "../src/solana.js";
 import { selector } from "../src/bittensor.js";
 import { ss58Decode } from "../src/derive.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const CHROME = process.env.CHROME || "C:/Program Files/Google/Chrome/Application/chrome.exe";
-const HOLDER = "E7wdV5qCYL1fZJf6YfvHEyheAeow67Mf7BTpByX89mNQ"; // real TAO + SOL holder, read-only use
+// Real TAO + SOL holders, read-only use. Run C types 0.1 TAO, so the first one that still holds that, some SOL, and
+// no $SOLTAO discount is used (E7wd… fell to 0.088 TAO by 4 Oct 2026). SIM_HOLDER pins one; test/solana.test.mjs
+// keeps the same list.
+const HOLDER = await (async () => {
+  const list = process.env.SIM_HOLDER ? [process.env.SIM_HOLDER] : [
+    "D1pmdPxohdDrk45f3gcwfq2EidAPNJkwvq32rBRzKPZk",
+    "FkaLnX17cXZGyeu3kZGdHCNdFMJJzBrPPYVvd18B3MZp",
+    "4muvDhac3U8CqtckUiL7U4EJDucnL1k5AGAxdWh2QV7F",
+    "E7wdV5qCYL1fZJf6YfvHEyheAeow67Mf7BTpByX89mNQ",
+  ];
+  const { connection } = createClients();
+  for (const h of list) {
+    const [tao, sol, soltao] = await Promise.all([getTaoBalance(connection, h), connection.getBalance(new PublicKey(h)), getSoltaoBalance(connection, h)]);
+    if (tao >= 100_000_000n && sol >= 50_000_000 && soltao < 10_000_000n * 1_000_000n) return h;
+  }
+  return list.at(-1);
+})();
 const VALIDATOR = "5CoZxgtfhcJKX2HmkwnsN18KbaT9aih9eF3b6qVPTgAUbifj"; // a registered delegate (test data, not a pick)
 // Test data, not picks. Opentensor Foundation's hotkey is a delegate that held no uid on subnet 1 on
 // 24 Sep 2026; subnet 1's owner hotkey held uid 248 there with a validator permit.
@@ -223,7 +240,7 @@ if (want("B")) {
   const { page, problems } = await openWith({ pubkey: HOLDER, secret: ed25519.utils.randomPrivateKey() });
   await page.click("#connect");
   await waitText(page, "#tao-balance", /TAO/);
-  expect("reads a real holder's TAO balance", /^0\.\d+ TAO$/.test(await text(page, "#tao-balance")), await text(page, "#tao-balance"));
+  expect("reads a real holder's TAO balance", /^[\d,]+(\.\d+)? TAO$/.test(await text(page, "#tao-balance")), await text(page, "#tao-balance"));
 
   await page.click("#derive");
   await waitText(page, "#coldkey-out", /^5/);
@@ -261,7 +278,7 @@ if (want("B")) {
   expect("soltao's fee is 0.25% of the TAO sent in SOL, at least 0.0035 SOL, and says so, with the price it used", soltaoFee >= 0.0035 && /^[\d.]+ SOL( → BgGF…72Na)? \(0\.25%, at least 0\.0035 SOL; 1 TAO = [\d.]+ SOL at the Orca TAO\/SOL pool\)$/.test(feeText), feeText);
   expect("total adds the priority fee and soltao's fee", Math.abs(total - lz - prio - soltaoFee) < 2e-6, `${total} SOL`);
   expect("review names the plan and the stake", /^Stake about 0\.0\d+ TAO on root/.test(await text(page, "#r-plan")), await text(page, "#r-plan"));
-  expect("review names how to get the stake back, and that unstake has not yet moved real funds", /^Unstake from Your Bittensor holdings in step 2, then Back to Solana\. Unstake has not yet moved real funds through this page\. The return quotes a live bridge fee then, plus 0\.25%\.$/.test(await text(page, "#r-later")), await text(page, "#r-later"));
+  expect("review names how to get the stake back, and that both steps have moved real funds", /^Unstake from Your Bittensor holdings in step 2, then Back to Solana\. Both have moved real funds through this page\. The return quotes a live bridge fee then, plus 0\.25%\.$/.test(await text(page, "#r-later")), await text(page, "#r-later"));
   expect("review shows the transit account", /^0x[0-9a-f]{40}$/.test(await text(page, "#r-via")));
   expect("review estimates Bittensor gas in TAO", /^about 0\.00\d+ TAO$/.test(await text(page, "#r-gas")), await text(page, "#r-gas"));
   expect("sign stays disabled while the route is not live", await page.$eval("#sign", (b) => b.disabled));
@@ -560,7 +577,7 @@ if (want("F")) {
   await waitText(page, "#holdings-note", /^Read \d\d:\d\d UTC|Could not/, 90_000);
   const holdings = await page.$$eval("#holdings-body tr", (trs) => trs.map((tr) => [...tr.children].map((td) => td.textContent.trim()).join(" | ")));
   expect("holdings show free TAO and each stake position with its worth in TAO, read from the chain", holdings[0] === "Free | — | 2 TAO | 2 TAO | Stake Top up Chutes" && holdings.length === 4 && holdings.slice(1, 3).every((h) => /^Staked on subnet 1 \| 5\w+…\w+(paid stakers [+−]?\d+\.\d% in 30 days; the best here [+−]?\d+\.\d%)? \| [\d,.]+ Alpha \| ≈ [\d,.]+ TAO \| Unstake Move Profile$/.test(h)) && /2 stake positions\. Subnet stakes are in that subnet's Alpha and collect their rewards in the stake itself; root stakes are in TAO\./.test(await text(page, "#holdings-note")), `${holdings.join(" / ")} · ${await text(page, "#holdings-note")}`);
-  expect("holdings disclose the stake route has carried real funds, and that Unstake/Move/Claim from this list have not", /has carried real funds/.test(await text(page, "#holdings-limits")) && /Unstake, Move, Claim, and staking more from this list/.test(await text(page, "#holdings-limits")) && /Unstake, Move, and Claim have not yet moved real funds through this page/.test(await text(page, "#holdings-prompt")) && /Unstake, Move, Stake and Claim here have not yet carried real funds through this page/.test(await text(page, "#holdings-note")));
+  expect("holdings disclose the stake route and Unstake have carried real funds, and that Move/Claim/Stake from this list have not", /has carried real funds/.test(await text(page, "#holdings-limits")) && /So has Unstake from this list/.test(await text(page, "#holdings-limits")) && /Move, Claim, and staking more from this list/.test(await text(page, "#holdings-limits")) && /Move and Claim have not yet moved real funds through this page/.test(await text(page, "#holdings-prompt")) && /Unstake here has carried real funds\. Move, Stake and Claim have not yet\./.test(await text(page, "#holdings-note")));
   expect("root rewards waiting with a validator are listed with a Claim, and counted in the total", /^Root rewards \| 5\w+…\w+ \| —waiting to be claimed \| ≈ 0\.003 TAO \| Claim$/.test(holdings[3] || "") && /0\.003 TAO is waiting in the validator's basket of subnet tokens, and "Claim" sells that slice and adds the TAO to your root stake\. Each claim pays a Bittensor fee \(about 0\.008 TAO on 25 Sep 2026\), so it only pays off once more than that has built up\.(?: Subnet \d+ is past the emission midpoint \(moving-price rank \d+\)\.)*(?: The chain pays those less than their price alone would earn, down to a drip\.)? Worth about [\d,.]+ TAO in all.*counting rewards still to claim/.test(await text(page, "#holdings-note")), `${holdings[3]} · ${await text(page, "#holdings-note")}`);
   await page.$eval("#holdings-body tr:nth-child(4) button", (b) => b.click());
   await waitText(page, "#move-quote", /^Claims about|Could not|The Bittensor fee/, 60_000);

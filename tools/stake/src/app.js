@@ -1356,7 +1356,7 @@ function renderReview(ready) {
     const view = holderView();
     const laterFee = view.cfg.offBps > 0n ? `plus soltao's fee at ${feeRateText(view.cfg)}%` : "plus 0.25%";
     return state.plan === "stake"
-      ? `Unstake from Your Bittensor holdings in step 2, then Back to Solana. Unstake has not yet moved real funds through this page. The return quotes a live bridge fee then, ${laterFee}.`
+      ? `Unstake from Your Bittensor holdings in step 2, then Back to Solana. Both have moved real funds through this page. The return quotes a live bridge fee then, ${laterFee}.`
       : `Back to Solana in the toggle above. The return quotes a live bridge fee then, ${laterFee}.`;
   });
   set("r-gas", () => { const g = bittensorGas(); return g === null ? "—" : `about ${tao(g)}`; });
@@ -1548,7 +1548,7 @@ async function showHoldings({ quiet = false } = {}) {
     const past = [...new Map(positions.filter((p) => standing.get(p.netuid)?.side === "below").map((p) => [p.netuid, p])).values()];
     const pastNote = past.length ? ` ${past.map((p) => `Subnet ${p.netuid} is past the emission midpoint (moving-price rank ${standing.get(p.netuid).rank})`).join(". ")}. The chain pays those less than their price alone would earn, down to a drip.` : "";
     const paidNote = paidShown ? ` ${paidRule(paidShown)} Moving to another validator on the same subnet swaps nothing: "Move" does it with the one chosen in step 3.` : "";
-    note("holdings-note", `Read ${new Date().toISOString().slice(11, 16)} UTC. ${positions.length ? `${positions.length} stake position${positions.length === 1 ? "" : "s"}. Subnet stakes are in that subnet's Alpha and collect their rewards in the stake itself; root stakes are in TAO.` : "No stake positions."}${yieldNote}${pastNote}${inAll}${changed ? " Changes since you last looked here include rewards and anything added or taken out elsewhere." : ""}${paidNote}${smallFree}${canMove() ? " Unstake, Move, Stake and Claim here have not yet carried real funds through this page." : ""}`);
+    note("holdings-note", `Read ${new Date().toISOString().slice(11, 16)} UTC. ${positions.length ? `${positions.length} stake position${positions.length === 1 ? "" : "s"}. Subnet stakes are in that subnet's Alpha and collect their rewards in the stake itself; root stakes are in TAO.` : "No stake positions."}${yieldNote}${pastNote}${inAll}${changed ? " Changes since you last looked here include rewards and anything added or taken out elsewhere." : ""}${paidNote}${smallFree}${canMove() ? " Unstake here has carried real funds. Move, Stake and Claim have not yet." : ""}`);
   } catch (e) {
     if (seq === holdingsSeq) note("holdings-note", `Could not read it from Bittensor: ${e.message}`, "bad");
   } finally {
@@ -2296,7 +2296,7 @@ async function runRoute(route, { expectLd = null, fresh = false } = {}) {
     const freeAfter = await getFreeBalance(coldkey).catch(() => null);
     const free = freeBefore !== null && freeAfter !== null && freeAfter > freeBefore ? freeAfter - freeBefore : null;
     track("sweep", "ok", [summary.stakedRao > 0n && `staked ${stakeAmount(summary.stakedRao, netuid)}`, free !== null && `${tao(free)} free`].filter(Boolean).join(" · ") || "done");
-    note("track-note", summary.stakedRao > 0n ? `Done. The ${bittensorStakeAsset(netuid)} stake is owned by your coldkey. Open Your Bittensor holdings in step 2 to unstake or send it home, or use any Bittensor wallet. Unstake has not yet moved real funds through this page.`
+    note("track-note", summary.stakedRao > 0n ? `Done. The ${bittensorStakeAsset(netuid)} stake is owned by your coldkey. Open Your Bittensor holdings in step 2 to unstake or send it home, or use any Bittensor wallet. Both have moved real funds through this page.`
       : summary.stakeRefused ? `Bittensor refused the stake${netuid === 0n ? "" : ` (the validator changed, or subnet ${netuid}'s price moved past the ${Number(CONFIG.subnetPriceToleranceBps) / 100}% limit)`}, so your TAO arrived unstaked. It is free TAO in your wallet: stake it again at today's price, or bring it back to Solana, from Your Bittensor holdings in step 2, or from any Bittensor wallet. Staking more from holdings has not yet moved real funds through this page.` : "Done. It is free TAO in your Bittensor wallet. Open Your Bittensor holdings in step 2 to stake it or send it home. Staking more from holdings has not yet moved real funds through this page.", summary.stakeRefused ? "warn" : "ok");
       
     $("f-dest").textContent = short(route.coldkey, 6);

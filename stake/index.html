@@ -27,7 +27,7 @@
 <link rel="apple-touch-icon" href="../logo.png">
 <link rel="stylesheet" href="../styles.css">
 <link rel="stylesheet" href="stake.css?v=eb438146">
-<script src="stake.js?v=fd7a03ad" defer></script>
+<script src="stake.js?v=2771a2fd" defer></script>
 </head>
 <body>
 <a class="skip" href="#steps">Skip to the steps</a>
@@ -57,9 +57,9 @@
   </h1>
   <p class="stake-lede">
     <span class="dir-fwd">The list is the choice. One signature creates the Bittensor wallet that holds the stake, and one transaction sends it once you clear the minimum <span id="stake-min">in step 3</span>. You keep the keys.</span>
-    <span class="dir-rev" hidden>Send free TAO from the wallet your signature creates back to your Solana wallet. If it is still staked, unstake it first from Your Bittensor holdings. Unstake has not yet moved real funds through this page.</span>
+    <span class="dir-rev" hidden>Send free TAO from the wallet your signature creates back to your Solana wallet. If it is still staked, unstake it first from Your Bittensor holdings. Both have moved real funds through this page.</span>
   </p>
-  <p class="stake-proved dir-fwd">Staking from Solana onto Bittensor, including onto a subnet, has moved real funds. Unstake, Move, and Claim are on this page and have not yet.</p>
+  <p class="stake-proved dir-fwd">Staking from Solana onto Bittensor, including onto a subnet, has moved real funds, and so have unstaking and sending TAO home. Move and Claim are on this page and have not yet.</p>
   <ol class="hops stake-hops dir-fwd" aria-label="The route">
     <li class="hop-now"><b>Solana</b><span>canonical TAO · you sign once</span></li>
     <li><b>LayerZero</b><span>the bridge TAO arrived on</span></li>
@@ -79,7 +79,7 @@
     <p class="dir-rev" hidden>This sends free TAO from the Bittensor wallet your signature creates back to your Solana wallet as canonical TAO, over the same LayerZero bridge. The page signs every Bittensor step with keys only you hold. To bring back staked TAO, unstake it first from Your Bittensor holdings in step 2.</p>
   </div></details>
   <details class="info"><summary><span class="info-i" aria-hidden="true">i</span><span class="info-l">Who runs this</span></summary><div class="info-body">    <p class="stake-who">Run by the maintainer of the Solana TAO Board (see the disclosure below). Your keys are made and kept in this browser and never sent to them, and there is no
-    soltao contract holding funds. Real funds have moved through this page from Solana onto Bittensor.
+    soltao contract holding funds. Real funds have moved through this page from Solana onto Bittensor, and back.
     You do trust this page's code, which is open source. Its only charge is
     0.25% of what you move, shown before you sign.</p></div></details>
   </div>
@@ -99,7 +99,7 @@
     </dl>
     <div class="profile" id="subnet-card-profile"></div>
     <p class="subnet-links" id="subnet-links" hidden></p>
-    <p class="step-p small">This link is the way in and the way back: stake from your Solana wallet, then return here to unstake or send TAO home. Unstake has not yet moved real funds through this page.</p>
+    <p class="step-p small">This link is the way in and the way back: stake from your Solana wallet, then return here to unstake or send TAO home. Both ways have moved real funds through this page.</p>
     <p class="step-note" id="subnet-note" role="status"></p>
   </div>
 </section>
@@ -276,10 +276,10 @@
       </div>
       <div class="holdings">
         <button type="button" class="btn btn-ghost btn-sm" id="holdings-btn">Your Bittensor holdings</button>
-        <p class="step-p small" id="holdings-prompt">Come back here to unstake, claim, move, or send TAO home. Unstake, Move, and Claim have not yet moved real funds through this page.</p>
+        <p class="step-p small" id="holdings-prompt">Come back here to unstake, claim, move, or send TAO home. Move and Claim have not yet moved real funds through this page.</p>
         <details class="info" id="holdings-limits">
           <summary><span class="info-i" aria-hidden="true">i</span><span class="info-l">What has carried real funds</span></summary>
-          <div class="info-body"><p>Staking from this page — Solana TAO onto Bittensor, including onto a subnet — has carried real funds. Unstake, Move, Claim, and staking more from this list have been checked against Bittensor's real runtime at zero cost and have not yet carried real funds through this page.</p></div>
+          <div class="info-body"><p>Staking from this page — Solana TAO onto Bittensor, including onto a subnet — has carried real funds. So has Unstake from this list, with soltao's fee in the same batch, and the return to Solana after it. Move, Claim, and staking more from this list have been checked against Bittensor's real runtime at zero cost and have not yet carried real funds through this page.</p></div>
         </details>
         <div id="holdings-wrap" hidden>
           <p class="step-note" id="holdings-note" role="status"></p>
@@ -490,7 +490,7 @@
         <div><dt id="f-staked-label">Staked TAO</dt><dd class="num" id="f-staked">—</dd></div>
         <div><dt>Free TAO</dt><dd class="num" id="f-free">—</dd></div>
       </dl>
-      <p class="step-p small">Come back here, sign the same message, and open Your Bittensor holdings to unstake or send it home. Unstake has not yet moved real funds through this page. Any Bittensor wallet with your recovery phrase works too.</p>
+      <p class="step-p small">Come back here, sign the same message, and open Your Bittensor holdings to unstake or send it home. Both have moved real funds through this page. Any Bittensor wallet with your recovery phrase works too.</p>
     </div>
   </li>
 </ol>

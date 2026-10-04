@@ -102,7 +102,7 @@ expect("Bittensor RPC parses the transaction (refuses an unfunded sender)", pars
   expect("the Helius API key is not in the page config", !readFileSync(join(root, "tools/stake/src/config.js"), "utf8").includes("mainnet.helius-rpc.com"));
   expect("official Solana RPC is not in connect-src (it 403s browser Origin)", !headers.includes("api.mainnet-beta.solana.com") && !nginx.includes("api.mainnet-beta.solana.com"));
   const html = readFileSync(join(root, "stake/index.html"), "utf8");
-  expect("holdings copy says the stake route has carried real funds", html.includes("has carried real funds") && html.includes("Unstake, Move, Claim, and staking more from this list") && html.includes("have not yet carried real funds through this page"));
+  expect("holdings copy says the stake route and Unstake have carried real funds, and Move/Claim have not", html.includes("has carried real funds") && html.includes("So has Unstake from this list") && html.includes("Move, Claim, and staking more from this list") && html.includes("have not yet carried real funds through this page"));
   expect("the stake page does not name a subnet to promote", !/Targon/i.test(html) && !/\bSN ?4\b/i.test(html));
   expect("the return review has a Solana TAO account row", html.includes('id="r-ata"'));
 }
