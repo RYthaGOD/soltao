@@ -4,59 +4,47 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-10-01 (item 39 live). **Live on soltao.xyz:** commit `24de4e1`, `stake.js?v=10e815f0`,
-`return.js?v=cc30346f`, `stake.css?v=50bdc3d0`. Choosing a subnet row opens its chart and pool figures
-above the list, before sign-in. The 0.25% fee still drops for a connected wallet that holds $SOLTAO.
-No subnet is named.
-**Still off:** Top up Chutes (`chutesLive: false`).
-**Not yet with real funds:** Move, the batched Bittensor fee, unstake, Claim, staking more from
-holdings, Chutes, and a first-time Solana token-account arrival.
-**Next:** one real-funds pass through Unstake, Move, Claim, and the batched Bittensor fee. Not a new
-feature. Do not name a subnet.
+Last updated: 2026-10-04 (items 40–42). **Live on soltao.xyz:** commit `7f2f93c` (a Cursor session, 2 Oct),
+`stake.js?v=fd7a03ad`, `return.js?v=049fc82b`, `stake.css?v=eb438146`. The subnet list is the stake page. Its
+figures, and an open validator or holdings list, re-read every minute (items 40–41). No subnet is named.
+**Built, not deployed:** item 42's copy (`stake.js?v=2771a2fd`): the page now says Unstake and the return after it
+have moved real funds. Deploying it needs Craig's go-ahead.
+**Real funds through the live page:** root and subnet stakes; the free-TAO return; and, from an outside wallet
+on 1 Oct, a subnet Unstake with the batched Bittensor fee, chained into a return that landed on Solana (item 42).
+**Not yet with real funds:** Move, Claim, staking more from holdings, a root unstake (plain `removeStake`),
+Top up Chutes (still off, `chutesLive: false`), and a first-time Solana token-account arrival.
+**Next:** one small real-funds Move and Claim. Not a new feature. Do not name a subnet.
 
-Previous live header (29 Sep, late): commit `830ac26`, `stake.js?v=629349d7`. Served on the first
-poll after `railway up --ci`. Shipped bug history item 29 and the first-time / core-loop copy: hero
-and holdings name the way back, the review quotes how to exit, a subnet link is the way in and back,
-Jupiter is in step 1, the board no longer calls the fee "flat SOL". `npm test` all passed; page runs
-A, A2, C passed (including `#r-later`). `test:live` matched the hash, CSP, return toggle, and subnet-1
-checks; the two failures were Bittensor's public RPC busy on the subnet-64 directory card.
+Usage on 4 Oct 2026 (`npm run usage`): 9 completed routes from 7 wallets since 21 Sep, 0.368833032 SOL in fees.
+Three routes are Craig's (`CVXTu5…`, `3hfdqA…` twice) and one wallet he funded (`GfoFSM…`). About 54 TAO has gone
+in, almost all from `FH9zKY…` (43.05 TAO on 1 Oct) and `cKR3xq…` (9.60 TAO on 3 Oct).
 
-As of 2026-09-25: **Live in production, nothing unreleased on `main`.** Latest deploy (25 Sep,
-Craig's go-ahead after a review of it): commit `d50a180`, `stake.js?v=d20813dc`, which ships item 21
-(claim root rewards, subnet pages) and `31cafeb` (board and stake-page polish: hero copy, subscript
-prices, SOLTAO row, footer, notes font). Served on the first poll; `npm test`, page-test runs A, E and
-F, and `test:live` (28 checks) all passed. Before it, `1e3c803` (the front page redirects to `/stake/`,
-board at `/board/`, with nginx `absolute_redirect off`) shipped `stake.js?v=3f2ee7a4`. An earlier
-deploy (25 Sep, Craig's go-ahead): commit `77a17cb`, `stake.js?v=77617c90` + `return.js?v=a211b567`,
-Solana RPC back on PublicNode after Helius began answering 403 (see "The Solana RPC is PublicNode
-again" below); served on the first poll, `test:live` all passed. Before it, commit `477bde3`, `stake.js?v=cd93f703` + `return.js?v=c15e5834`: **`CONFIG.returnLive` is now true**,
-so the return to Solana and unstake/stake from the holdings view are open to everyone, switched on
-at Craig's explicit request BEFORE any real-funds run (wallets refuse the sign-in on localhost, since
-the message names soltao.xyz, so the first real runs have to be on the live page). `test:live` all
-passed, including the return option now enabled. The paragraph below on "shipped but switched off"
-is superseded. Before it, commit `ad1161c` (polish, bug history item 15: unstake-then-return, send again after a revert,
-"TAO added per day" in the directory), `stake.js?v=1e178c2d` + `return.js?v=3598743b`, served on the
-first poll, `/healthz` 200, `test:live` all passed; the return and stake moves are still switched off.
-Before it, `9f22575` (the subnet directory, item 14), `stake.js?v=d8f02947` +
-`return.js?v=5f50824e`, `test:live` all passed. The deploy before that, `994f394` (Craig: "deploy once
-you are happy"), `stake.js?v=412be73a` + `return.js?v=8406712c`: Served on the first poll; `/healthz` 200 (so the new nginx rules are valid);
-`npm run test:live` 23/23 on the real domain, including both cache headers, both mirror redirects,
-`return.js` served and the return option still disabled.
+### Deploy log (newest first)
 
-Live now: the cleanup; the review fixes (bug history item 11: price-limited subnet stakes, TAO/Alpha
-wording, debounced subnet checks, mobile wallet links, cache headers, Solana priority fee, sealed
-resume routes); both Codex P1 fixes (item 12); the roast fixes (validator picker, shareable links,
-who-runs-this line, USD in the review, holdings view); plus the redesign, subnet staking, the Helius
-switch and link previews from before.
-
-**Shipped and on in production** (`CONFIG.returnLive` true since 24 Sep 2026): return to Solana
-(real-funds proof, item 17), unstake/re-stake/Move from the holdings view (no real-funds proof yet),
-item 29 (confirm race), and the loop copy (`stake.js?v=629349d7`).
-**Still off:** Top up Chutes (`CONFIG.chutesLive` false).
-
-An earlier version of this header warned about an unreleased CSP fix. That is resolved: the live
-CSP on both `/` and `/stake/` now includes the configured Helius origin, confirmed by simulating
-the page's own wallet-connect `fetch()` from inside the live page (200 OK, zero violations).
+Every deploy below was served on the first poll after `railway up --ci` unless it says otherwise. Bug history
+items carry the detail.
+- **2 Oct** `7f2f93c` (Cursor), `stake.js?v=fd7a03ad`: item 41. Served before it was pushed or recorded here;
+  pushed and recorded on 4 Oct.
+- **2 Oct** `bbcc861` (Cursor): item 40. Not recorded here at the time.
+- **1 Oct** `24de4e1`, `stake.js?v=10e815f0`, `stake.css?v=50bdc3d0`: item 39. `test:live` all passed.
+- **1 Oct** `13a64c8`, `stake.js?v=3d1eb62c`, `return.js?v=cc30346f`: item 38, the $SOLTAO holder discount.
+- **30 Sep** `29cca29` (`stake.js?v=e3bec6b6`, `stake.css?v=1c83d7a1`): item 37. `5738c89`: item 36 (copy only).
+  `754e8a1` (`stake.js?v=fb9b5ffc`, `return.js?v=9d4c32fb`): item 35. `b8bdaf2` (`stake.js?v=b8533f54`): item 34.
+  `bd1ad57` (`stake.js?v=f5b87523`, `stake.css?v=25a3abdb`, `return.js?v=7ac428cd`): items 32–33.
+- **29 Sep** `fc4b204` (`stake.js?v=a683574c`): item 31. `830ac26` (`stake.js?v=629349d7`): items 29–30; `npm test`
+  and page runs A, A2 and C passed, and `test:live`'s two failures were Bittensor's public RPC busy on the subnet-64
+  card. `bf510de`: items 25–28 (profiles, trading, the 0.25% fee), merged from `stake-trading`.
+- **25 Sep** `d50a180` (`stake.js?v=d20813dc`): item 21 and the `31cafeb` polish; `npm test`, page runs A, E and F,
+  and `test:live` (28 checks) passed. `1e3c803` (`stake.js?v=3f2ee7a4`): the front page redirects to `/stake/`, the
+  board moves to `/board/`, nginx `absolute_redirect off`. `77a17cb` (`stake.js?v=77617c90`, `return.js?v=a211b567`):
+  the Solana RPC back on PublicNode after Helius began answering 403.
+- **24 Sep** `477bde3` (`stake.js?v=cd93f703`, `return.js?v=c15e5834`): **`CONFIG.returnLive` true**, at Craig's
+  explicit request before any real-funds run (wallets refuse the sign-in on localhost, since the message names
+  soltao.xyz). `ad1161c` (`stake.js?v=1e178c2d`): item 15. `9f22575` (`stake.js?v=d8f02947`): item 14. `994f394`
+  (`stake.js?v=412be73a`, Craig: "deploy once you are happy"): the review, Codex P1 and roast fixes; `test:live`
+  23/23. `292b68b`: item 10.
+- **23–24 Sep** three rounds: see "Historical" at the end. An old header warned about an unreleased CSP fix; that
+  was resolved and confirmed from inside the live page (bug history item 7).
 
 ## What this is
 
@@ -144,7 +132,8 @@ main "Solana TAO Board" page which stays no-wallet-connect).
   (`sealRoute`/`readRoute`) and the return checkpoints (`sealRecord`/`openRecord`, label "return").
 - The return direction in the page (`app.js`) opens where `RETURN_OPEN`: local hosts, or
   `CONFIG.returnLive`. **It is true** since 24 Sep 2026; a real-funds return landed the same day
-  (bug history item 17). Unstake / Move / the batched Bittensor fee have not yet carried real funds.
+  (bug history item 17). A subnet Unstake, the return after it and the batched Bittensor fee carried real
+  funds on 1 Oct 2026 (item 42). Move and Claim have not.
 - `tools/stake/build.mjs` — esbuild bundler. Also stamps `stake/index.html`'s script tag with a
   content hash (`stake.js?v=<hash>`) so a new deploy can never be served stale from any cache layer.
   **Always run `npm run build` before deploying** — the hash must change for the fix to actually
@@ -695,7 +684,7 @@ This is **not** git-push-triggered. Steps, in order, every time:
         both signed moves decode to the intended call.
       - Page-test run F: the Move button, the same-subnet quote, the move-to-root quote and the impact
         warning.
-      - **Not yet with real funds.**
+      - **Not yet with real funds.** (4 Oct 2026: Unstake now has, item 42. Move still has not.)
 
 27. **Validators' 30-day record, directory changes, and the review's Alpha quote, 28 Sep 2026 (built, not
     deployed).**
@@ -767,7 +756,8 @@ This is **not** git-push-triggered. Steps, in order, every time:
       - Live runtime: a stake move with the fee signs and decodes as `utility.batchAll([removeStakeLimit,
         transferKeepAlive(5Cvj…, fee)])`, and the runtime prices the batch.
       - Page-test run F: every holdings quote states the fee.
-      - **The batched Bittensor fee has not carried real funds yet.**
+      - **The batched Bittensor fee has not carried real funds yet.** (It has since: two 0.001 TAO fees landed
+        at `5Cvj…` on 1 Oct 2026, item 42.)
     - *Deploy:* merged from `stake-trading`, together with items 24 (removed), 25, 26 and 27.
 
 29. **An unconfirmed Solana send must not unlock a second send (29 Sep 2026).**
@@ -904,6 +894,53 @@ This is **not** git-push-triggered. Steps, in order, every time:
     Served on the first poll after `railway up --ci`. `test:live` all passed. Daily history was 1.9
     days old, inside the three-day check.
 
+40. **The subnet list is the stake page; its figures re-read every minute (2 Oct 2026, a Cursor session).**
+    The page opens on Browse subnets. Picking a row opens that subnet's chart, pool figures and validators
+    there, and the choice fills step 3. Nothing on the list is a recommendation. While the tab is open the
+    pool price, emission, the dollar price and a connected wallet's balances re-read every 60 s
+    (`LIVE_REFRESH_MS`). A failed refresh keeps the last good rows on screen, and an open chart stays up until
+    the new figures are ready. The README and the link card (`og.html`, `og.png`) now lead with the stake
+    page. Daily history ran through 2 Oct. Live as `bbcc861`; it was not recorded here at the time.
+
+41. **Open validator and holdings lists join the refresh (2 Oct 2026, a Cursor session).** An open validator
+    list and an open holdings list re-read on the same tick (`openPicker` / `showHoldings` with `quiet`). A tick
+    only refreshes a list already on screen, never one a click is already reading. The commit also added
+    "Unstake has not yet moved real funds through this page" to the reverse lede, the subnet card, the review's
+    `#r-later` and the finished-route notes. That was already untrue by then (item 42). Live as `7f2f93c`
+    (`stake.js?v=fd7a03ad`, `stake.css?v=eb438146`, `return.js?v=049fc82b`). It was served before it was pushed;
+    pushed on 4 Oct.
+
+42. **An outside wallet's subnet Unstake and return carried real funds (1 Oct 2026, found 4 Oct).** Read from
+    Bittensor's archive node and from Solana, nothing signed:
+    - 30 Sep, 05:25 UTC: `FXNTL46d…` staked 0.15 TAO onto a subnet through the page (item 36).
+    - 1 Oct, 12:38 UTC, block 9,187,979: coldkey `5D5cC13N…` (its first extrinsic, nonce 0) signed
+      `utility.batchAll([removeStakeLimit(2.3826 Alpha, allow_partial false), transferKeepAlive(5Cvj…, 0.001 TAO)])`.
+      Events: `StakeRemoved` (0.1224 TAO freed), `ItemCompleted` twice, `BatchCompleted`, `ExtrinsicSuccess`.
+    - Block 9,187,980, 12 s later (nonce 1): `batchAll([transferAllowDeath(5EUsPH5t…, 0.1278 TAO),
+      transferKeepAlive(5Cvj…, 0.001 TAO)])`. That is the return's first funding transfer with its fee riding once
+      (item 28), the "unstake, then return" chain of item 15.
+    - 1 Oct, 12:42 UTC: an OFT `LzReceive` (Solana `4bfZ69rq…`) raised `FXNTL46d…`'s TAO account from 0.04365 to
+      0.164343 TAO (+0.120693). The account already existed, so the first-time rent path is still unobserved.
+    - The fee coldkey `5Cvj…` went from 0.006593908 to 0.008593908 TAO in those two blocks. Bisecting its balance
+      from block 9,150,000 to 9,210,128 found no other change.
+
+    So a subnet Unstake (`removeStakeLimit`), "unstake, then return" and the batched Bittensor fee now have
+    real-funds proof, from a wallet that is not Craig's. Still not proven: Move, Claim, staking more from
+    holdings, a root unstake (plain `removeStake`), Chutes, and a first-time token account.
+    - *Page copy*, with no subnet named: the hero proof line, the reverse lede, the subnet card, who-runs, the
+      holdings prompt, `#holdings-limits`, the holdings note, `#r-later` and the finished-route note now say
+      Unstake and the return have moved real funds, and Move and Claim have not. The tests that quote that copy
+      are updated (`evm`, `page` runs C and F, `live`). Built as `stake.js?v=2771a2fd`; CSS and `return.js`
+      unchanged. **Not deployed:** it needs Craig's go-ahead.
+    - *`npm run usage` crashed:* a version-1 Solana transaction reached the fee wallet by 4 Oct, and
+      `@solana/web3.js` 1.95.8 cannot parse one, even with a higher `maxSupportedTransactionVersion`. The script
+      now reads transactions over plain JSON-RPC (`jsonParsed`, `maxSupportedTransactionVersion: 1`) and retries
+      network errors. The page never calls `getTransaction`, so it was not affected. Count on 4 Oct: 9 routes from
+      7 wallets since 21 Sep, 0.368833032 SOL.
+    - *Simulation holder drift:* `test/solana.test.mjs` and page run C borrowed `E7wd…`, which fell to 0.088 TAO,
+      under the 0.1 TAO they simulate. Both now take the first of four holders that still has 0.1 TAO, some SOL
+      and no $SOLTAO discount (`SIM_HOLDER` pins one). `npm test` all passed.
+
 ## Link previews and SEO
 
 `index.html` and `stake/index.html` each carry their own `og:`/`twitter:` block; they are hand-
@@ -957,7 +994,9 @@ the launch date and a dedicated fee wallet is optional, not needed for measureme
 
 **Score: 55 / 110** ("needs significant work"). Value proposition 6 (x2), crypto necessity 9, target
 user 5, first-time experience 4, core loop 2, moat 3, technical execution 8, naming 4, monetization
-3, timing 5. The engineering is ahead of the product.
+3, timing 5. The engineering is ahead of the product. Re-runs: 65 / 110 later on 24 Sep (`docs/subnet-pilot-and-roast-2026-09-24.md`), then 70 / 110 on
+30 Sep (`docs/roast-my-product-2026-09-30.html`), up on the fee model and loop copy, not on users. The 30 Sep
+code review (`docs/review-and-iterate-2026-09-30.html`) graded the client B (83).
 
 **Worst issues, and the plan for each:**
 
@@ -976,12 +1015,12 @@ Avoided: token-first thinking; the $SOLTAO gate was rejected and the conflict is
 
 ## Current state
 
-**As of 1 Oct 2026.** Production is `24de4e1` / `stake.js?v=10e815f0` / `stake.css?v=50bdc3d0` /
-`return.js?v=cc30346f`. Item 39 is live. `chutesLive` stays false. Do not feature a subnet unless they asked.
+**As of 4 Oct 2026.** Production is `7f2f93c` / `stake.js?v=fd7a03ad` / `stake.css?v=eb438146` /
+`return.js?v=049fc82b` (items 40–41). Item 42's copy is built as `stake.js?v=2771a2fd` and waits on Craig's
+go-ahead to deploy. `chutesLive` stays false. Do not feature a subnet unless they asked.
 
-**Next, in order.** (1) One real-funds pass through Unstake, Move, Claim, and the batched Bittensor fee.
-(2) Leave Chutes off until one ≥0.01 TAO top-up is credited. Marketing and the two research scripts
-are still uncommitted and are not part of the stake route.
+**Next, in order.** (1) Deploy item 42's copy once Craig approves. (2) One small real-funds Move and Claim.
+(3) Leave Chutes off until one ≥0.01 TAO top-up is credited.
 
 ### What has real-funds proof
 - Wallet connect, SIWS, derivation, quotes, simulation.
@@ -989,13 +1028,15 @@ are still uncommitted and are not part of the stake route.
 - Free-TAO return to Solana (24 Sep 2026, item 17): wrap + LayerZero send landed, existing token account.
 - Error recovery / resume from chain state.
 - One hand-held third-party "Just deliver it" route (item 23). Keep-alive sweep (item 20) on that run.
-- Another Just-deliver (29 Sep 2026, `FH9zKYUT…`, not Craig).
-- Subnet stake through the live page (30 Sep 2026, stranger, `addStakeLimit` on netuid 4).
+- More routes from wallets outside Craig's known two: `FH9zKY…` (29 Sep and 1 Oct, 43.05 TAO), `9AEqMf…`
+  (30 Sep), `cKR3xq…` (3 Oct, 9.60 TAO).
+- Subnet stake through the live page (30 Sep 2026, stranger, `addStakeLimit`).
+- Subnet Unstake with the batched 0.25% Bittensor fee, then a return that landed on Solana (1 Oct 2026, the same
+  stranger, item 42).
 
 ### Live on soltao.xyz, not yet with real funds
-- Unstake / Stake / Move / Claim from holdings (items 13, 26, 21).
-- Batched 0.25% Bittensor fee (item 28).
-- Subnet directory, profiles, validator 30-day record (items 14, 25, 27).
+- Move, Claim, and staking more from holdings (items 26, 21, 13). A root unstake (plain `removeStake`).
+- Subnet directory, profiles, validator 30-day record (items 14, 25, 27): read-only, nothing to prove with funds.
 
 ### Built, gated off (`chutesLive: false`)
 - Top up Chutes (item 18). Needs one ≥0.01 TAO real top-up credited by Chutes before flipping the flag.

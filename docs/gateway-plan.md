@@ -1,20 +1,22 @@
 # soltao Gateway Plan
 
-Last updated: 2026-10-01
+Last updated: 2026-10-04
 
 ## Where we are
 
-The gateway described below is live at soltao.xyz/stake (commit `29cca29`). People can stake from a
-Solana wallet, including onto a subnet, and bring free TAO back. One stranger has staked onto a subnet
-through the page. Unstake, Move, Claim, staking more from holdings, and the batched Bittensor fee are
-open and have not carried real funds.
+The gateway described below is live at soltao.xyz/stake (commit `7f2f93c`, `stake.js?v=fd7a03ad`). The
+subnet list is the stake page. People can stake from a Solana wallet, including onto a subnet, unstake,
+and bring TAO back. On 1 Oct 2026 a stranger who had staked onto a subnet the day before unstaked it, paid
+the batched 0.25% Bittensor fee, and got 0.1207 TAO back in their Solana wallet (HANDOVER item 42). Move,
+Claim, staking more from holdings, and a root unstake have not carried real funds.
 
-The $SOLTAO holder discount on the 0.25% fee (HANDOVER item 38) is live as of 1 Oct 2026
-(`stake.js?v=3d1eb62c`). Next is to prove Unstake, Move, Claim, and the batched Bittensor fee with
-real funds. Do not start a new feature, and do not name a subnet, until that is done.
+Usage read from the fee wallet on 4 Oct 2026: 9 completed routes from 7 wallets since 21 Sep, 0.369 SOL in
+fees, about 54 TAO in. Four of those wallets are not among Craig's known wallets and were not funded by him.
 
-Chutes top-up stays switched off. Marketing assets and the vault research scripts in the working tree
-are not part of the stake route.
+The $SOLTAO holder discount on the 0.25% fee (HANDOVER item 38) is live as of 1 Oct 2026. Next is one small
+real-funds Move and Claim. Do not start a new feature, and do not name a subnet, until that is done.
+
+Chutes top-up stays switched off.
 
 ## Product promise
 
@@ -75,8 +77,9 @@ Acceptance:
 ## Milestone 3: bridge-back foundation
 
 Status: done in production. `CONFIG.returnLive` is true. A real-funds free-TAO return landed 24 Sep
-2026 (HANDOVER item 17). Unstake and Move are live in the holdings view; they have not yet carried
-real funds. The batched 0.25% Bittensor fee (item 28) has not carried real funds.
+2026 (HANDOVER item 17). Unstake and Move are live in the holdings view. A subnet Unstake, the return
+after it and the batched 0.25% Bittensor fee (item 28) carried real funds on 1 Oct 2026 (item 42). Move
+has not.
 
 Goal: build return-to-Solana for free TAO first, then add unstake.
 
@@ -117,8 +120,9 @@ Remaining:
 
 ## Milestone 4: unstake and return
 
-Status (29 Sep 2026): live in production (`CONFIG.returnLive` true). Unstake, Stake and Move from
-the holdings view are open; none of those three have carried real funds yet. Outcome of each move
+Status (4 Oct 2026): live in production (`CONFIG.returnLive` true). Unstake, Stake and Move from
+the holdings view are open. A subnet Unstake chained into a return carried real funds on 1 Oct 2026, from
+a stranger's wallet (HANDOVER item 42); Stake from holdings, Move and a root unstake have not. Outcome of each move
 is the extrinsic's own event when the node still has it (item 22), else a balance/stake fallback.
 Each position offers "Unstake" (a full or partial amount, `removeStakeLimit` 2% under the pool price on a
 subnet, plain `removeStake` on root), which leaves free TAO that "Bridge to Solana" then brings home.
@@ -128,7 +132,7 @@ before it is sent and settled on resume (`src/stake_moves.js`, `src/settle.js`),
 judged from the position and free balance, since an included extrinsic can still fail to dispatch.
 Verified: mocked chain (lands once, price refusal uses the nonce but moves nothing, page closed
 after submit, expired transaction); live runtime (all four calls sign and decode to the intended
-call and arguments). Not yet done with real funds. Chained on 24 Sep 2026: an Unstake can be confirmed
+call and arguments). Real funds: the chained subnet Unstake and return of 1 Oct 2026. Chained on 24 Sep 2026: an Unstake can be confirmed
 together with "then bring the TAO this frees back to my Solana wallet", priced with the live bridge fee
 before anything is signed; after the unstake lands, the page returns what it freed, less the return's
 own costs, keeping 0.001 TAO free (tools/stake/HANDOVER.md, bug history item 15). A return whose
@@ -181,6 +185,43 @@ fallback to catch. The page now reads the chosen subnet's metagraph (precompile 
 calls per request) and refuses a subnet that does not exist, a hotkey with no uid there, and a hotkey
 with a uid but no validator permit. Root staking keeps the original delegate check. The same scan is
 the data source for the keyless validator picker (option 2 in the research note).
+
+## Hackathon note: $SOLTAO is not a coupon (1 Oct 2026)
+
+For the Colosseum submission. The business is the 0.25% fee, shown before anyone signs. No
+$SOLTAO is required, and holding it does not open the route.
+
+A coupon would start on a small balance and make the fee optional for almost anyone who held a
+little. The cut does not. It applies to the percentage only, and only in the connected wallet:
+10 million tokens take a quarter off (0.1875%), 50 million take half off (0.125%). It stops
+there. The floors stay, 0.0035 SOL from Solana and 0.001 TAO on Bittensor, so under about 0.5 TAO
+the holding changes nothing.
+
+The cut is sized for someone who uses the bridge, not for a bag that never moves TAO. On a send
+of 43.05 TAO (1 Oct 2026, 12:26 UTC, about $13,200), half off would have saved 0.14 SOL and a
+quarter off 0.07 SOL. That wallet paid the full 0.25%, 0.280 SOL. Once, the saving is small.
+Across repeated sends of that size, the holding is tied to fees that wallet would have paid
+anyway, which is how the route keeps a user instead of paying them to show up once.
+
+The same wallet is the one that signs. Tokens sitting somewhere else do not count. A failed
+balance read pays the full 0.25%. The person who runs the page also launched the coin. The
+submission should say that, and should not recommend buying it.
+
+The coin also has its own reward, separate from the route fee. The mint takes 1% on every
+transfer (`transferFeeBasisPoints` 100, read 20 Sep 2026). Those fees accrue in canonical TAO
+and, under StonkFun's published model, are paid to holders pro-rata when the pot is worth
+distributing. There is no schedule. The 1% fee and TAO accruing to the update authority were
+read on chain. A payout landing in a holder's wallet was not observed directly, and the
+submission should not claim one was. The fee cut is for someone who keeps bridging. The 1% is
+for someone who keeps holding.
+
+What would make the holding stickier still is subnet staking that feels like trading that
+subnet's alpha: one choice, a price, and a way back. That is the direction. It is not a Solana
+market, and there is no receipt token. The page still says so.
+
+Usage the same day, read from the fee wallet: 8 completed routes from 6 wallets since 21 Sep
+2026, 0.31 SOL in fees. Most of that fee is the one 43.05 TAO send. The post is
+`marketing/stake-not-a-coupon.txt`.
 
 ## Deferred
 
