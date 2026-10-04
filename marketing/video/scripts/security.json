@@ -1,0 +1,101 @@
+[
+ {
+  "id": "hook",
+  "title": "Your wallet stays yours.",
+  "sub": "How soltao keeps your wallet safe, and why",
+  "say": "soltao lets you stake the TAO in your Solana wallet on Bittensor. Real money moves through it. So before I built anything, I asked one question. What could go wrong for the user? Here is everything I did about it."
+ },
+ {
+  "id": "keys",
+  "title": "Keys made in your browser",
+  "points": [
+   "One signature creates your Bittensor wallet",
+   "Keys never leave your browser",
+   "No soltao server ever sees them"
+  ],
+  "say": "It starts with your keys. You sign one message with your Solana wallet. Your browser turns that signature into your Bittensor wallet. The keys are made on your device, and they never leave it. No soltao server ever sees them."
+ },
+ {
+  "id": "custody",
+  "title": "No custody. No contract.",
+  "points": [
+   "No soltao smart contract in the path",
+   "No server that can move your funds",
+   "Your coldkey exports to btcli, any time"
+  ],
+  "say": "There is no soltao contract holding your funds, and no server that can move them. Your stake is ordinary native stake on Bittensor. Your wallet is a normal twelve word phrase you can import into btcli. If soltao disappeared tomorrow, your stake would still be yours."
+ },
+ {
+  "id": "domain",
+  "title": "Sign-in tied to soltao.xyz",
+  "points": [
+   "The message names soltao.xyz",
+   "Wallets warn on any other site",
+   "Only ever sign it on soltao.xyz"
+  ],
+  "say": "The sign in message names soltao dot x y z, and it says so in plain words. Wallets that check the site will warn you if anyone else asks you to sign it. The rule is simple. Only sign it on soltao dot x y z."
+ },
+ {
+  "id": "validator",
+  "title": "The silent mistake, blocked",
+  "points": [
+   "!The chain accepts a stake to a validator with no slot",
+   "!That stake earns nothing, with no error",
+   "soltao checks the subnet's own list first"
+  ],
+  "say": "I found a silent trap on Bittensor. If you stake to a validator with no slot on your subnet, the chain accepts it, and your stake earns nothing. No error. So soltao reads the subnet's own validator list from the chain, and refuses those before you sign."
+ },
+ {
+  "id": "limits",
+  "title": "Price limits on every subnet stake",
+  "points": [
+   "Subnet stakes carry a 2% price limit",
+   "If the price moves too far, nothing trades",
+   "Refused stakes land as free TAO, never stuck"
+  ],
+  "say": "Every subnet stake carries a two percent price limit. If the price moves too far, the trade simply does not happen. And if the network refuses a stake for any reason, your TAO lands in your own wallet, unstaked. Nothing gets stuck in between."
+ },
+ {
+  "id": "resume",
+  "title": "Close the tab. Nothing is lost.",
+  "points": [
+   "Progress is read back from the chain",
+   "Every step is sealed before it is sent",
+   "Resuming never pays twice"
+  ],
+  "say": "Close the tab halfway through, and nothing is lost. When you come back, soltao reads the chain and finishes exactly where it stopped. Every step is sealed before it is sent, so a resume never pays twice."
+ },
+ {
+  "id": "replay",
+  "title": "Tested against real mainnet",
+  "stat": "29/29",
+  "statSub": "checks passing, zero funds spent",
+  "say": "Before anything ships, the transactions the route signs are replayed against real Bittensor mainnet state, without spending a single token. That harness is how I found the silent validator trap. Today, twenty nine out of twenty nine checks pass."
+ },
+ {
+  "id": "fees",
+  "title": "Every fee, before you sign",
+  "points": [
+   "Flat 0.003 SOL soltao fee, with its address",
+   "Bridge fees shown in dollars",
+   "High fees need your explicit consent"
+  ],
+  "say": "You see every fee before you sign. soltao charges a flat zero point zero zero three SOL, shown with the address it goes to. If fees are a large share of what you send, the page stops and asks you to accept them first."
+ },
+ {
+  "id": "open",
+  "title": "Open source. Honest about limits.",
+  "points": [
+   "All code public, MIT licensed",
+   "Root stake and the return: proven with real funds",
+   "Subnet stake and unstake: tested, first real runs next"
+  ],
+  "say": "All of the code is public. And I am honest about where things stand. Root staking and the return to Solana have carried real funds. Subnet staking and unstaking are tested against mainnet, and their first real runs are next."
+ },
+ {
+  "id": "cta",
+  "title": "soltao.xyz",
+  "sub": "Only sign on soltao.xyz",
+  "say": "Users come first. That is why soltao is built this way. Try it at soltao dot x y z. And remember, only ever sign on soltao dot x y z."
+ }
+]

@@ -1,0 +1,34 @@
+[
+  {
+    "id": "open",
+    "say": "If you hold TAO on Solana, this is how you buy into a Bittensor subnet. What you end up holding is that subnet's alpha. You do not have to learn a new wallet app first. soltao is the door."
+  },
+  {
+    "id": "door",
+    "say": "What is live today is the bridge. Your TAO starts in your Solana wallet. One transaction sends it across. On the other side it is staked, in a Bittensor wallet that only you hold. There is no receipt token in between. The hops are on the page: Solana, the bridge, then your wallet."
+  },
+  {
+    "id": "choose",
+    "say": "Before anything is sent, you choose the subnet. Show subnets reads every one from the chain, in number order. TAO added per day is what the chain paid into that pool, after its emission cut. The midpoint is a rank by moving price. Above it, a subnet keeps more. Past it, the row is marked, and the chain pays less, down to a drip. Nothing on this list is a recommendation."
+  },
+  {
+    "id": "look",
+    "say": "Open a row and you are looking at that alpha before you buy it. Its price, its pool, and its chart. The seven and thirty day moves are the past. They are not what the chain pays next. The page asks the chain what a buy returns in alpha today. Choosing the row fills the subnet in step three. The name is only what the owner registered."
+  },
+  {
+    "id": "sign",
+    "say": "Connect the Solana wallet that holds the TAO. If it does not have any yet, the page points you at a swap from SOL into canonical TAO, and you come back to this tab. Then sign once. That signature moves no funds. It creates the Bittensor wallet, and the same signature finds it again."
+  },
+  {
+    "id": "alpha",
+    "say": "Root keeps your TAO as TAO. The yield sits in the validator's basket until you claim. Any other subnet is the buy. Your TAO is converted into that subnet's alpha, at the pool's price, so the value moves with it. A validator with no permit on that subnet is refused before you can sign."
+  },
+  {
+    "id": "fee",
+    "say": "You see the cost before you sign. soltao charges a quarter of one percent of what you move, and never less than point oh oh three five SOL on the way in. The bridge fee is listed beside it. This wallet is empty, so the amounts stay blank until there is TAO to send. One signature sends the transaction."
+  },
+  {
+    "id": "home",
+    "say": "A buy you cannot leave is not a buy. The same page brings free TAO home over the same bridge. Holdings reads every stake on this wallet. A new one is empty. This is where a stake shows up. Unstake, move, and claim are here, and they have not yet carried real funds. The bridge has. Buy the alpha, and the way back stays yours. Only sign this on soltao dot x y z."
+  }
+]

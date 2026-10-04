@@ -1,0 +1,14 @@
+The fee on soltao.xyz/stake is 0.25% of what you move. Holding $SOLTAO in the wallet you connect now lowers that percentage. You do not need any to use the route.
+
+10 million or more: 0.1875%
+50 million or more: 0.125%
+
+It stops there. The minimums stay: 0.0035 SOL on the way from Solana, 0.001 TAO on Bittensor. A small move still pays the floor.
+
+Only that wallet's $SOLTAO account counts. The balance is read when the fee is quoted, and again before you sign. If the tier changed, the page shows the new fee and does not sign the old one. If the balance cannot be read, you pay the full 0.25%.
+
+The same rate applies on the way over, on a stake, an unstake, a move, a claim, and the return to Solana. If Bittensor refuses the action, that fee is not paid.
+
+The person who runs this page also launched $SOLTAO. This is not a recommendation to buy it.
+
+soltao.xyz/stake

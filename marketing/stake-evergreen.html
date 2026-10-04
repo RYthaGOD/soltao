@@ -1,0 +1,280 @@
+<!doctype html>
+<!-- Evergreen stake cards. Each .card is 1600×900. Open with ?n=0..3 -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>soltao stake cards</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1600px; height: 900px; background: #0b0b0c; }
+  .card {
+    width: 1600px; height: 900px;
+    background: #0b0b0c;
+    color: #f1efec;
+    font: 400 20px/1.45 "Segoe UI", system-ui, sans-serif;
+    display: flex;
+    overflow: hidden;
+    letter-spacing: -0.012em;
+  }
+  .stripe {
+    width: 14px; flex: none;
+    background: linear-gradient(180deg, #2ccab5, #1a8f80);
+  }
+  .pad {
+    flex: 1;
+    padding: 52px 64px 44px;
+    display: flex;
+    flex-direction: column;
+    background:
+      radial-gradient(720px 420px at 8% 0%, rgba(44, 202, 181, 0.13), transparent 68%),
+      radial-gradient(640px 420px at 100% 100%, rgba(219, 134, 81, 0.13), transparent 70%);
+  }
+  .top { display: flex; align-items: center; gap: 16px; }
+  .mark {
+    width: 52px; height: 52px; border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(44, 202, 181, 0.28), 0 8px 28px -10px rgba(44, 202, 181, 0.55);
+  }
+  .name { font-weight: 650; font-size: 28px; letter-spacing: -0.03em; line-height: 1; }
+  .sub { margin-left: 6px; color: #85827e; font-size: 20px; letter-spacing: -0.01em; }
+  .top .url {
+    margin-left: auto;
+    font: 550 18px/1 "Cascadia Mono", Consolas, ui-monospace, monospace;
+    color: #62dfcc; letter-spacing: -0.02em;
+  }
+  h1 {
+    margin-top: 36px;
+    font-size: 68px; line-height: 0.98; letter-spacing: -0.042em; font-weight: 700;
+  }
+  h1 em {
+    font-style: normal;
+    background: linear-gradient(100deg, #f0ae80, #db8651 46%, #c4683a);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    padding-right: 0.06em;
+  }
+  .lede {
+    margin-top: 22px; max-width: 40em;
+    color: #a8a6a3; font-size: 22px; line-height: 1.45; letter-spacing: -0.015em;
+  }
+  .panel {
+    margin-top: 34px;
+    border: 1px solid rgba(44, 202, 181, 0.32);
+    border-radius: 16px;
+    background: #0e0e10;
+    padding: 26px 8px 8px;
+  }
+  .panel small {
+    display: block; padding: 0 28px;
+    font: 600 13px/1 "Cascadia Mono", Consolas, ui-monospace, monospace;
+    letter-spacing: 0.14em; text-transform: uppercase; color: #2ccab5;
+  }
+  .cols { display: grid; margin-top: 18px; }
+  .cols.n3 { grid-template-columns: 1fr 1fr 1fr; }
+  .cols.n4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+  .col { padding: 8px 28px 26px; border-left: 1px solid rgba(255, 255, 255, 0.08); }
+  .cols.n4 .col { padding-inline: 22px; }
+  .col:first-child { border-left: 0; }
+  .hold {
+    font: 550 15px/1 "Cascadia Mono", Consolas, ui-monospace, monospace;
+    letter-spacing: 0.04em; text-transform: uppercase; color: #85827e;
+  }
+  .steps .hold { color: #2ccab5; letter-spacing: 0.12em; }
+  .rate {
+    margin-top: 14px;
+    font-weight: 650; font-size: 44px; line-height: 1.05; letter-spacing: -0.03em;
+  }
+  .num {
+    margin-top: 14px;
+    font: 650 60px/1 "Cascadia Mono", Consolas, ui-monospace, monospace;
+    letter-spacing: -0.045em; font-variant-numeric: tabular-nums; color: #f1efec;
+  }
+  .note { margin-top: 12px; color: #a8a6a3; font-size: 18px; letter-spacing: -0.01em; min-height: 1.45em; }
+  .foot {
+    margin-top: auto;
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 32px;
+    padding-top: 28px;
+  }
+  .mint small {
+    display: block; margin-bottom: 8px;
+    font: 600 13px/1 "Cascadia Mono", Consolas, ui-monospace, monospace;
+    letter-spacing: 0.14em; text-transform: uppercase; color: #2ccab5;
+  }
+  .mint code, .mint p {
+    font: 600 22px/1.35 "Segoe UI", system-ui, sans-serif;
+    letter-spacing: -0.02em; color: #f1efec;
+  }
+  .mint code {
+    font-family: "Cascadia Mono", Consolas, ui-monospace, monospace;
+    font-size: 22px; letter-spacing: -0.03em; line-height: 1;
+  }
+  .aside { text-align: right; color: #a8a6a3; font-size: 18px; letter-spacing: -0.012em; line-height: 1.45; }
+  .aside b { color: #db8651; font-weight: 650; }
+</style>
+</head>
+<body>
+
+<article class="card">
+  <div class="stripe"></div>
+  <div class="pad">
+    <div class="top">
+      <img class="mark" src="../logo.png" alt="">
+      <span class="name">soltao</span>
+      <span class="sub">no custody</span>
+      <span class="url">soltao.xyz/stake</span>
+    </div>
+    <h1>You keep the keys.<br><em>Nobody else holds one.</em></h1>
+    <p class="lede">Every key along the way comes from your signature. No receipt token. No soltao contract.</p>
+    <div class="panel">
+      <small>What you hold</small>
+      <div class="cols n3">
+        <div class="col">
+          <div class="hold">No custody</div>
+          <div class="rate">Yours</div>
+          <div class="note">Not held for you</div>
+        </div>
+        <div class="col">
+          <div class="hold">No receipt token</div>
+          <div class="rate">The TAO</div>
+          <div class="note">The position is the TAO</div>
+        </div>
+        <div class="col">
+          <div class="hold">Your validator</div>
+          <div class="rate">You pick</div>
+          <div class="note">Who it stakes to</div>
+        </div>
+      </div>
+    </div>
+    <div class="foot">
+      <div class="mint"><p>Open source. The keys stay in your browser.</p></div>
+      <div class="aside">A Bittensor wallet<br><b>only you hold</b></div>
+    </div>
+  </div>
+</article>
+
+<article class="card">
+  <div class="stripe"></div>
+  <div class="pad">
+    <div class="top">
+      <img class="mark" src="../logo.png" alt="">
+      <span class="name">soltao</span>
+      <span class="sub">one signature</span>
+      <span class="url">soltao.xyz/stake</span>
+    </div>
+    <h1>One signature.<br><em>Onto Bittensor.</em></h1>
+    <p class="lede">Canonical TAO leaves the Solana wallet you already hold.<br>It goes back over the LayerZero bridge it came in on.</p>
+    <div class="panel steps">
+      <small>The route</small>
+      <div class="cols n4">
+        <div class="col">
+          <div class="hold">01</div>
+          <div class="rate">Solana</div>
+          <div class="note">You sign once</div>
+        </div>
+        <div class="col">
+          <div class="hold">02</div>
+          <div class="rate">LayerZero</div>
+          <div class="note">The bridge it came on</div>
+        </div>
+        <div class="col">
+          <div class="hold">03</div>
+          <div class="rate">Bittensor</div>
+          <div class="note">Unwrapped to TAO</div>
+        </div>
+        <div class="col">
+          <div class="hold">04</div>
+          <div class="rate">Your wallet</div>
+          <div class="note">Staked. Yours.</div>
+        </div>
+      </div>
+    </div>
+    <div class="foot">
+      <div class="mint"><p>Staked to the validator you pick.</p></div>
+      <div class="aside">LayerZero<br><b>the bridge it came on</b></div>
+    </div>
+  </div>
+</article>
+
+<article class="card">
+  <div class="stripe"></div>
+  <div class="pad">
+    <div class="top">
+      <img class="mark" src="../logo.png" alt="">
+      <span class="name">soltao</span>
+      <span class="sub">before you sign</span>
+      <span class="url">soltao.xyz/stake</span>
+    </div>
+    <h1>A 0.25% fee.<br><em>Shown before you sign.</em></h1>
+    <p class="lede">Of what you move. You do not need any $SOLTAO to use the route. Holding it in the wallet you connect lowers that percentage.</p>
+    <div class="panel">
+      <small>The fee</small>
+      <div class="cols n3">
+        <div class="col">
+          <div class="hold">Of what you move</div>
+          <div class="num">0.25%</div>
+          <div class="note">Quoted before you sign</div>
+        </div>
+        <div class="col">
+          <div class="hold">To use the route</div>
+          <div class="rate">No $SOLTAO</div>
+          <div class="note">Holding it lowers the fee</div>
+        </div>
+        <div class="col">
+          <div class="hold">Minimums stay</div>
+          <div class="num">0.0035 SOL</div>
+          <div class="note">0.001 TAO on Bittensor</div>
+        </div>
+      </div>
+    </div>
+    <div class="foot">
+      <div class="mint">
+        <small>$SOLTAO mint</small>
+        <code>8P1XmDhzU8qR3oiXHd2YfmBpB92Rn4hwunMsMGdghvCn</code>
+      </div>
+      <div class="aside">Read from your wallet<br><b>when the fee is quoted</b></div>
+    </div>
+  </div>
+</article>
+
+<article class="card">
+  <div class="stripe"></div>
+  <div class="pad">
+    <div class="top">
+      <img class="mark" src="../logo.png" alt="">
+      <span class="name">soltao</span>
+      <span class="sub">both ways</span>
+      <span class="url">soltao.xyz/stake</span>
+    </div>
+    <h1>Come back for it.<br><em>Send it home.</em></h1>
+    <p class="lede">See the position, unstake it, or send free TAO back to the Solana wallet you hold. Same bridge. Same keys.</p>
+    <div class="panel">
+      <small>On this page</small>
+      <div class="cols n3">
+        <div class="col">
+          <div class="hold">Your holdings</div>
+          <div class="rate">See it</div>
+          <div class="note">The wallet only you hold</div>
+        </div>
+        <div class="col">
+          <div class="hold">When you want</div>
+          <div class="rate">Unstake</div>
+          <div class="note">Back to free TAO</div>
+        </div>
+        <div class="col">
+          <div class="hold">Over LayerZero</div>
+          <div class="rate">Solana</div>
+          <div class="note">The wallet you already hold</div>
+        </div>
+      </div>
+    </div>
+    <div class="foot">
+      <div class="mint"><p>Unstake first if it is still staked.</p></div>
+      <div class="aside">Free TAO<br><b>back to Solana</b></div>
+    </div>
+  </div>
+</article>
+
+<script>
+const n = Number(new URLSearchParams(location.search).get("n") || "0");
+document.querySelectorAll(".card").forEach((el, i) => { if (i !== n) el.remove(); });
+</script>
+</body>
+</html>

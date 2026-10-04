@@ -1,0 +1,17 @@
+Holding $SOLTAO lowers the fee on soltao.xyz/stake. It does not open the route.
+
+The fee is 0.25% of what you move, shown before you sign, and paid in the same transaction. You do not need any $SOLTAO to use it.
+
+If the Solana wallet you connect holds 10 million or more, that percentage comes down by a quarter, to 0.1875%. At 50 million it is cut in half, to 0.125%. It stops there. It does not go to zero.
+
+The minimums stay: 0.0035 SOL on the way from Solana, 0.001 TAO on Bittensor. The discount is on the percentage only, so a small move still pays the floor.
+
+Why it is shaped this way. The route was not going to require the coin. A cut that started on a small holding would have made the fee optional for almost anyone who held a little, so the first step is 10 million and the last step is half. The floors stay so a tiny amount still pays for the page.
+
+Only that wallet's $SOLTAO account counts. Tokens sitting somewhere else do not. The balance is read when the fee is quoted, and again before you sign. If the tier changed, the page shows the new fee and does not sign the old one. If the balance cannot be read, you pay the full 0.25%. A failed lookup is not a discount.
+
+The same rate applies on the way over, on a stake, an unstake, a move, a claim, a Chutes top-up, and the return to Solana. If Bittensor refuses the action, that fee is not paid.
+
+The person who runs this page also launched $SOLTAO. You do not need it. This is not a recommendation to buy it.
+
+Mint: 8P1XmDhzU8qR3oiXHd2YfmBpB92Rn4hwunMsMGdghvCn

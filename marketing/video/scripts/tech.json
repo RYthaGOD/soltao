@@ -1,0 +1,81 @@
+[
+  {
+    "id": "open",
+    "title": "How the route is built.",
+    "sub": "No soltao contract holds funds.",
+    "say": "This is how soltao is built. One Solana transaction starts the route. No soltao contract holds the funds, and no server can move them."
+  },
+  {
+    "id": "solana",
+    "title": "The Solana transaction",
+    "points": [
+      "Sends canonical TAO across",
+      "Drops gas for the far side",
+      "Pays the fee in that transaction"
+    ],
+    "say": "On Solana, the transaction sends the canonical TAO mint across the bridge, includes a small gas drop so the far side can start, and pays soltao's fee in that same transaction."
+  },
+  {
+    "id": "keys",
+    "title": "Keys made in the browser",
+    "points": [
+      "One sign-in signature",
+      "A 12-word coldkey, on device",
+      "A transit key for delivery"
+    ],
+    "say": "You sign one message. The browser turns that signature into two keys. A twelve word coldkey you can import into btcli, and a transit key that receives the bridge. Neither key is sent to a soltao server."
+  },
+  {
+    "id": "transit",
+    "title": "Why a transit account",
+    "points": [
+      "The bridge delivers to EVM",
+      "That address stakes the TAO",
+      "Stake is handed to your coldkey"
+    ],
+    "say": "The bridge delivers to an EVM address, and only that address can stake what it holds. So the TAO arrives in your transit account, gets staked, and is handed to your coldkey. The page only pays out to that coldkey."
+  },
+  {
+    "id": "validator",
+    "title": "A bad validator is refused.",
+    "say": "Bittensor will accept a stake to a validator with no slot on that subnet. The stake earns nothing, and there is no error. soltao reads the subnet's own list and refuses those before you sign.",
+    "video": "footage/run.mp4",
+    "videoStart": 9
+  },
+  {
+    "id": "limit",
+    "title": "A 2% price limit",
+    "points": [
+      "Subnet stakes swap into alpha",
+      "The cap is the pool price",
+      "A refusal lands as free TAO"
+    ],
+    "say": "A subnet stake swaps TAO into that subnet's alpha, so it goes out with a two percent price limit. If the price moves further, the chain refuses it, and your TAO lands in your wallet, unstaked."
+  },
+  {
+    "id": "resume",
+    "title": "Close the tab. It resumes.",
+    "points": [
+      "Progress is read from the chain",
+      "Each step is sealed first",
+      "A resume never pays twice"
+    ],
+    "say": "Close the tab halfway through and the page reads the chain and finishes the route. Each step is sealed before it is sent, so a resume never pays twice."
+  },
+  {
+    "id": "proof",
+    "title": "Mainnet, then real funds.",
+    "points": [
+      "Replayed on real mainnet state",
+      "No funds spent in the replay",
+      "Root and subnet stake, live"
+    ],
+    "say": "The transactions the route signs are replayed against real Bittensor mainnet state, without spending funds. Root staking and subnet staking have also been run with real TAO."
+  },
+  {
+    "id": "cta",
+    "title": "soltao.xyz",
+    "sub": "Open source. MIT.",
+    "say": "The code is public, under the MIT license. Try the route at soltao dot x y z."
+  }
+]

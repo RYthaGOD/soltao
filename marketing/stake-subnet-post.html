@@ -1,0 +1,139 @@
+<!doctype html>
+<!-- Social card for the subnet stake post. Render at exactly 1600×900. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>soltao subnet stake post</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1600px; height: 900px; background: #0b0b0c; }
+  body {
+    background: #0b0b0c;
+    color: #f1efec;
+    font: 400 20px/1.45 "Segoe UI", system-ui, sans-serif;
+    display: flex;
+    overflow: hidden;
+    letter-spacing: -0.012em;
+  }
+  .stripe {
+    width: 14px;
+    flex: none;
+    background: linear-gradient(180deg, #2ccab5, #1a8f80);
+  }
+  .pad {
+    flex: 1;
+    padding: 52px 64px 44px;
+    display: flex;
+    flex-direction: column;
+    background:
+      radial-gradient(720px 420px at 8% 0%, rgba(44, 202, 181, 0.13), transparent 68%),
+      radial-gradient(640px 420px at 100% 100%, rgba(219, 134, 81, 0.13), transparent 70%);
+  }
+  .top { display: flex; align-items: center; gap: 16px; }
+  .mark {
+    width: 52px; height: 52px; border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(44, 202, 181, 0.28), 0 8px 28px -10px rgba(44, 202, 181, 0.55);
+  }
+  .name { font-weight: 650; font-size: 28px; letter-spacing: -0.03em; line-height: 1; }
+  .sub { margin-left: 6px; color: #85827e; font-size: 20px; letter-spacing: -0.01em; }
+  .top .url {
+    margin-left: auto;
+    font: 550 18px/1 "Cascadia Mono", Consolas, ui-monospace, monospace;
+    color: #62dfcc; letter-spacing: -0.02em;
+  }
+  h1 {
+    margin-top: 36px;
+    font-size: 72px; line-height: 0.96; letter-spacing: -0.045em; font-weight: 700;
+  }
+  h1 em {
+    font-style: normal;
+    background: linear-gradient(100deg, #f0ae80, #db8651 46%, #c4683a);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    padding-right: 0.06em;
+  }
+  .lede {
+    margin-top: 22px; max-width: 46em;
+    color: #a8a6a3; font-size: 22px; line-height: 1.45; letter-spacing: -0.015em;
+  }
+  .panel {
+    margin-top: 32px;
+    border: 1px solid rgba(44, 202, 181, 0.32);
+    border-radius: 16px;
+    background: #0e0e10;
+    padding: 26px 8px 8px;
+  }
+  .panel small {
+    display: block; padding: 0 28px;
+    font: 600 13px/1 "Cascadia Mono", Consolas, ui-monospace, monospace;
+    letter-spacing: 0.14em; text-transform: uppercase; color: #2ccab5;
+  }
+  .cols { display: grid; grid-template-columns: 1fr 1fr 1fr; margin-top: 18px; }
+  .col { padding: 8px 28px 26px; border-left: 1px solid rgba(255, 255, 255, 0.08); }
+  .col:first-child { border-left: 0; }
+  .hold {
+    font: 550 15px/1 "Cascadia Mono", Consolas, ui-monospace, monospace;
+    letter-spacing: 0.04em; text-transform: uppercase; color: #85827e;
+  }
+  .rate {
+    margin-top: 14px;
+    height: 52px;
+    display: flex; align-items: flex-end;
+    font-weight: 650; font-size: 48px; line-height: 1; letter-spacing: -0.035em;
+  }
+  .rate.num {
+    font-family: "Cascadia Mono", Consolas, ui-monospace, monospace;
+    font-size: 52px; letter-spacing: -0.045em; font-variant-numeric: tabular-nums;
+    color: #62dfcc;
+  }
+  .note { margin-top: 12px; color: #a8a6a3; font-size: 18px; letter-spacing: -0.01em; }
+  .foot {
+    margin-top: auto;
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 32px;
+    padding-top: 28px;
+  }
+  .mint p {
+    font: 600 22px/1.35 "Segoe UI", system-ui, sans-serif;
+    letter-spacing: -0.02em; color: #f1efec;
+  }
+  .aside { text-align: right; color: #a8a6a3; font-size: 18px; letter-spacing: -0.012em; line-height: 1.45; }
+  .aside b { color: #db8651; font-weight: 650; }
+</style>
+</head>
+<body>
+  <div class="stripe"></div>
+  <div class="pad">
+    <div class="top">
+      <img class="mark" src="../logo.png" alt="">
+      <span class="name">soltao</span>
+      <span class="sub">you keep the keys</span>
+      <span class="url">soltao.xyz/stake</span>
+    </div>
+    <h1>One signature.<br><em>One transaction.</em></h1>
+    <p class="lede">The message creates a Bittensor wallet only you hold. The transaction sends canonical Solana TAO home over LayerZero. It lands as a native stake on the subnet you pick.</p>
+    <div class="panel">
+      <small>Where it lands</small>
+      <div class="cols">
+        <div class="col">
+          <div class="hold">Root</div>
+          <div class="rate">TAO</div>
+          <div class="note">Claim the rewards</div>
+        </div>
+        <div class="col">
+          <div class="hold">A subnet</div>
+          <div class="rate">Alpha</div>
+          <div class="note">Emissions in the stake</div>
+        </div>
+        <div class="col">
+          <div class="hold">The fee</div>
+          <div class="rate num">0.25%</div>
+          <div class="note">Shown before you sign</div>
+        </div>
+      </div>
+    </div>
+    <div class="foot">
+      <div class="mint"><p>No custody. No receipt token. No soltao contract.</p></div>
+      <div class="aside">Native stake.<br><b>Your wallet.</b></div>
+    </div>
+  </div>
+</body>
+</html>

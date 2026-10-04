@@ -1,0 +1,37 @@
+[
+  {
+    "id": "open",
+    "at": 0.2,
+    "say": "This is a real run on soltao. The stake page, next to a Solana wallet."
+  },
+  {
+    "id": "signin",
+    "at": 5.6,
+    "say": "Sign in once. That signature moves no funds. The browser makes your Bittensor wallet."
+  },
+  {
+    "id": "choose",
+    "at": 12.4,
+    "say": "Then choose what happens on arrival. Stake it, or just deliver it."
+  },
+  {
+    "id": "fees",
+    "at": 17.4,
+    "say": "Every fee is on the page before you sign. soltao's fee, the bridge, and the wallet it lands in."
+  },
+  {
+    "id": "send",
+    "at": 25.2,
+    "say": "One Solana transaction starts it. From here, the page does the rest."
+  },
+  {
+    "id": "bridge",
+    "at": 36,
+    "say": "Solana is done. The bridge is delivering the TAO. Then the page unwraps it into your wallet."
+  },
+  {
+    "id": "landed",
+    "at": 54.2,
+    "say": "It has landed. The TAO is in the Bittensor wallet this page made. Try it at soltao dot x y z."
+  }
+]

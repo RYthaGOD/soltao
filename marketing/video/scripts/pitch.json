@@ -1,0 +1,58 @@
+[
+  {
+    "id": "open",
+    "title": "Buy subnet alpha from Solana.",
+    "sub": "The bridge is live.",
+    "say": "If you hold TAO on Solana, you can buy into a Bittensor subnet from the wallet you already have. What you end up holding is that subnet's alpha. soltao is the bridge."
+  },
+  {
+    "id": "door",
+    "title": "One signature. One transaction.",
+    "say": "What is live is that bridge. One signature creates your Bittensor wallet, and moves no funds. One transaction sends the TAO across and stakes it, in a wallet only you hold. There is no receipt token, and no soltao contract in the path.",
+    "video": "footage/demo-walk.mp4",
+    "videoStart": 14
+  },
+  {
+    "id": "choose",
+    "title": "You choose the alpha first.",
+    "points": [
+      "Price, pool, and the emission cut",
+      "Root keeps TAO as TAO",
+      "Any other subnet converts to alpha"
+    ],
+    "say": "Before anything moves, you choose the subnet. You see its price, its pool, and what a buy returns in alpha today. Root keeps your TAO as TAO. Any other subnet converts it, at the pool's price."
+  },
+  {
+    "id": "keys",
+    "title": "The stake stays yours.",
+    "points": [
+      "Keys made in your browser",
+      "No server ever sees them",
+      "Leave, and the same bridge brings TAO home"
+    ],
+    "say": "Your Bittensor wallet is made in the browser, from that one signature. The keys never leave your device. If this site disappeared tomorrow, the stake would still be yours. And you can leave: the same page brings free TAO home."
+  },
+  {
+    "id": "fee",
+    "title": "The business is the route.",
+    "stat": "0.25%",
+    "statSub": "of what you move, at least 0.0035 SOL",
+    "say": "soltao charges a quarter of one percent of what you move. On the way in, the fee never goes below point oh oh three five SOL. You see it before you sign. Real TAO has already crossed. The code is public, under the MIT license."
+  },
+  {
+    "id": "who",
+    "title": "For holders. And for subnets.",
+    "points": [
+      "Already hold TAO on Solana",
+      "A subnet wants those holders",
+      "No new wallet app"
+    ],
+    "say": "This is for someone who already holds canonical TAO, and for a subnet that wants those holders staking into its alpha, without asking them to learn a new wallet app."
+  },
+  {
+    "id": "cta",
+    "title": "soltao.xyz",
+    "sub": "Try the live bridge",
+    "say": "You can try it today. Connect your Solana wallet. Sign once. Choose a subnet. Read the fee. Then approve one transaction. Only sign this on soltao dot x y z."
+  }
+]

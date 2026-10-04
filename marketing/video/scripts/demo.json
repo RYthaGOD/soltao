@@ -1,0 +1,84 @@
+[
+ {
+  "id": "intro",
+  "title": "Stake TAO from Solana",
+  "sub": "A real run, with real funds",
+  "say": "This is a real run on soltao. TAO in a Solana wallet, staked on Bittensor, in a wallet only I hold."
+ },
+ {
+  "id": "connect",
+  "title": "1. Connect your Solana wallet",
+  "points": [
+   "Phantom, Solflare or any standard wallet",
+   "The page reads your canonical TAO",
+   "It shows the staking minimum up front"
+  ],
+  "say": "First, connect a Solana wallet. The page reads how much canonical TAO you hold, and tells you up front how much staking needs."
+ },
+ {
+  "id": "signin",
+  "title": "2. Sign in once",
+  "points": [
+   "One signature, no funds move",
+   "Your Bittensor wallet is created in the browser",
+   "The same wallet every time you sign in"
+  ],
+  "say": "Next, sign in once. That signature moves no funds. Your browser turns it into your Bittensor wallet, and it is the same wallet every time you come back.",
+  "video": "footage/run.mp4",
+  "videoStart": 0
+ },
+ {
+  "id": "choose",
+  "title": "3. Choose where to stake",
+  "points": [
+   "Root, or any subnet",
+   "Validators from the subnet's own on-chain list",
+   "Wrong validators are refused before you sign"
+  ],
+  "say": "Then choose where to stake. Root, or any subnet. Validators come from that subnet's own list on chain, and a validator with no slot is refused before you can sign.",
+  "video": "footage/run.mp4",
+  "videoStart": 9
+ },
+ {
+  "id": "review",
+  "title": "4. Review every fee",
+  "points": [
+   "soltao's flat 0.003 SOL, with its address",
+   "Bridge fees, in dollars",
+   "Fees as a share of what you send"
+  ],
+  "say": "Before anything is signed, you see every fee. soltao's flat fee with its address, the bridge fees in dollars, and what share of your amount they are.",
+  "video": "footage/run.mp4",
+  "videoStart": 17
+ },
+ {
+  "id": "send",
+  "title": "5. One Solana transaction",
+  "points": [
+   "The bridge carries TAO to Bittensor",
+   "The page stakes it and hands it to your wallet",
+   "Close the tab and it resumes from the chain"
+  ],
+  "say": "Approve one Solana transaction. The bridge carries your TAO to Bittensor, and the page stakes it and hands it to your wallet. If you close the tab, it picks up from the chain where it left off.",
+  "video": "footage/run.mp4",
+  "videoStart": 24
+ },
+ {
+  "id": "holdings",
+  "title": "6. Your position, on chain",
+  "points": [
+   "Every position your wallet holds",
+   "Unstake all or part",
+   "Bring TAO back to the same Solana wallet"
+  ],
+  "say": "Your position shows straight from the chain. From here you can unstake all or part, and bring your TAO back to the same Solana wallet.",
+  "video": "footage/run.mp4",
+  "videoStart": 50
+ },
+ {
+  "id": "cta",
+  "title": "soltao.xyz",
+  "sub": "Only sign on soltao.xyz",
+  "say": "That's soltao. Try it at soltao dot x y z."
+ }
+]

@@ -1,0 +1,9 @@
+Someone moved 43.05 TAO through soltao.xyz/stake today, about $13,200. The fee was 0.280 SOL, the full 0.25%.
+
+$SOLTAO is not a coupon, and you do not need it. 10 million in the wallet you connect takes the fee to 0.1875%. 50 million takes it to 0.125%. On today's send, half off would have saved 0.14 SOL. Under about 0.5 TAO the 0.0035 SOL minimum still applies, so a small move pays the same either way.
+
+The coin also takes 1% of every transfer. That accrues in TAO and is split across holders when the pot is worth sending. There is no schedule, and it is separate from the route fee.
+
+The cut is for someone who bridges at this size and comes back. It matters more if staking a subnet feels like trading its alpha.
+
+The person who runs this page also launched $SOLTAO. This is not a recommendation to buy it.

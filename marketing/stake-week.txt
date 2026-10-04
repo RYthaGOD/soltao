@@ -1,0 +1,20 @@
+soltao.xyz/stake is the subnet list now. Pick a row. Its chart, its pool, and its validators open there, and that choice fills the stake below. Nothing on the list is a recommendation.
+
+The figures stay current while the tab is open. Pool price, emission, the dollar price, and a connected wallet's balances re-read every minute. An open validator list and an open holdings list do too. Daily chart history runs through 2 Oct 2026. The last point on the chart is the live pool price.
+
+The fee is 0.25% of what you move, shown before you sign. Holding $SOLTAO in the wallet you connect lowers that percentage. You do not need any to use the route.
+
+10 million or more: 0.1875%
+50 million or more: 0.125%
+
+It stops there. The minimums stay: 0.0035 SOL on the way from Solana, 0.001 TAO on Bittensor. A small move still pays the floor. If that balance cannot be read, you pay the full 0.25%.
+
+Staking from Solana onto Bittensor, including onto a subnet, has moved real funds. So has sending free TAO home. Unstake, Move, and Claim are on the page and have not yet. The 12-word phrase is on screen when the wallet is created. TAO sent to a Bittensor address you paste cannot be brought back to Solana from this page.
+
+Usage, read from the fee wallet on 1 Oct 2026: 8 completed routes from 6 wallets since 21 Sep, 0.31 SOL in fees. Most of that is one send of 43.05 TAO.
+
+Next is one small real-funds pass through Unstake, Move, and Claim.
+
+The person who runs this page also launched $SOLTAO. This is not a recommendation to buy it.
+
+soltao.xyz/stake

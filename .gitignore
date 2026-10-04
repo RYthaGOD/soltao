@@ -17,3 +17,5 @@ tools/stake/.backtest-result.json
 marketing/video/out/
 marketing/video/public/audio/
 tools/stake/.history-cache.json
+marketing/video/tmp/
+marketing/video/public/footage/
