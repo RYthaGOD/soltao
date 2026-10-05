@@ -4,11 +4,10 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-10-04 (items 40–42). **Live on soltao.xyz:** commit `7f2f93c` (a Cursor session, 2 Oct),
-`stake.js?v=fd7a03ad`, `return.js?v=049fc82b`, `stake.css?v=eb438146`. The subnet list is the stake page. Its
-figures, and an open validator or holdings list, re-read every minute (items 40–41). No subnet is named.
-**Built, not deployed:** item 42's copy (`stake.js?v=2771a2fd`): the page now says Unstake and the return after it
-have moved real funds. Deploying it needs Craig's go-ahead.
+Last updated: 2026-10-05 (item 42 live). **Live on soltao.xyz:** commit `33609bb` (deployed 5 Oct),
+`stake.js?v=2771a2fd`, `return.js?v=049fc82b`, `stake.css?v=eb438146`. The subnet list is the stake page. Its
+figures, and an open validator or holdings list, re-read every minute (items 40–41). The page says Unstake and
+the return after it have moved real funds, and Move and Claim have not (item 42). No subnet is named.
 **Real funds through the live page:** root and subnet stakes; the free-TAO return; and, from an outside wallet
 on 1 Oct, a subnet Unstake with the batched Bittensor fee, chained into a return that landed on Solana (item 42).
 **Not yet with real funds:** Move, Claim, staking more from holdings, a root unstake (plain `removeStake`),
@@ -23,6 +22,10 @@ in, almost all from `FH9zKY…` (43.05 TAO on 1 Oct) and `cKR3xq…` (9.60 TAO o
 
 Every deploy below was served on the first poll after `railway up --ci` unless it says otherwise. Bug history
 items carry the detail.
+- **5 Oct** `33609bb`, `stake.js?v=2771a2fd` (built in `b201f16`), at Craig's go-ahead: item 42's copy and the
+  daily history to 4 Oct. `npm test` passed; page runs B and C passed, and run F passed every copy and holdings
+  quote check before Bittensor's public RPC failed it on the Chutes card. `test:live` all passed (35 checks,
+  history 0.8 days old).
 - **2 Oct** `7f2f93c` (Cursor), `stake.js?v=fd7a03ad`: item 41. Served before it was pushed or recorded here;
   pushed and recorded on 4 Oct.
 - **2 Oct** `bbcc861` (Cursor): item 40. Not recorded here at the time.
@@ -931,7 +934,7 @@ This is **not** git-push-triggered. Steps, in order, every time:
       holdings prompt, `#holdings-limits`, the holdings note, `#r-later` and the finished-route note now say
       Unstake and the return have moved real funds, and Move and Claim have not. The tests that quote that copy
       are updated (`evm`, `page` runs C and F, `live`). Built as `stake.js?v=2771a2fd`; CSS and `return.js`
-      unchanged. **Not deployed:** it needs Craig's go-ahead.
+      unchanged. Deployed 5 Oct 2026 at Craig's go-ahead (`33609bb`); `test:live` all passed.
     - *`npm run usage` crashed:* a version-1 Solana transaction reached the fee wallet by 4 Oct, and
       `@solana/web3.js` 1.95.8 cannot parse one, even with a higher `maxSupportedTransactionVersion`. The script
       now reads transactions over plain JSON-RPC (`jsonParsed`, `maxSupportedTransactionVersion: 1`) and retries
@@ -1015,12 +1018,11 @@ Avoided: token-first thinking; the $SOLTAO gate was rejected and the conflict is
 
 ## Current state
 
-**As of 4 Oct 2026.** Production is `7f2f93c` / `stake.js?v=fd7a03ad` / `stake.css?v=eb438146` /
-`return.js?v=049fc82b` (items 40–41). Item 42's copy is built as `stake.js?v=2771a2fd` and waits on Craig's
-go-ahead to deploy. `chutesLive` stays false. Do not feature a subnet unless they asked.
+**As of 5 Oct 2026.** Production is `33609bb` / `stake.js?v=2771a2fd` / `stake.css?v=eb438146` /
+`return.js?v=049fc82b` (items 40–42). `chutesLive` stays false. Do not feature a subnet unless they asked.
 
-**Next, in order.** (1) Deploy item 42's copy once Craig approves. (2) One small real-funds Move and Claim.
-(3) Leave Chutes off until one ≥0.01 TAO top-up is credited.
+**Next, in order.** (1) One small real-funds Move and Claim. (2) Leave Chutes off until one ≥0.01 TAO top-up
+is credited.
 
 ### What has real-funds proof
 - Wallet connect, SIWS, derivation, quotes, simulation.

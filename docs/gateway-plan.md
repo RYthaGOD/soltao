@@ -1,10 +1,10 @@
 # soltao Gateway Plan
 
-Last updated: 2026-10-04
+Last updated: 2026-10-05
 
 ## Where we are
 
-The gateway described below is live at soltao.xyz/stake (commit `7f2f93c`, `stake.js?v=fd7a03ad`). The
+The gateway described below is live at soltao.xyz/stake (commit `33609bb`, `stake.js?v=2771a2fd`). The
 subnet list is the stake page. People can stake from a Solana wallet, including onto a subnet, unstake,
 and bring TAO back. On 1 Oct 2026 a stranger who had staked onto a subnet the day before unstaked it, paid
 the batched 0.25% Bittensor fee, and got 0.1207 TAO back in their Solana wallet (HANDOVER item 42). Move,
