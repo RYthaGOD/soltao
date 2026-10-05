@@ -10,6 +10,37 @@ real, how deep the book is, what the look-alikes are, and which TAO-quoted coins
 **Canonical mint:** `taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY`
 (A LayerZero V2 OFT listed by Sunrise, issued from Bittensor EVM, live since 5 May 2026.)
 
+## For judges
+
+**Two minutes, no funds:** open [soltao.xyz/stake](https://soltao.xyz/stake/) and tap a subnet. Its
+chart, pool and validators open, read live from Bittensor. Connect a Solana wallet and sign once:
+that signature moves nothing and creates a Bittensor wallet only you hold (the 12 words are on screen).
+Step 3 checks a validator against that subnet's own metagraph, and the review shows every fee and
+where it goes before anything is signed. Flip the toggle to "Back to Solana" to see the way home.
+
+**What has carried real funds through the live page** (read from chain, details in
+[tools/stake/HANDOVER.md](tools/stake/HANDOVER.md)):
+
+| Action | Real funds |
+|---|---|
+| Stake from Solana onto root | Yes, 23 Sep 2026 |
+| Stake from Solana onto a subnet | Yes, 30 Sep 2026, a stranger's wallet |
+| Unstake, then return to Solana | Yes, 1 Oct 2026, the same stranger: 0.1207 TAO back in 4 minutes |
+| Return free TAO to Solana | Yes, 24 Sep 2026 |
+| soltao's 0.25% fee, in SOL and in TAO | Yes, on every route since 29 Sep; in TAO since 1 Oct |
+| Move, Claim, staking more from holdings | Not yet. Checked against Bittensor's runtime at zero cost only |
+| Top up Chutes | Built, switched off |
+
+Usage on 4 Oct 2026: 9 routes from 7 wallets since 21 Sep, 0.369 SOL in fees (`npm run usage`).
+
+**Tests:** `cd tools/stake && npm install && npm test` runs the unit suites and simulates the exact
+Solana transaction on mainnet. `npm run test:mainnet` replays the signed Bittensor transactions
+against real mainnet state through `eth_call` overrides, at zero cost. `npm run test:live` checks
+the deployed site.
+
+The person who runs this also launched the $SOLTAO coin. The route does not need it. See "The
+conflict, and where it is disclosed" below.
+
 ---
 
 ## Stack
