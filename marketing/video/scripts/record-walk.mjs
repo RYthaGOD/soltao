@@ -109,12 +109,15 @@ await page.waitForFunction(() => {
 console.log("reading subnets");
 await page.$eval("#dir-btn", (el) => el.click());
 await page.waitForFunction(() => /emission midpoint is rank \d+/.test(document.querySelector("#dir-rule")?.textContent || ""), { timeout: 90000 });
-await mark(page, () => {
+// The page re-renders the subnet list every minute (since 2 Oct 2026), which drops an injected id,
+// so the row is marked again right before each beat uses it.
+const markMid = () => mark(page, () => {
   const b = [...document.querySelectorAll("#dir-body .dir-row")].find((el) => el.textContent.includes("the emission midpoint"));
   if (!b) return false;
   b.id = "rec-mid";
   return true;
-});
+}, "rec-mid");
+await markMid();
 await page.evaluate(() => window.scrollTo(0, 0));
 
 fs.rmSync(framesDir, { recursive: true, force: true });
@@ -155,10 +158,12 @@ try {
     await glide(page, "#dir-rule");
     await point(page, "#dir-rule");
     await sleep(Math.min(7000, (durations.choose ?? 20) * 350));
+    await markMid();
     await glide(page, "#rec-mid");
     await point(page, "#rec-mid");
   });
   await beat("look", async () => {
+    await markMid();
     await clickSel(page, "#rec-mid");
     await page.waitForFunction(() => Boolean(document.querySelector("#dir-detail svg")), { timeout: 50000 });
     await shot(page);
