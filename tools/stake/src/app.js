@@ -924,12 +924,15 @@ const profileSeqs = new Map();
 async function renderProfile(root, netuid, { full = false, fresh = false, keep = false } = {}) {
   const seq = (profileSeqs.get(root.id) || 0) + 1; profileSeqs.set(root.id, seq);
   const current = () => profileSeqs.get(root.id) === seq;
+  // The validator picker may sit in this profile's slot. Every replaceChildren below would drop it from
+  // the page (then "pick-wrap" is gone and choosing a subnet throws), so it goes back to its box first.
+  const replace = (...nodes) => { if (root.id === "dir-profile") parkPicker(); root.replaceChildren(...nodes); };
   // A live refresh keeps the chart up until the new figures are ready, so the card does not flash blank.
-  if (!(keep && root.childElementCount)) root.replaceChildren(el("p", "step-note", `reading subnet ${netuid}…`));
+  if (!(keep && root.childElementCount)) replace(el("p", "step-note", `reading subnet ${netuid}…`));
   const [dirR, chainR, histR, idxR, profR, , valR] = await Promise.allSettled([readDirectory(), readChainInfo({ force: fresh }), readHistory(netuid), readHistoryIndex(), readProfiles(), readUsd(), readValidatorRecord(netuid)]);
   if (!current()) return;
   const row = dirR.status === "fulfilled" ? dirR.value.rows.find((r) => r.netuid === netuid) : null;
-  if (!row) { root.replaceChildren(el("p", "step-note", dirR.status === "rejected" ? `Could not read this subnet from Bittensor: ${dirR.reason?.message}` : `Bittensor has no subnet ${netuid} right now.`)); return; }
+  if (!row) { replace(el("p", "step-note", dirR.status === "rejected" ? `Could not read this subnet from Bittensor: ${dirR.reason?.message}` : `Bittensor has no subnet ${netuid} right now.`)); return; }
   const nowSec = Math.floor(Date.now() / 1000);
   const hist = histR.status === "fulfilled" && histR.value.netuid === netuid ? histR.value : null;
   // Points from before this netuid's current subnet registered belong to another subnet; the history
@@ -1356,7 +1359,7 @@ function renderReview(ready) {
     const view = holderView();
     const laterFee = view.cfg.offBps > 0n ? `plus soltao's fee at ${feeRateText(view.cfg)}%` : "plus 0.25%";
     return state.plan === "stake"
-      ? `Unstake from Your Bittensor holdings in step 2, then Back to Solana. Both have moved real funds through this page. The return quotes a live bridge fee then, ${laterFee}.`
+      ? `Unstake from Your Bittensor holdings in step 2, then Back to Solana. The return quotes a live bridge fee then, ${laterFee}.`
       : `Back to Solana in the toggle above. The return quotes a live bridge fee then, ${laterFee}.`;
   });
   set("r-gas", () => { const g = bittensorGas(); return g === null ? "—" : `about ${tao(g)}`; });
@@ -2296,7 +2299,7 @@ async function runRoute(route, { expectLd = null, fresh = false } = {}) {
     const freeAfter = await getFreeBalance(coldkey).catch(() => null);
     const free = freeBefore !== null && freeAfter !== null && freeAfter > freeBefore ? freeAfter - freeBefore : null;
     track("sweep", "ok", [summary.stakedRao > 0n && `staked ${stakeAmount(summary.stakedRao, netuid)}`, free !== null && `${tao(free)} free`].filter(Boolean).join(" · ") || "done");
-    note("track-note", summary.stakedRao > 0n ? `Done. The ${bittensorStakeAsset(netuid)} stake is owned by your coldkey. Open Your Bittensor holdings in step 2 to unstake or send it home, or use any Bittensor wallet. Both have moved real funds through this page.`
+    note("track-note", summary.stakedRao > 0n ? `Done. The ${bittensorStakeAsset(netuid)} stake is owned by your coldkey. Open Your Bittensor holdings in step 2 to unstake or send it home, or use any Bittensor wallet.`
       : summary.stakeRefused ? `Bittensor refused the stake${netuid === 0n ? "" : ` (the validator changed, or subnet ${netuid}'s price moved past the ${Number(CONFIG.subnetPriceToleranceBps) / 100}% limit)`}, so your TAO arrived unstaked. It is free TAO in your wallet: stake it again at today's price, or bring it back to Solana, from Your Bittensor holdings in step 2, or from any Bittensor wallet. Staking more from holdings has not yet moved real funds through this page.` : "Done. It is free TAO in your Bittensor wallet. Open Your Bittensor holdings in step 2 to stake it or send it home. Staking more from holdings has not yet moved real funds through this page.", summary.stakeRefused ? "warn" : "ok");
       
     $("f-dest").textContent = short(route.coldkey, 6);
@@ -2405,6 +2408,16 @@ function init() {
   prefillFromLink();
   gate();
   $("dir-btn").addEventListener("click", () => { openDirectory({ force: $("dir-btn").textContent === "Read again" }); });
+  // The hero's first move: root, the default. It clears a subnet picked from the list (a subnet's own
+  // page hides the button instead), then the link scrolls to step 1.
+  $("cta-root").addEventListener("click", () => {
+    const n = $("netuid-in").value.trim();
+    if (state.running || !n || n === "0") return;
+    $("netuid-in").value = ""; delete $("netuid-in").dataset.chosen; onNetuid();
+  });
+  // The footer's "Verify this page" names the exact build this tab is running.
+  const built = document.querySelector('script[src*="stake.js?v="]')?.getAttribute("src");
+  if (built) $("build-name").textContent = built;
   // The list is the page, so it starts open. That loads return.js (the Bittensor reads live there).
   // Then the same read repeats while the tab is visible, so a price does not sit at the first snapshot.
   openDirectory();
@@ -2421,7 +2434,7 @@ function prefillFromLink() {
   const hotkeyOk = /^5[1-9A-HJ-NP-Za-km-z]{47}$/.test(hotkey);
   if (hotkeyOk) { $("hotkey-in").value = hotkey; if (!netuid || netuid === "0") onHotkey(); }
   // A subnet in the link makes this that subnet's page (root has no page of its own).
-  if (/^\d{1,5}$/.test(netuid) && Number(netuid) > 0) showSubnetCard(Number(netuid), hotkeyOk ? hotkey : null);
+  if (/^\d{1,5}$/.test(netuid) && Number(netuid) > 0) { showSubnetCard(Number(netuid), hotkeyOk ? hotkey : null); $("hero-cta").classList.remove("dir-fwd"); $("hero-cta").hidden = true; }
   // ?chutes=5F… (a Chutes payment address) pre-fills "Top up Chutes" once the user opens it; it is
   // still shown, checked and acknowledged there like a pasted one.
   const chutes = (q.get("chutes") || "").trim();

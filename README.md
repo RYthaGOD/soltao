@@ -31,7 +31,17 @@ where it goes before anything is signed. Flip the toggle to "Back to Solana" to 
 | Move, Claim, staking more from holdings | Not yet. Checked against Bittensor's runtime at zero cost only |
 | Top up Chutes | Built, switched off |
 
-Usage on 4 Oct 2026: 9 routes from 7 wallets since 21 Sep, 0.369 SOL in fees (`npm run usage`).
+Usage on 6 Oct 2026: 9 routes from 7 wallets since 21 Sep, 0.369 SOL in fees (`npm run usage`).
+
+**Check the page you are trusting.** It runs one self-hosted script. The `?v=` in its address is the
+start of its SHA-256, the same file is committed here as `stake/stake.js`, and rebuilding it from
+source gives the same bytes (checked 6 Oct 2026):
+
+```bash
+curl -s https://soltao.xyz/stake/stake.js | sha256sum      # live
+sha256sum stake/stake.js                                    # this repo
+cd tools/stake && npm ci && npm run build && git diff --stat ../../stake   # rebuild: no diff
+```
 
 **Tests:** `cd tools/stake && npm install && npm test` runs the unit suites and simulates the exact
 Solana transaction on mainnet. `npm run test:mainnet` replays the signed Bittensor transactions
@@ -373,8 +383,9 @@ routing; Jupiter handles the swap and the link is prefilled.
 
 The person who runs this page also launched the **SOLTAO** coin on StonkFun —
 `8P1XmDhzU8qR3oiXHd2YfmBpB92Rn4hwunMsMGdghvCn`, a Token-2022 mint with a 1% transfer tax, a
-fixed 1,000,000,000 supply and no mint or freeze authority. The page's X and Telegram links are
-that coin's accounts.
+fixed 1,000,000,000 supply and no mint or freeze authority. Since 6 Oct 2026 the board's own links
+point at the builder (@Moneybag_Fin on X) and this repo; the coin's X and Telegram are linked only
+from its disclosure.
 
 A reference page that grades other people's coins, run by someone who has a coin, only works if
 it says so where a reader will see it. So the footer carries the disclosure in plain language,

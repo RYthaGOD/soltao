@@ -278,7 +278,7 @@ if (want("B")) {
   expect("soltao's fee is 0.25% of the TAO sent in SOL, at least 0.0035 SOL, and says so, with the price it used", soltaoFee >= 0.0035 && /^[\d.]+ SOL( → BgGF…72Na)? \(0\.25%, at least 0\.0035 SOL; 1 TAO = [\d.]+ SOL at the Orca TAO\/SOL pool\)$/.test(feeText), feeText);
   expect("total adds the priority fee and soltao's fee", Math.abs(total - lz - prio - soltaoFee) < 2e-6, `${total} SOL`);
   expect("review names the plan and the stake", /^Stake about 0\.0\d+ TAO on root/.test(await text(page, "#r-plan")), await text(page, "#r-plan"));
-  expect("review names how to get the stake back, and that both steps have moved real funds", /^Unstake from Your Bittensor holdings in step 2, then Back to Solana\. Both have moved real funds through this page\. The return quotes a live bridge fee then, plus 0\.25%\.$/.test(await text(page, "#r-later")), await text(page, "#r-later"));
+  expect("review names how to get the stake back", /^Unstake from Your Bittensor holdings in step 2, then Back to Solana\. The return quotes a live bridge fee then, plus 0\.25%\.$/.test(await text(page, "#r-later")), await text(page, "#r-later"));
   expect("review shows the transit account", /^0x[0-9a-f]{40}$/.test(await text(page, "#r-via")));
   expect("review estimates Bittensor gas in TAO", /^about 0\.00\d+ TAO$/.test(await text(page, "#r-gas")), await text(page, "#r-gas"));
   expect("sign stays disabled while the route is not live", await page.$eval("#sign", (b) => b.disabled));
@@ -432,6 +432,7 @@ if (want("E")) {
   // The link makes this subnet 1's page: its on-chain identity and pool on top, labelled as the owner's.
   await waitText(page, "#subnet-note", /registered on Bittensor|Could not read|has no subnet/, 90_000);
   const card = { hidden: await page.$eval("#subnet-card", (el) => el.hidden), n: await text(page, "#subnet-card-n"), h: await text(page, "#subnet-card-h"), price: await text(page, "#subnet-price"), pool: await text(page, "#subnet-pool"), validator: await text(page, "#subnet-validator"), note: await text(page, "#subnet-note"), title: await page.title() };
+  expect("a subnet's own page hides the hero's \"Stake on root\"", await page.$eval("#hero-cta", (el) => el.hidden));
   expect("a subnet link opens that subnet's page, with its registered name, pool and the linked validator", !card.hidden && card.n === "1" && card.h.length > 0 && /^[\d,.]+ TAO$/.test(card.price) && /^[\d,]+ TAO$/.test(card.pool) && card.validator.startsWith(SUBNET1_OWNER_HOTKEY.slice(0, 6)) && /soltao has not checked them and does not endorse this subnet/.test(card.note) && /^Stake on .+ from your Solana wallet — soltao$/.test(card.title), JSON.stringify(card));
   const cardLinks = await page.$$eval("#subnet-links a", (as) => as.map((a) => [a.href, a.rel, a.target]));
   expect("…with the owner's links, https only, opening elsewhere", cardLinks.every(([href, rel, target]) => href.startsWith("https://") && /noopener/.test(rel) && target === "_blank"), JSON.stringify(cardLinks));
@@ -485,7 +486,7 @@ if (want("E")) {
   await page.select("#dir-sort", "change7");
   const moves = await dirRows();
   const ch = moves.map((m) => pct(m.ch7)).filter((v) => v !== null);
-  expect("each subnet shows its 7 and 30 day price change, with a 30-day sparkline", ch.length > 100 && moves.filter((m) => m.spark).length > 100 && moves.slice(0, 3).every((m) => /^[+−]?\d+\.\d%$/.test(m.ch7) && /[+−]?\d+\.\d%$/.test(m.ch30)), moves.slice(0, 3).map((m) => [m.id, m.ch7, m.ch30].join(":")).join(" "));
+  expect("each subnet shows its 7 and 30 day price change, with a 30-day sparkline", ch.length > 100 && moves.filter((m) => m.spark).length > 100 && moves.slice(0, 3).every((m) => /^[+−]?\d+\.\d%$/.test(m.ch7)) && moves.filter((m) => /[+−]?\d+\.\d%$/.test(m.ch30)).length > 100, moves.slice(0, 3).map((m) => [m.id, m.ch7, m.ch30].join(":")).join(" "));
   expect("sorting by 7-day change orders it so, leaves root out, and says a past move predicts nothing", ch.every((v, i) => i === 0 || ch[i - 1] >= v) && !moves.some((m) => m.id === "0") && /most risen first/.test(await text(page, "#dir-rule")) && /a past move says nothing about the next one/.test(await text(page, "#dir-rule")), ch.slice(0, 3).join(", "));
   await page.select("#dir-sort", "pool");
   const pickNet = pools[0][0];
@@ -497,6 +498,11 @@ if (want("E")) {
 
   const who = (await text(page, ".stake-who")).replace(/\s+/g, " ");
   expect("the page says who runs it and what they can take, near the top", /never sent to them/.test(who) && /only charge is\s+0\.25% of what you move, shown before you sign/.test(who), who);
+  const proof = await page.$$eval(".proof-list li", (lis) => lis.map((li) => li.textContent.replace(/\s+/g, " ").trim()));
+  expect("the hero lists what has been done with real funds, and nothing more", proof.join(" | ") === "Stake onto root23 Sep | Stake onto a subnet30 Sep | Unstake, then back to Solana1 Oct · 4 min", proof.join(" | "));
+  expect("the footer names the build this tab runs", /^stake\.js\?v=[0-9a-f]{8}$/.test(await text(page, "#build-name")), await text(page, "#build-name"));
+  await clickEl(page, "#cta-root");
+  expect("\"Stake on root\" clears the subnet picked from the list", (await page.$eval("#netuid-in", (el) => el.value)) === "", await page.$eval("#netuid-in", (el) => el.value));
   await clean(page, problems, "run E");
   await page.close();
 }

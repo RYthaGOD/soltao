@@ -944,6 +944,39 @@ This is **not** git-push-triggered. Steps, in order, every time:
       under the 0.1 TAO they simulate. Both now take the first of four holders that still has 0.1 TAO, some SOL
       and no $SOLTAO discount (`SIM_HOLDER` pins one). `npm test` all passed.
 
+43. **The 6 Oct roast's page fixes (6 Oct 2026).** From `docs/roast-my-product-2026-10-06.md` (61/110,
+    judge's lens), on Craig's "do it all":
+    - *Hero:* leads with "Stake your Solana TAO on Bittensor" instead of "Pick a subnet". Its first move is
+      "Stake on root" (`#cta-root`: clears a subnet picked from the list, then scrolls to step 1) beside
+      "Browse subnets". A subnet's own page (`?netuid=N`) hides it. The subnet list and "Send it" copy say
+      root is the default.
+    - *Real-funds copy:* the page said "real funds" 10 times. The hero now shows one "Done with real funds on
+      mainnet" strip (root stake 23 Sep, subnet stake 30 Sep, unstake + return 1 Oct). The repeats are cut
+      from the trust line, who-runs, the reverse lede, the subnet card, `#r-later` and the finished-route
+      note. The holdings prompt and `#holdings-limits` still say Move and Claim have not moved real funds.
+    - *Verify this page:* the footer (`#verify`) names the running build (`#build-name`, from the script
+      tag) and how to check it. The `?v=` is the start of the SHA-256, the file is committed, and a rebuild
+      from the committed source gave the same bytes (checked 6 Oct). The README's "For judges" has the
+      commands.
+    - *Bug fixed:* on a subnet's own page, choosing another subnet from the list threw "Cannot set
+      properties of null (setting 'hidden')". `renderProfile` replaced `#dir-profile`'s children while the
+      validator picker sat in its slot, which took `#pick-wrap` out of the page. Every replace now parks the
+      picker first. Live on `2771a2fd` as well; page run E caught it.
+    - *Phone list fixed:* the subnet rows were held at the 64 px of the list's grid track on a phone, so a
+      row's second and third lines (sparkline, 30-day change, emission rank) spilled under the next row.
+      The list is now a flex column whose rows keep their own height. Desktop looks the same.
+    - *Test:* run E's 7/30-day check no longer needs a 30-day figure on the top three movers. A subnet
+      registered under 30 days ago has none (subnet 108 on 6 Oct), and the page rightly shows "—".
+    - *Board:* its header and footer links are the builder (@Moneybag_Fin) and the repo. The coin's X and
+      Telegram are linked only from its disclosure.
+    - *Not done:* parking the $SOLTAO discount, and a way to run one real Chutes top-up through the live
+      page. Both wait for Craig's own decision. The discount and its disclosures are unchanged.
+    - Built as `stake.js?v=b6c4271f`, `stake.css?v=34b30b81`; `return.js` unchanged. `npm test` all
+      passed; page runs A, B, C and E passed. Run F passed every check up to the Chutes card, then its fee
+      quote failed with "Failed to fetch", twice, the second time after a 5-minute quiet pause. It failed in
+      the same place on 5 Oct, before these changes, and nothing here touches `payments.js`. Chutes is off
+      in production, but look at this before any real Chutes top-up.
+
 ## Link previews and SEO
 
 `index.html` and `stake/index.html` each carry their own `og:`/`twitter:` block; they are hand-
