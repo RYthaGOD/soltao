@@ -4,17 +4,18 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-10-05 (item 42 live). **Live on soltao.xyz:** commit `33609bb` (deployed 5 Oct),
-`stake.js?v=2771a2fd`, `return.js?v=049fc82b`, `stake.css?v=eb438146`. The subnet list is the stake page. Its
-figures, and an open validator or holdings list, re-read every minute (items 40–41). The page says Unstake and
-the return after it have moved real funds, and Move and Claim have not (item 42). No subnet is named.
+Last updated: 2026-10-07 (item 43 live). **Live on soltao.xyz:** commit `e33b99e` (deployed 7 Oct),
+`stake.js?v=b6c4271f`, `return.js?v=049fc82b`, `stake.css?v=34b30b81`. The hero leads with "Stake on root" and
+one "Done with real funds on mainnet" strip, and the footer says how to verify the script (item 43). The subnet
+list sits under the hero; its figures, and an open validator or holdings list, re-read every minute (items
+40–41). The holdings still say Move and Claim have not moved real funds. No subnet is named.
 **Real funds through the live page:** root and subnet stakes; the free-TAO return; and, from an outside wallet
 on 1 Oct, a subnet Unstake with the batched Bittensor fee, chained into a return that landed on Solana (item 42).
 **Not yet with real funds:** Move, Claim, staking more from holdings, a root unstake (plain `removeStake`),
 Top up Chutes (still off, `chutesLive: false`), and a first-time Solana token-account arrival.
 **Next:** one small real-funds Move and Claim. Not a new feature. Do not name a subnet.
 
-Usage on 4 Oct 2026 (`npm run usage`): 9 completed routes from 7 wallets since 21 Sep, 0.368833032 SOL in fees.
+Usage on 6 Oct 2026 (`npm run usage`, unchanged since 4 Oct; the last route was 3 Oct 16:30 UTC): 9 completed routes from 7 wallets since 21 Sep, 0.368833032 SOL in fees.
 Three routes are Craig's (`CVXTu5…`, `3hfdqA…` twice) and one wallet he funded (`GfoFSM…`). About 54 TAO has gone
 in, almost all from `FH9zKY…` (43.05 TAO on 1 Oct) and `cKR3xq…` (9.60 TAO on 3 Oct).
 
@@ -22,6 +23,10 @@ in, almost all from `FH9zKY…` (43.05 TAO on 1 Oct) and `cKR3xq…` (9.60 TAO o
 
 Every deploy below was served on the first poll after `railway up --ci` unless it says otherwise. Bug history
 items carry the detail.
+- **7 Oct** `e33b99e` (item 43 is `c445a46`; the daily history to 6 Oct), `stake.js?v=b6c4271f`,
+  `stake.css?v=34b30b81`, at Craig's go-ahead. `npm test` passed; page runs A, B, C and E passed, and run F passed
+  everything up to the Chutes card's fee quote ("Failed to fetch", as on 5 Oct). Served within two polls; the live
+  `stake.js` hashes to `b6c4271f…`. `test:live` all passed.
 - **5 Oct** `33609bb`, `stake.js?v=2771a2fd` (built in `b201f16`), at Craig's go-ahead: item 42's copy and the
   daily history to 4 Oct. `npm test` passed; page runs B and C passed, and run F passed every copy and holdings
   quote check before Bittensor's public RPC failed it on the Chutes card. `test:live` all passed (35 checks,
