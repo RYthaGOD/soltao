@@ -9,6 +9,11 @@ Last updated: 2026-10-07 (item 43 live). **Live on soltao.xyz:** commit `e33b99e
 one "Done with real funds on mainnet" strip, and the footer says how to verify the script (item 43). The subnet
 list sits under the hero; its figures, and an open validator or holdings list, re-read every minute (items
 40–41). The holdings still say Move and Claim have not moved real funds. No subnet is named.
+**10 Oct history refresh live:** `npm run history` refreshed `stake/history/` through 10 Oct
+(`generatedAt` `2026-10-10T07:00:05Z`, no missing days). `npm run build` kept the same served code
+hashes, and `npm test` passed. Craig then said "railway up"; Railway deployed the refreshed history
+from the local working tree with code hashes unchanged. Post-deploy `npm run test:live` all passed;
+daily history reads 0.9 days old.
 **Real funds through the live page:** root and subnet stakes; the free-TAO return; and, from an outside wallet
 on 1 Oct, a subnet Unstake with the batched Bittensor fee, chained into a return that landed on Solana (item 42).
 **Not yet with real funds:** Move, Claim, staking more from holdings, a root unstake (plain `removeStake`),
@@ -23,6 +28,11 @@ in, almost all from `FH9zKY…` (43.05 TAO on 1 Oct) and `cKR3xq…` (9.60 TAO o
 
 Every deploy below was served on the first poll after `railway up --ci` unless it says otherwise. Bug history
 items carry the detail.
+- **10 Oct** history-only deploy from local working tree, at Craig's "railway up": `stake.js?v=b6c4271f`,
+  `return.js?v=049fc82b`, `stake.css?v=34b30b81` unchanged. `npm run history` wrote history through
+  10 Oct, `npm run build` kept the same hashes, `npm test` passed, and post-deploy `test:live` all passed
+  with daily history 0.9 days old. Commit this history refresh after review; the deployed snapshot is ahead
+  of the last committed history.
 - **7 Oct** `e33b99e` (item 43 is `c445a46`; the daily history to 6 Oct), `stake.js?v=b6c4271f`,
   `stake.css?v=34b30b81`, at Craig's go-ahead. `npm test` passed; page runs A, B, C and E passed, and run F passed
   everything up to the Chutes card's fee quote ("Failed to fetch", as on 5 Oct). Served within two polls; the live
