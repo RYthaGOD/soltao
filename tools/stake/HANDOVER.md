@@ -4,7 +4,7 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-10-11 (usage-tool verification). **Live executable code:** commit `e33b99e` (deployed 7 Oct),
+Last updated: 2026-10-11 (wallet readiness check). **Live executable code:** commit `e33b99e` (deployed 7 Oct),
 `stake.js?v=b6c4271f`, `return.js?v=049fc82b`, `stake.css?v=34b30b81`. The hero leads with "Stake on root" and
 one "Done with real funds on mainnet" strip, and the footer says how to verify the script (item 43). The subnet
 list sits under the hero; its figures, and an open validator or holdings list, re-read every minute (items
@@ -26,6 +26,10 @@ root-unstake definitions still match; root-claim minimum read as 0.0005 TAO. The
 scan with a 15-minute budget stopped on repeated request timeouts after listing 545 candidates. Both
 returned no count. The figures below remain the historical 6 Oct measurement. See the readable checkpoint
 at `docs/soltao-audit-next-2026-10-11.html`.
+**11 Oct supplied wallet:** Craig supplied the configured Bittensor fee recipient `5Cvj3sq8...QG94`.
+At finalized block 9,260,908 it held 0.008593908 TAO free, with no stake positions and no root rewards.
+No Move or Claim can be demonstrated on that state. Next, check the public Bittensor address the live
+page derives from the Solana wallet used to stake. Full read-only evidence is in the proof runbook.
 **Real funds through the live page:** root and subnet stakes; the free-TAO return; and, from an outside wallet
 on 1 Oct, a subnet Unstake with the batched Bittensor fee, chained into a return that landed on Solana (item 42).
 **Not yet with real funds:** Move, Claim, staking more from holdings, a root unstake (plain `removeStake`),

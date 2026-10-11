@@ -8,6 +8,24 @@ The live runtime accepts the expected Move, Claim, root-unstake and transfer cal
 the basket and swap simulation reads also answered. The observed root-claim minimum was
 0.0005 TAO. Re-read the quote before a run; this check neither sends funds nor proves a payout.
 
+### Supplied wallet checked on 11 Oct
+
+Craig supplied `5Cvj3sq8RU2m6vFQmz2jFVix8sqBfWcuqyGKaCnMXyf9QG94`. This matches
+`CONFIG.fee.bittensor`, the gateway's Bittensor fee recipient. Reads at finalized block 9,260,908
+(`0x2f02d064f449bf78f5f6070a3b0d8d461c77bd0e384bac220ff2b6d3349d5cbe`), collected at
+`2026-10-11T15:45:41Z`, returned:
+
+- Free TAO: 0.008593908 (8,593,908 rao); reserved and frozen: zero.
+- Nonce: 1.
+- Stake positions: none.
+- Root reward baskets: none.
+
+Move and Claim are not ready on this address: there is no position to move and no reward to claim.
+The check does not establish whether this address matches the wallet derived by the live page.
+Next, obtain the public Bittensor address shown after signing in with the Solana wallet used for
+the earlier stake. The page's action gate requires that derived address; a pasted public address
+alone is only a lookup. Nothing was signed or sent during this check.
+
 ## First: Move, then Claim
 
 Use the existing position in Craig's wallet on `https://soltao.xyz/stake/`. Choose the amount and
