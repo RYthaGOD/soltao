@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>SolTAO - Gateway Readiness, 11 Oct 2026</title>
+  <style>
+    * { box-sizing: border-box; letter-spacing: 0; }
+    body { margin: 0; color: #182326; background: #fff; font: 16px/1.6 system-ui, sans-serif; }
+    main { max-width: 1000px; margin: auto; padding: 40px 24px 64px; }
+    header { border-bottom: 3px solid #168467; padding-bottom: 24px; }
+    h1 { font-size: 36px; line-height: 1.2; margin: 8px 0 16px; }
+    h2 { font-size: 22px; line-height: 1.3; margin: 0 0 16px; }
+    h3 { font-size: 17px; margin: 20px 0 8px; }
+    p { margin: 8px 0 16px; }
+    section { padding: 28px 0; border-bottom: 1px solid #d8dfe0; }
+    a { color: #116e59; text-underline-offset: 3px; overflow-wrap: anywhere; }
+    small, .muted { color: #536467; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    th, td { padding: 12px 10px; border-bottom: 1px solid #d8dfe0; vertical-align: top; text-align: left; overflow-wrap: anywhere; }
+    th { background: #f2f5f5; font-size: 14px; }
+    th:first-child { width: 30%; }
+    .done { color: #116e59; font-weight: 650; }
+    .open { color: #a52c49; font-weight: 650; }
+    code { font: 14px/1.5 ui-monospace, monospace; overflow-wrap: anywhere; }
+    pre { background: #f2f5f5; padding: 16px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    li { margin: 8px 0; }
+    footer { padding-top: 24px; font-size: 14px; color: #536467; }
+    @media (max-width: 560px) {
+      main { padding: 24px 16px 40px; }
+      h1 { font-size: 30px; }
+      th, td { padding: 10px 6px; font-size: 14px; }
+    }
+    @media print { main { max-width: none; padding: 0; } section { break-inside: avoid; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <small>POST-SUBMISSION CHECKPOINT / 11 OCT 2026</small>
+    <h1>SolTAO</h1>
+    <p><strong>Next milestone: prove the remaining gateway actions with controlled wallet runs.</strong></p>
+    <p>Build toward TAO DeFi through reliable access to Bittensor, repeat use and useful position
+      management. The current product plan puts Move and Claim proof first.</p>
+    <a href="soltao-audit-next-2026-10-10.md">Full technical and strategy audit</a>
+  </header>
+
+  <section aria-labelledby="state">
+    <h2 id="state">Current Evidence</h2>
+    <table>
+      <thead><tr><th>Area</th><th>Verified State</th></tr></thead>
+      <tbody>
+        <tr><td>Production history</td><td><span class="done">Refreshed and verified on 10 Oct.</span>
+          No missing days in that snapshot. Production checks passed after the approved Railway deploy;
+          executable hashes did not change.</td></tr>
+        <tr><td>Local checks</td><td><span class="done">Full suite passed.</span> Includes 16 new reporting
+          regression cases and a Solana mainnet simulation using 507,133 of 650,000 compute units.</td></tr>
+        <tr><td>Bittensor definitions</td><td><span class="done">Read-only checks passed on 11 Oct.</span>
+          Move, Claim and root-unstake arguments match at block 9,259,338. This does not prove a real payout.</td></tr>
+        <tr><td>Real-funds proof</td><td><span class="open">Incomplete.</span> Root/subnet entry, free return
+          and a subnet unstake followed by return are documented. Move, Claim, stake-more, root unstake,
+          first-time Solana account arrival and credited Chutes payment remain open.</td></tr>
+        <tr><td>Usage</td><td id="usage-result">Historical measurement: 9 fee-paying Solana OFT submissions
+          from 7 wallets, measured 6 Oct. <span class="open">Fresh total unverified.</span> The 11 Oct
+          since-launch scan stopped on public RPC timeouts and produced no count. Use a reliable archive
+          RPC for the next complete measurement.</td></tr>
+      </tbody>
+    </table>
+    <p class="muted">A successful Solana submission does not establish Bittensor delivery or staking
+      completion. Wallet addresses do not establish distinct people.</p>
+  </section>
+
+  <section aria-labelledby="findings">
+    <h2 id="findings">Findings and Fixes</h2>
+    <h3>High: remaining live actions lack real-funds evidence</h3>
+    <p>Follow the <a href="gateway-proof-runbook.md">wallet proof runbook</a> for one small same-subnet
+      Move and one fee-aware Claim. Record transaction outcomes, fees, before/after positions and reload
+      behavior. A same-subnet Move does not prove the cross-subnet path. Keep Chutes off until credited.</p>
+    <h3>Medium: reporting could stall and overstate completion</h3>
+    <p><span class="done">Fixed locally.</span> The counter now requires a successful transaction with
+      a direct canonical OFT send and the expected System Program fee transfer. Requests and the whole scan
+      have deadlines; retries respect provider delays. Incomplete history produces no count.</p>
+    <pre><code>cd tools/stake
+npm run test:usage
+node usage.mjs --json --max-duration-ms 900000</code></pre>
+    <h3>Operational: daily data still needs regular refresh</h3>
+    <p>The 10 Oct refresh resolved the stale deployed snapshot. Keep the existing history/build/test/deploy
+      procedure and live freshness check in the <a href="../tools/stake/HANDOVER.md">handover</a>.</p>
+  </section>
+
+  <section aria-labelledby="direction">
+    <h2 id="direction">Where To Go Next</h2>
+    <ol>
+      <li><strong>Finish gateway proof.</strong> Complete and record the wallet runs before adding features.</li>
+      <li><strong>Run a small pilot.</strong> Track completed destinations, repeat users, returns and support
+        incidents separately from Solana submissions.</li>
+      <li><strong>Test validator management.</strong> Use observed demand to prioritize validator health,
+        same-subnet moves and fee-aware claims, with the user signing each action.</li>
+      <li><strong>Prove a service payment.</strong> One credited Chutes top-up supplies the evidence for
+        the Bittensor-services direction.</li>
+    </ol>
+    <p>Vaults, receipt tokens and managed strategies remain deferred under the existing roadmap.</p>
+  </section>
+
+  <section aria-labelledby="assessment">
+    <h2 id="assessment">Audit Assessment</h2>
+    <p>The 10 Oct assessment was <strong>B overall</strong>, with <strong>B+ security and correctness</strong>
+      and <strong>C+ partner readiness</strong>. These are scoped engineering judgments, not an independent
+      security certification. This maintenance pass does not regrade untested fund flows.</p>
+  </section>
+
+  <footer>
+    <p>Sources: repository code, the dated audit and handover, test output and read-only chain responses.
+      Reporting follows Solana's <a href="https://solana.com/docs/rpc/http/getsignaturesforaddress">signature
+      history</a> and <a href="https://solana.com/docs/rpc/http/gettransaction">transaction</a> APIs.</p>
+    <p>History checkpoint: <code>dedafe3</code>. Reporting and documentation changes are local.
+      This continuation has made no deployment or real-funds transaction.</p>
+  </footer>
+</main>
+</body>
+</html>

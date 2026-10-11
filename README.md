@@ -31,7 +31,10 @@ where it goes before anything is signed. Flip the toggle to "Back to Solana" to 
 | Move, Claim, staking more from holdings | Not yet. Checked against Bittensor's runtime at zero cost only |
 | Top up Chutes | Built, switched off |
 
-Usage on 6 Oct 2026: 9 routes from 7 wallets since 21 Sep, 0.369 SOL in fees (`npm run usage`).
+Usage measured on 6 Oct 2026: 9 fee-paying Solana OFT submissions from 7 wallets since 21 Sep,
+0.369 SOL in fees (`npm run usage`). This count does not establish Bittensor delivery or staking
+completion, and wallets are not unique people. The real-funds table above records separate evidence.
+The 11 Oct recount could not finish through public RPC rate limits/timeouts; it produced no new total.
 
 **Check the page you are trusting.** It runs one self-hosted script. The `?v=` in its address is the
 start of its SHA-256, the same file is committed here as `stake/stake.js`, and rebuilding it from
@@ -43,7 +46,7 @@ sha256sum stake/stake.js                                    # this repo
 cd tools/stake && npm ci && npm run build && git diff --stat ../../stake   # rebuild: no diff
 ```
 
-**Tests:** `cd tools/stake && npm install && npm test` runs the unit suites and simulates the exact
+**Tests:** `cd tools/stake && npm ci && npm test` runs the unit suites and simulates the exact
 Solana transaction on mainnet. `npm run test:mainnet` replays the signed Bittensor transactions
 against real mainnet state through `eth_call` overrides, at zero cost. `npm run test:live` checks
 the deployed site.
@@ -322,7 +325,7 @@ script. The footer of /stake/ says the same.
 | `tools/stake/src/app.js` | The page controller |
 | `tools/stake/src/oft_return.js`, `return_route.js`, `substrate.js`, `return_entry.js` | Free TAO back to Solana. Built into its own `stake/return.js`, fetched only when that direction is opened. Open in production (`returnLive` true since 24 Sep 2026) |
 | `tools/stake/src/pending.js` | Seals what the page saves in the browser (resume routes, return checkpoints) so edits are ignored |
-| `tools/stake/usage.mjs` | `npm run usage`: counts completed routes on-chain from the fee wallet |
+| `tools/stake/usage.mjs` | `npm run usage`: counts successful fee-paying Solana OFT sends; does not verify Bittensor completion |
 | `tools/stake/test/` | Derivation vectors, signing against ethers, the runner against a simulated chain, the Solana transaction simulated on mainnet, zero-cost mainnet replays, a headless-browser run under the production CSP, and a post-deploy check of the live domain |
 | `tools/stake/HANDOVER.md` | Current state, bug history and the deploy procedure. Read it first |
 | `stake/` | What is served: `index.html`, `stake.css`, `stake.js` and `return.js` (both built) and their licence notices |
@@ -333,7 +336,7 @@ and kept only in the private `research/archive/`.
 ### Build and test
 
 ```bash
-cd tools/stake && npm install
+cd tools/stake && npm ci
 npm test                     # derivation, EVM signing, route runner, subnet lookup, return engine, build shim, Solana simulation
 npm run test:mainnet         # the real route.js against live Bittensor mainnet state, in eth_call only
 npm run test:page            # builds both bundles, then drives the page in Chrome under the production CSP
@@ -343,6 +346,7 @@ npm run test:return:live     # bridge-back fee and transfer quotes, read-only
 npm run test:return:metadata # bridge-back call shapes against the live runtime metadata
 npm run test:return:mainnet  # bridge-back wrap and send, replayed in eth_call only
 npm run test:live            # after a deploy: the real domain, read-only, no wallet
+npm run test:usage           # offline usage, history coverage and RPC timeout regressions
 npm run serve                # the site on http://localhost:8788 with the production headers
 ```
 
@@ -370,6 +374,23 @@ funds (30 Sep 2026), and so has a subnet unstake with soltao's Bittensor fee, ch
 that landed on Solana (1 Oct 2026). Move, Claim, and staking more from holdings have not.
 `tools/stake/HANDOVER.md` tracks exactly what has
 which kind of proof, and how to deploy.
+
+### Usage reporting
+
+From `tools/stake`, run `npm run usage -- --since 2026-10-06`. For machine-readable output use
+`node usage.mjs --since 2026-10-06 --json`; progress goes to stderr and stdout contains only the
+finished JSON report. The older `routes`, `wallets` and `feeSol` fields remain, with an explicit
+`metric: "solana_oft_submissions"` label and measurement limitations.
+
+The default public Solana RPC may rate-limit scans. Pass `--rpc <archive-rpc-url>` for a provider
+with full address and transaction history. PublicNode may only retain a recent window. The tool
+never selects the project's free Helius key automatically. Requests time out after 10 seconds,
+retry at most twice, respect `Retry-After`, and the scan stops after five minutes. Override those
+limits with `--timeout-ms` and `--max-duration-ms` when needed.
+
+Missing timestamps, missing transactions, repeated pages, and history that does not reach before
+`--since` exit with code 2 and no report. A partial scan must never be presented as zero usage.
+The next live-wallet evidence steps are in [the proof runbook](docs/gateway-proof-runbook.md).
 
 ## Things this deliberately does not do
 

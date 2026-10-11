@@ -55,6 +55,8 @@ Fix:
 
 ### High: live subnet history is stale
 
+Resolved 10 Oct 2026: refreshed, deployed and checked live; details in the follow-up below.
+
 `npm run test:live` failed one check:
 
 `the daily history is served, complete and under 3 days old - 3.9 days old`
@@ -207,3 +209,36 @@ That can become true. Today, it is the destination, not the audited product.
 - Craig then said "railway up"; deployed with `railway up --ci`.
 - Post-deploy `npm run test:live` passed all checks. The daily history check now reads `0.9 days old` with `91 points`.
 - Code hashes stayed unchanged; the deploy was a history/data refresh, not an executable route-code change.
+
+## Continued maintenance on 2026-10-10
+
+- Recorded the deployed history and this audit in local commit `dedafe3`.
+- Fixed the usage reporter's unbounded RPC waits: request deadlines include response-body reads,
+  retries are bounded and honor `Retry-After`, and the entire scan has a configurable time budget.
+- Tightened the metric to successful transactions with a direct canonical OFT `send` and a System
+  Program fee transfer. Merely referencing the program, a quote instruction, or a CPI is insufficient.
+  The JSON keeps its existing fields and adds an explicit metric name, history boundary and limitation.
+- Corrected current README/handover usage wording: a Solana submission does not prove Bittensor
+  completion. The historical 9 submissions / 7 wallets remain dated to the prior measurement.
+- Empty or truncated history, missing timestamps/transactions, repeated pages and exhausted requests
+  produce no count. RPC response bodies and authenticated URLs are not printed in network errors.
+- Added offline regression coverage for those cases and prepared `docs/gateway-proof-runbook.md`.
+- Changed the remaining README setup/test commands to `npm ci`.
+
+This maintenance changes local reporting and documentation only. No served route code, feature
+flags or fund-moving logic changed. Move, Claim and the other real-funds gaps remain open.
+
+### Verification completed on 2026-10-11
+
+- Collected the completed `npm test` result: all suites passed, including 16 new usage-reporting
+  regressions and the mainnet Solana transaction simulation (507,133 / 650,000 compute units).
+- `npm run test:return:metadata` passed against block 9,259,338. Move, Claim and root-unstake
+  argument definitions match the client. Basket and swap simulation reads answered; the current
+  root-claim minimum was 0.0005 TAO. This remains read-only evidence, not real-funds proof.
+- The five-minute usage run reached its deadline under the public RPC's rate limits and correctly
+  produced no report. A second since-launch run with a 15-minute budget found 545 candidate transactions,
+  then stopped on repeated 10-second request timeouts after reading more than 200. Neither incomplete
+  run produced a count. A fresh full usage total still needs a reliable archive RPC; the older published
+  figures remain dated to 6 Oct and are not presented as newly verified.
+- Added `docs/soltao-audit-next-2026-10-11.html` as the readable checkpoint. Desktop (1400 px) and
+  mobile (390 px) renders were inspected; neither had horizontal overflow.

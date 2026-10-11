@@ -1,22 +1,26 @@
 # soltao Gateway Plan
 
-Last updated: 2026-10-05
+Last updated: 2026-10-10
 
 ## Where we are
 
-The gateway described below is live at soltao.xyz/stake (commit `33609bb`, `stake.js?v=2771a2fd`). The
+The gateway described below is live at soltao.xyz/stake (executable code `e33b99e`, `stake.js?v=b6c4271f`;
+10 Oct history refresh recorded in `dedafe3`). The
 subnet list is the stake page. People can stake from a Solana wallet, including onto a subnet, unstake,
 and bring TAO back. On 1 Oct 2026 a stranger who had staked onto a subnet the day before unstaked it, paid
 the batched 0.25% Bittensor fee, and got 0.1207 TAO back in their Solana wallet (HANDOVER item 42). Move,
 Claim, staking more from holdings, and a root unstake have not carried real funds.
 
-Usage read from the fee wallet on 4 Oct 2026: 9 completed routes from 7 wallets since 21 Sep, 0.369 SOL in
-fees, about 54 TAO in. Four of those wallets are not among Craig's known wallets and were not funded by him.
+Usage read from the fee wallet on 4 Oct 2026: 9 fee-paying Solana OFT submissions from 7 wallets since
+21 Sep, 0.369 SOL in fees, about 54 TAO sent. This alone does not verify Bittensor delivery or staking
+completion. Four of those wallets are not among Craig's known wallets and were not funded by him.
 
 The $SOLTAO holder discount on the 0.25% fee (HANDOVER item 38) is live as of 1 Oct 2026. Next is one small
 real-funds Move and Claim. Do not start a new feature, and do not name a subnet, until that is done.
 
 Chutes top-up stays switched off.
+
+The next wallet runs and evidence requirements are prepared in [the proof runbook](gateway-proof-runbook.md).
 
 ## Product promise
 

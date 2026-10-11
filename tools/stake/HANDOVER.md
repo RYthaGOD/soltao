@@ -4,7 +4,7 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-10-07 (item 43 live). **Live on soltao.xyz:** commit `e33b99e` (deployed 7 Oct),
+Last updated: 2026-10-11 (usage-tool verification). **Live executable code:** commit `e33b99e` (deployed 7 Oct),
 `stake.js?v=b6c4271f`, `return.js?v=049fc82b`, `stake.css?v=34b30b81`. The hero leads with "Stake on root" and
 one "Done with real funds on mainnet" strip, and the footer says how to verify the script (item 43). The subnet
 list sits under the hero; its figures, and an open validator or holdings list, re-read every minute (items
@@ -14,13 +14,26 @@ list sits under the hero; its figures, and an open validator or holdings list, r
 hashes, and `npm test` passed. Craig then said "railway up"; Railway deployed the refreshed history
 from the local working tree with code hashes unchanged. Post-deploy `npm run test:live` all passed;
 daily history reads 0.9 days old.
+**10 Oct local checkpoint:** `dedafe3` records the deployed history refresh and audit notes.
+The usage reporter now measures fee-paying Solana OFT submissions explicitly, with bounded RPC
+requests, a scan budget, progress on stderr and no partial report on incomplete history. This is
+local tooling; it changes no served bundle. `docs/gateway-proof-runbook.md` prepares the remaining
+Move/Claim evidence runs and distinguishes same-subnet from cross-subnet Move proof.
+**11 Oct checks:** the full `npm test` suite passed, including 16 new usage regression cases and
+the Solana mainnet simulation. `test:return:metadata` passed at block 9,259,338: Move, Claim and
+root-unstake definitions still match; root-claim minimum read as 0.0005 TAO. These checks spend no funds.
+**Usage still needs an archive RPC:** a five-minute scan hit its total deadline; a second since-launch
+scan with a 15-minute budget stopped on repeated request timeouts after listing 545 candidates. Both
+returned no count. The figures below remain the historical 6 Oct measurement. See the readable checkpoint
+at `docs/soltao-audit-next-2026-10-11.html`.
 **Real funds through the live page:** root and subnet stakes; the free-TAO return; and, from an outside wallet
 on 1 Oct, a subnet Unstake with the batched Bittensor fee, chained into a return that landed on Solana (item 42).
 **Not yet with real funds:** Move, Claim, staking more from holdings, a root unstake (plain `removeStake`),
 Top up Chutes (still off, `chutesLive: false`), and a first-time Solana token-account arrival.
 **Next:** one small real-funds Move and Claim. Not a new feature. Do not name a subnet.
 
-Usage on 6 Oct 2026 (`npm run usage`, unchanged since 4 Oct; the last route was 3 Oct 16:30 UTC): 9 completed routes from 7 wallets since 21 Sep, 0.368833032 SOL in fees.
+Usage measured on 6 Oct 2026 (`npm run usage`, unchanged since 4 Oct; the last submission was 3 Oct 16:30 UTC): 9 fee-paying Solana OFT submissions from 7 wallets since 21 Sep, 0.368833032 SOL in fees.
+This Solana counter alone does not prove Bittensor delivery or staking completion, or distinct people.
 Three routes are Craig's (`CVXTu5…`, `3hfdqA…` twice) and one wallet he funded (`GfoFSM…`). About 54 TAO has gone
 in, almost all from `FH9zKY…` (43.05 TAO on 1 Oct) and `cKR3xq…` (9.60 TAO on 3 Oct).
 
@@ -31,8 +44,7 @@ items carry the detail.
 - **10 Oct** history-only deploy from local working tree, at Craig's "railway up": `stake.js?v=b6c4271f`,
   `return.js?v=049fc82b`, `stake.css?v=34b30b81` unchanged. `npm run history` wrote history through
   10 Oct, `npm run build` kept the same hashes, `npm test` passed, and post-deploy `test:live` all passed
-  with daily history 0.9 days old. Commit this history refresh after review; the deployed snapshot is ahead
-  of the last committed history.
+  with daily history 0.9 days old. The history refresh and audit were subsequently recorded in `dedafe3`.
 - **7 Oct** `e33b99e` (item 43 is `c445a46`; the daily history to 6 Oct), `stake.js?v=b6c4271f`,
   `stake.css?v=34b30b81`, at Craig's go-ahead. `npm test` passed; page runs A, B, C and E passed, and run F passed
   everything up to the Chutes card's fee quote ("Failed to fetch", as on 5 Oct). Served within two polls; the live
@@ -122,7 +134,8 @@ main "Solana TAO Board" page which stays no-wallet-connect).
   `stake/history/` the daily history (`npm run history`).
 - `tools/stake/src/prices.js` — display-only USD prices from Dexscreener for the review.
 - `tools/stake/src/fit.js` — how much of an unstake's freed TAO a chained return can send (item 15).
-- `tools/stake/usage.mjs` — `npm run usage`: completed routes counted on-chain from the fee wallet.
+- `tools/stake/usage.mjs` — `npm run usage`: successful fee-paying Solana OFT sends from the fee wallet;
+  does not establish Bittensor completion. `npm run test:usage` covers RPC failure and reporting cases.
 - `tools/stake/src/route.js` — the 4-step Bittensor route logic (unwrap/stake/handover/sweep) for
   the forward direction, now netuid-aware (stakes and hands over on whichever subnet the user
   picked, root by default), including the stake-refusal fallback.
@@ -1066,8 +1079,9 @@ Avoided: token-first thinking; the $SOLTAO gate was rejected and the conflict is
 
 ## Current state
 
-**As of 5 Oct 2026.** Production is `33609bb` / `stake.js?v=2771a2fd` / `stake.css?v=eb438146` /
-`return.js?v=049fc82b` (items 40–42). `chutesLive` stays false. Do not feature a subnet unless they asked.
+**As of 10 Oct 2026.** Production executable code is `e33b99e` / `stake.js?v=b6c4271f` /
+`stake.css?v=34b30b81` / `return.js?v=049fc82b` (through item 43). The 10 Oct history refresh is
+recorded in `dedafe3`. `chutesLive` stays false. Do not feature a subnet unless they asked.
 
 **Next, in order.** (1) One small real-funds Move and Claim. (2) Leave Chutes off until one ≥0.01 TAO top-up
 is credited.
