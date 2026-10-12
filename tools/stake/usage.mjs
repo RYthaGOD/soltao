@@ -3,10 +3,11 @@
 // Uses the public RPC unless --rpc is supplied; never consumes HELIUS_API_KEY implicitly.
 
 import { parseArgs } from "node:util";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
 import { base58 } from "@scure/base";
 import { CONFIG } from "./src/config.js";
+import { createUsageCache } from "./usage-cache.mjs";
 
 const DEFAULT_SINCE = "2026-09-21T00:00:00Z";
 const DEFAULT_RPC = "https://api.mainnet-beta.solana.com";
@@ -21,6 +22,7 @@ export function usageOptions(args) {
     since: { type: "string", default: DEFAULT_SINCE },
     rpc: { type: "string", default: DEFAULT_RPC },
     json: { type: "boolean", default: false },
+    cache: { type: "boolean", default: false },
     "timeout-ms": { type: "string", default: "10000" },
     "max-duration-ms": { type: "string", default: "300000" },
   } });
@@ -39,7 +41,7 @@ export function usageOptions(args) {
     }
     return value;
   };
-  return { since: date.getTime() / 1000, rpcUrl: url.href, asJson: values.json,
+  return { since: date.getTime() / 1000, rpcUrl: url.href, asJson: values.json, useCache: values.cache,
     timeoutMs: milliseconds("timeout-ms"), maxDurationMs: milliseconds("max-duration-ms") };
 }
 
@@ -121,13 +123,24 @@ export function routeFromTransaction(tx, signature, blockTime) {
     from: fee.parsed.info.source, feeLamports: fee.parsed.info.lamports } : null;
 }
 
-export async function readUsage({ rpc, since, onProgress = () => {} }) {
+function validateTransaction(tx, s) {
+  if (tx.slot !== s.slot || tx.blockTime !== s.blockTime
+      || tx.transaction?.signatures?.[0] !== s.signature || tx.meta?.err !== null) {
+    throw new Error(`Transaction does not match finalized signature history for ${s.signature}; no count was produced`);
+  }
+}
+
+export async function readUsage({ rpc, since, cache, signal, onProgress = () => {} }) {
   if (!Number.isFinite(since)) throw new Error("A valid --since date is required");
+  const checkBudget = () => {
+    if (signal?.aborted) throw new Error("Usage scan exceeded its time budget; no count was produced");
+  };
   const candidates = [], seen = new Set();
   let oldest = null, covered = false, before;
   for (let pageNumber = 1; !covered; pageNumber++) {
+    checkBudget();
     onProgress(`Reading signature page ${pageNumber}...`);
-    const page = await rpc("getSignaturesForAddress", [CONFIG.fee.wallet, { limit: 1000, commitment: "confirmed", ...(before ? { before } : {}) }]);
+    const page = await rpc("getSignaturesForAddress", [CONFIG.fee.wallet, { limit: 1000, commitment: "finalized", ...(before ? { before } : {}) }]);
     if (!Array.isArray(page)) throw new Error("Invalid signature history; no count was produced");
     if (!page.length) break;
     for (const s of page) {
@@ -138,6 +151,9 @@ export async function readUsage({ rpc, since, onProgress = () => {} }) {
       // Unknown timestamps cannot silently drop transactions or establish the coverage boundary.
       if (!Number.isFinite(s.blockTime) || s.err === undefined) {
         throw new Error(`Missing timestamp or status for ${s.signature}; no count was produced`);
+      }
+      if (!Number.isSafeInteger(s.slot) || s.slot < 0 || s.confirmationStatus !== "finalized") {
+        throw new Error(`Missing slot or finalized status for ${s.signature}; no count was produced`);
       }
       oldest = oldest === null ? s.blockTime : Math.min(oldest, s.blockTime);
       if (s.blockTime < since) { covered = true; break; }
@@ -152,16 +168,35 @@ export async function readUsage({ rpc, since, onProgress = () => {} }) {
   }
 
   const routes = [];
+  let cacheHits = 0;
   for (const [index, s] of candidates.entries()) {
-    if (index % 10 === 0) onProgress(`Checking transaction ${index + 1}/${candidates.length}...`);
+    checkBudget();
+    if (index % 10 === 0) onProgress(`Checking transaction ${index + 1}/${candidates.length} (${cacheHits} cached)...`);
+    let tx = await cache?.get(s.signature), route;
+    if (tx) {
+      try {
+        validateTransaction(tx, s);
+        route = routeFromTransaction(tx, s.signature, s.blockTime);
+      } catch {
+        onProgress(`Ignoring mismatched or malformed cached transaction ${s.signature}; fetching again`);
+        tx = null;
+      }
+      if (tx) cacheHits++;
+    }
     // Raw JSON-RPC preserves support for version 1, which web3.js 1.x cannot decode.
-    const tx = await rpc("getTransaction", [s.signature, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
-    if (!tx) throw new Error(`The RPC could not return transaction ${s.signature}; no count was produced`);
-    const route = routeFromTransaction(tx, s.signature, s.blockTime);
+    if (!tx) {
+      tx = await rpc("getTransaction", [s.signature, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "finalized" }]);
+      if (!tx) throw new Error(`The RPC could not return transaction ${s.signature}; no count was produced`);
+      validateTransaction(tx, s);
+      route = routeFromTransaction(tx, s.signature, s.blockTime);
+      await cache?.put(s.signature, tx);
+    }
     if (route) routes.push(route);
   }
+  checkBudget();
   return {
     metric: "solana_oft_submissions", since: new Date(since * 1000).toISOString(),
+    commitment: "finalized", cacheHits,
     historyReached: new Date(oldest * 1000).toISOString(), checked: candidates.length,
     routes, wallets: new Set(routes.map((r) => r.from)).size,
     feeSol: routes.reduce((sum, r) => sum + r.feeLamports, 0) / 1e9,
@@ -171,15 +206,20 @@ export async function readUsage({ rpc, since, onProgress = () => {} }) {
 
 async function main() {
   try {
-    const { rpcUrl, since, asJson, timeoutMs, maxDurationMs } = usageOptions(process.argv.slice(2));
+    const { rpcUrl, since, asJson, useCache, timeoutMs, maxDurationMs } = usageOptions(process.argv.slice(2));
     const signal = AbortSignal.timeout(maxDurationMs);
     const onProgress = (message) => console.error(message);
     const rpc = createUsageRpc(rpcUrl, { timeoutMs, signal, onProgress });
-    const report = await readUsage({ rpc, since, onProgress });
+    const cache = useCache ? await createUsageCache(
+      fileURLToPath(new URL("../../research/usage-cache/", import.meta.url)),
+      await rpc("getGenesisHash", []), onProgress,
+    ) : undefined;
+    if (cache) onProgress("Resuming with local finalized transactions; signature history will be read again");
+    const report = await readUsage({ rpc, since, cache, signal, onProgress });
     if (asJson) console.log(JSON.stringify(report, null, 2));
     else {
       console.log(`Solana OFT submissions since ${report.since}: ${report.routes.length} from ${report.wallets} wallet(s), ${report.feeSol} SOL in fees`);
-      console.log(`(${report.checked} fee-wallet transactions checked; history reaches ${report.historyReached})`);
+      console.log(`(${report.checked} finalized fee-wallet transactions checked, ${report.cacheHits} cached; history reaches ${report.historyReached})`);
       console.log(report.limitation);
       for (const r of report.routes) console.log(`  ${r.at.slice(0, 16)}  ${r.from.slice(0, 6)}...  ${r.signature.slice(0, 16)}...`);
     }

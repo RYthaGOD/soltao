@@ -31,10 +31,11 @@ where it goes before anything is signed. Flip the toggle to "Back to Solana" to 
 | Move, Claim, staking more from holdings | Not yet. Checked against Bittensor's runtime at zero cost only |
 | Top up Chutes | Built, switched off |
 
-Usage measured on 6 Oct 2026: 9 fee-paying Solana OFT submissions from 7 wallets since 21 Sep,
+Usage rechecked on 12 Oct 2026: 9 fee-paying Solana OFT submissions from 7 wallets since 21 Sep,
 0.369 SOL in fees (`npm run usage`). This count does not establish Bittensor delivery or staking
 completion, and wallets are not unique people. The real-funds table above records separate evidence.
-The 11 Oct recount could not finish through public RPC rate limits/timeouts; it produced no new total.
+The completed scan checked 559 finalized fee-wallet transactions and reproduced the earlier total.
+The latest qualifying submission remains 3 Oct. [Dated public evidence](docs/usage-2026-10-12.json).
 
 **Check the page you are trusting.** It runs one self-hosted script. The `?v=` in its address is the
 start of its SHA-256, the same file is committed here as `stake/stake.js`, and rebuilding it from
@@ -380,13 +381,23 @@ which kind of proof, and how to deploy.
 From `tools/stake`, run `npm run usage -- --since 2026-10-06`. For machine-readable output use
 `node usage.mjs --since 2026-10-06 --json`; progress goes to stderr and stdout contains only the
 finished JSON report. The older `routes`, `wallets` and `feeSol` fields remain, with an explicit
-`metric: "solana_oft_submissions"` label and measurement limitations.
+`metric: "solana_oft_submissions"` label and measurement limitations. Both history and transaction
+reads require finalized state; the report includes `commitment` and `cacheHits`.
 
 The default public Solana RPC may rate-limit scans. Pass `--rpc <archive-rpc-url>` for a provider
 with full address and transaction history. PublicNode may only retain a recent window. The tool
 never selects the project's free Helius key automatically. Requests time out after 10 seconds,
 retry at most twice, respect `Retry-After`, and the scan stops after five minutes. Override those
 limits with `--timeout-ms` and `--max-duration-ms` when needed.
+
+To keep completed reads across interrupted runs, use `node usage.mjs --cache --json`. Re-run the same
+command to resume. Only public finalized transactions are saved, atomically, under the repository's
+ignored `research/usage-cache/` directory (also excluded from the Docker build context). Entries are
+separated by cluster genesis hash, not provider URL; no RPC credentials are saved. Every run still
+re-reads signature history, matches cached signatures/slots/timestamps against it, and classifies raw
+transactions using the current code. Invalid entries are fetched again. Unrelated cached transactions
+cannot add to the count or establish history coverage. The cache is local convenience data, not an
+independent chain proof; omit `--cache` for a fresh network-only check. It cannot supply missing history.
 
 Missing timestamps, missing transactions, repeated pages, and history that does not reach before
 `--since` exit with code 2 and no report. A partial scan must never be presented as zero usage.

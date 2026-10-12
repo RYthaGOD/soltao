@@ -1,6 +1,6 @@
 # soltao Gateway Plan
 
-Last updated: 2026-10-10
+Last updated: 2026-10-12
 
 ## Where we are
 
@@ -11,9 +11,12 @@ and bring TAO back. On 1 Oct 2026 a stranger who had staked onto a subnet the da
 the batched 0.25% Bittensor fee, and got 0.1207 TAO back in their Solana wallet (HANDOVER item 42). Move,
 Claim, staking more from holdings, and a root unstake have not carried real funds.
 
-Usage read from the fee wallet on 4 Oct 2026: 9 fee-paying Solana OFT submissions from 7 wallets since
-21 Sep, 0.369 SOL in fees, about 54 TAO sent. This alone does not verify Bittensor delivery or staking
-completion. Four of those wallets are not among Craig's known wallets and were not funded by him.
+Usage rechecked on 12 Oct 2026: 9 fee-paying Solana OFT submissions from 7 wallets since 21 Sep,
+0.368833032 SOL in fees, after checking 559 finalized fee-wallet transactions. The latest qualifying
+submission is still 3 Oct. [Public evidence](usage-2026-10-12.json). The earlier amount analysis was
+about 54 TAO sent; it was not recalculated in this recount. This alone does not verify Bittensor
+delivery or staking completion. Four wallets were not among Craig's known or funded wallets in the
+earlier analysis; that is not independent verification of four people.
 
 The $SOLTAO holder discount on the 0.25% fee (HANDOVER item 38) is live as of 1 Oct 2026. Next is one small
 real-funds Move and Claim. Do not start a new feature, and do not name a subnet, until that is done.
@@ -63,8 +66,8 @@ converted to ~11.2 Alpha, owned by the fresh coldkey, with zero root-stake cross
 across 7 of 8 repeated runs (the one failure was an RPC rate-limit from our own repeated testing,
 not a reverted transaction; the harness has retried rate limits since 24 Sep 2026). Deployed to production 23 Sep 2026 on Craig's explicit go-ahead, on
 the strength of that verification plus the root-staking route's prior real-funds confirmation.
-Still not verified via an actual real signed transaction with real funds through the live page —
-see `tools/stake/HANDOVER.md` for the exact current gap.
+Real-funds evidence subsequently landed through the live page: root staking on 23 Sep and subnet
+staking on 30 Sep. See `tools/stake/HANDOVER.md` for the recorded runs and remaining action gaps.
 
 Goal: make the current stake route clear for both root TAO and subnet Alpha.
 
@@ -118,7 +121,8 @@ Remaining:
   CSP is unchanged and the forward page never downloads it.
 - Done: every funding, wrap and send is reconciled on resume (mined / pending / dead), per the Codex
   review of 24 Sep 2026.
-- Open: unstake / Move / the batched Bittensor fee with real funds; first-time ATA rent path.
+- Done with real funds on 1 Oct: subnet unstake, the batched Bittensor fee, and the chained return.
+- Open: root unstake, Move, and the first-time ATA rent path with real funds.
   Holdings copy and the HANDOVER state this honestly; `assertReturnCreatesAta()` re-reads the
   wTAO `enforcedOptions` rent drop so a contract change fails CI.
 
@@ -163,7 +167,7 @@ of the coldkey on screen, from the chain's StakeInfo runtime API (Solana TAO is 
 runtime API (one call, ~50 KB, ~1 s) with its registered name and symbol, the pool's spot price and
 its TAO, a search, and two orders stated on the page (subnet number, or TAO in the pool with root
 left out); names are labelled as owner-registered, not endorsed. Per-position actions are done
-(Milestone 4, gated). Emissions: "TAO added per day", the TAO the chain put into each pool in the last
+(Milestone 4, now live; its remaining real-funds gaps are listed above). Emissions: "TAO added per day", the TAO the chain put into each pool in the last
 block times 7,200, with its own stated sort. Take is per validator, not per subnet, so it lives in the
 validator picker.
 
@@ -223,8 +227,8 @@ What would make the holding stickier still is subnet staking that feels like tra
 subnet's alpha: one choice, a price, and a way back. That is the direction. It is not a Solana
 market, and there is no receipt token. The page still says so.
 
-Usage the same day, read from the fee wallet: 8 completed routes from 6 wallets since 21 Sep
-2026, 0.31 SOL in fees. Most of that fee is the one 43.05 TAO send. The post is
+Usage the same day, read from the fee wallet: 8 fee-paying Solana OFT submissions from 6 wallets since
+21 Sep 2026, 0.31 SOL in fees. This counter alone does not prove destination completion. Most of that fee is the one 43.05 TAO send. The post is
 `marketing/stake-not-a-coupon.txt`.
 
 ## Deferred

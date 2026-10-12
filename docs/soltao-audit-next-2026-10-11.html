@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>SolTAO - Gateway Readiness, 11 Oct 2026</title>
+  <title>SolTAO - Gateway Readiness, Updated 12 Oct 2026</title>
   <style>
     * { box-sizing: border-box; letter-spacing: 0; }
     body { margin: 0; color: #182326; background: #fff; font: 16px/1.6 system-ui, sans-serif; }
@@ -38,7 +38,7 @@
 <body>
 <main>
   <header>
-    <small>POST-SUBMISSION CHECKPOINT / 11 OCT 2026</small>
+    <small>POST-SUBMISSION CHECKPOINT / UPDATED 12 OCT 2026</small>
     <h1>SolTAO</h1>
     <p><strong>Next milestone: prove the remaining gateway actions with controlled wallet runs.</strong></p>
     <p>Build toward TAO DeFi through reliable access to Bittensor, repeat use and useful position
@@ -51,20 +51,21 @@
     <table>
       <thead><tr><th>Area</th><th>Verified State</th></tr></thead>
       <tbody>
-        <tr><td>Production history</td><td><span class="done">Refreshed and verified on 10 Oct.</span>
-          No missing days in that snapshot. Production checks passed after the approved Railway deploy;
-          executable hashes did not change.</td></tr>
-        <tr><td>Local checks</td><td><span class="done">Full suite passed.</span> Includes 16 new reporting
-          regression cases and a Solana mainnet simulation using 507,133 of 650,000 compute units.</td></tr>
+        <tr><td>Production history</td><td><span class="done">Production checks passed on 12 Oct.</span>
+          The deployed snapshot was 2.8 days old at that check. A new local refresh has zero missing days,
+          128 subnet files and 128 validator files. <span class="open">Deployment awaits explicit approval.</span></td></tr>
+        <tr><td>Local checks</td><td><span class="done">Full suite passed on 12 Oct.</span> Includes 22 reporting
+          regression cases and a Solana mainnet simulation using 507,131 of 650,000 compute units.
+          Rebuilding leaves every executable hash unchanged.</td></tr>
         <tr><td>Bittensor definitions</td><td><span class="done">Read-only checks passed on 11 Oct.</span>
           Move, Claim and root-unstake arguments match at block 9,259,338. This does not prove a real payout.</td></tr>
         <tr><td>Real-funds proof</td><td><span class="open">Incomplete.</span> Root/subnet entry, free return
           and a subnet unstake followed by return are documented. Move, Claim, stake-more, root unstake,
           first-time Solana account arrival and credited Chutes payment remain open.</td></tr>
-        <tr><td>Usage</td><td id="usage-result">Historical measurement: 9 fee-paying Solana OFT submissions
-          from 7 wallets, measured 6 Oct. <span class="open">Fresh total unverified.</span> The 11 Oct
-          since-launch scan stopped on public RPC timeouts and produced no count. Use a reliable archive
-          RPC for the next complete measurement.</td></tr>
+        <tr><td>Usage</td><td id="usage-result"><span class="done">Full recount completed on 12 Oct.</span>
+          559 finalized transactions checked: 9 fee-paying Solana OFT submissions from 7 wallets,
+          0.368833032 SOL in fees. Latest qualifying send: 3 Oct. The cached rerun refreshed history and
+          completed in 6.4 seconds. <a href="usage-2026-10-12.json">Dated public evidence</a>.</td></tr>
       </tbody>
     </table>
     <p class="muted">A successful Solana submission does not establish Bittensor delivery or staking
@@ -81,12 +82,18 @@
     <p><span class="done">Fixed locally.</span> The counter now requires a successful transaction with
       a direct canonical OFT send and the expected System Program fee transfer. Requests and the whole scan
       have deadlines; retries respect provider delays. Incomplete history produces no count.</p>
+    <h3>Medium: interrupted scans discarded completed reads</h3>
+    <p><span class="done">Fixed locally on 12 Oct.</span> Optional finalized-transaction checkpoints let a
+      scan resume after a timeout. Every run refreshes signature history and rechecks cached transactions;
+      the cache cannot turn partial coverage into a complete count. Cache files stay outside deployment.</p>
     <pre><code>cd tools/stake
 npm run test:usage
-node usage.mjs --json --max-duration-ms 900000</code></pre>
+node usage.mjs --cache --json</code></pre>
     <h3>Operational: daily data still needs regular refresh</h3>
-    <p>The 10 Oct refresh resolved the stale deployed snapshot. Keep the existing history/build/test/deploy
-      procedure and live freshness check in the <a href="../tools/stake/HANDOVER.md">handover</a>.</p>
+    <p>The 12 Oct local refresh is ready for a separately approved Railway deployment. Keep the existing
+      history/build/test/deploy procedure and live freshness check in the
+      <a href="../tools/stake/HANDOVER.md">handover</a>. The last production check does not prove that the
+      newer local history is live.</p>
   </section>
 
   <section aria-labelledby="direction">

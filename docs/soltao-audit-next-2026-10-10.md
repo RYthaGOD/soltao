@@ -242,3 +242,29 @@ flags or fund-moving logic changed. Move, Claim and the other real-funds gaps re
   figures remain dated to 6 Oct and are not presented as newly verified.
 - Added `docs/soltao-audit-next-2026-10-11.html` as the readable checkpoint. Desktop (1400 px) and
   mobile (390 px) renders were inspected; neither had horizontal overflow.
+
+### Checkpoint on 2026-10-12
+
+- Closed the recount blocker with optional, atomic finalized-transaction caching. Each run refreshes
+  signature history, validates cached slot/time/signature/status, and runs the current classifier over
+  raw transactions. Invalid entries are refetched; missing coverage still fails without a count.
+  Cache files remain under ignored, deployment-excluded `research/usage-cache/`; no provider credentials
+  or wallet secrets are stored.
+- An interrupted run preserved 174 transactions. Resuming completed all 559 candidates since 21 Sep,
+  with history reaching 20 Sep: **9 qualifying Solana OFT submissions, 7 wallets, 0.368833032 SOL fees**.
+  The last qualifying submission remains 3 Oct 16:30:18 UTC. A refreshed-history rerun reused all 559
+  cached reads in 6.367 seconds. [Dated public evidence](usage-2026-10-12.json).
+- `npm test` passed, including 22 reporting regressions and the mainnet simulation at 507,131 / 650,000
+  CU. Rebuilds before and after refreshing data retained all served executable hashes.
+- `npm run test:live` passed all checks at about 06:03 UTC. Its deployed history was 2.8 days old then,
+  so the next local snapshot was generated at `2026-10-12T06:05:41.118Z`: zero missing days, 128 subnet
+  files and 128 validator files. All generated JSON files were checked; histories have 2-91 points
+  according to subnet age. This data refresh is **not deployed**; fresh Railway approval is pending.
+- Reconciled stale milestone notes: subnet staking and subnet unstake/batched fee/return already have
+  recorded real-funds proof. They must not be confused with the still-open root-unstake and Move gaps.
+
+**Remaining gates:** a separately approved history deployment; user-operated real-funds Move, Claim,
+stake-more, root unstake and first-time Solana token-account arrival; and a credited Chutes payment
+before enabling that feature. The supplied Bittensor fee wallet had no positions or rewards on its
+11 Oct finalized read, so it cannot supply the Move/Claim proof in that state. The proof runbook is ready.
+No funds were spent, no feature gates changed, and no new DeFi feature was added at this checkpoint.

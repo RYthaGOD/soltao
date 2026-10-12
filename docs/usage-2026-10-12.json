@@ -1,0 +1,70 @@
+{
+  "checkedAt": "2026-10-12T13:01:24.923Z",
+  "durationMs": 6367,
+  "rpcMethods": ["getGenesisHash", "getSignaturesForAddress"],
+  "metric": "solana_oft_submissions",
+  "since": "2026-09-21T00:00:00.000Z",
+  "commitment": "finalized",
+  "cacheHits": 559,
+  "historyReached": "2026-09-20T15:20:27.000Z",
+  "checked": 559,
+  "routes": [
+    {
+      "at": "2026-10-03T16:30:18.000Z",
+      "signature": "5NPXNZN26hchptELUFZZ4N4cE9ZMjDEA65ubYYfwpttCQZfXimQcMANSDJniLD1m3BYnLdb6mJiJ5sm5KjLobsBi",
+      "from": "cKR3xqDD39VTPApZo1gb1ZNyD1oydZdeJfJC8e4Evro",
+      "feeLamports": 58942880
+    },
+    {
+      "at": "2026-10-01T12:26:08.000Z",
+      "signature": "4pHD8zkKQLkwYysKbSLtA5GarS1eMcLzd3uuyz23Er8nrcLG7BomHHimzbJXTuRbM5mRsiPt6RxeuumpTrP3TmtK",
+      "from": "FH9zKYUTsnd7H1zuMESZ5rFM1PUdKnZaLAdDhWBNzEGP",
+      "feeLamports": 279878631
+    },
+    {
+      "at": "2026-09-30T13:09:54.000Z",
+      "signature": "5DPJ7oV2ZXcR5VbuLHnRySuNDmg7jXYqUz3GKtfdjqEdjLQdEKocaDEtu9oVUD39E8agoUBHJGPSJWpQ2wKtUYqW",
+      "from": "9AEqMfxmnxiQPgkex8WkSpuB2FgYLGXEF19LGQRSjrou",
+      "feeLamports": 3500000
+    },
+    {
+      "at": "2026-09-30T05:25:36.000Z",
+      "signature": "5LCEXpTtsUnffgK6pq5uutFtBkjJazQPfHiHr2nwAG24gnH3xQbD2KeZ9hJt4XDPYRFJpMfUzomMU3MNL5aqgZi2",
+      "from": "FXNTL46d5zJP415fh25b7UciNyZBbCUdb9qdRhD57Lp8",
+      "feeLamports": 3500000
+    },
+    {
+      "at": "2026-09-29T19:24:16.000Z",
+      "signature": "U6vALVvef3Gf99SYkyvmkN5A6Gvcv7Rs7cSXXCPJUScgVi6D8fC2TBPaF5gg71JHhHnLAh9xMwBAyP8tQt9rnZr",
+      "from": "FH9zKYUTsnd7H1zuMESZ5rFM1PUdKnZaLAdDhWBNzEGP",
+      "feeLamports": 6511521
+    },
+    {
+      "at": "2026-09-25T15:12:15.000Z",
+      "signature": "2iWArJQT2cKFRerNP26tRZRWNKJtGwCwz8FDNPJM25wuyxy3FZWvsoTNfCjvGpGrVAmb7iYmNrvF5jL6f7GXahxG",
+      "from": "GfoFSMtQ3oYbY529swRJ84KdGhesC84VKfCRRySFXFP9",
+      "feeLamports": 3000000
+    },
+    {
+      "at": "2026-09-24T07:43:37.000Z",
+      "signature": "5CZ3ykMwJazYyvDiW8LgceJMqYVvjR5Y8uDNoFEPQq6QnCusWUq71wfbtwpxGmGsUFxY3WDStgJnnKBRuCLGohxu",
+      "from": "3hfdqAw3UXSrHDXqXVNqdoU9Z5kTK5zAWLK3APK2nAE3",
+      "feeLamports": 3000000
+    },
+    {
+      "at": "2026-09-24T07:38:47.000Z",
+      "signature": "4fcLqdJsDwJ7KkGKmagmA9ttqowihLhGMB7pHcSMvyzE5r1j4JA7ftAo3FVaxLV2myVA1VvfCZQLZoF9CW4ex1oP",
+      "from": "3hfdqAw3UXSrHDXqXVNqdoU9Z5kTK5zAWLK3APK2nAE3",
+      "feeLamports": 3000000
+    },
+    {
+      "at": "2026-09-23T00:23:42.000Z",
+      "signature": "3hjqjVFhL5kNiMdFktqQX7mdvUxmfbHNd7pjS3A4tz7K9sCcJP9LjoyFFM6uQzLfUCvZBLt4wPx5zfkfrpFDx3LX",
+      "from": "CVXTu5tbmKXFHoczJ7aDuhYX189ptgmfYKWgVNEKdoaz",
+      "feeLamports": 7500000
+    }
+  ],
+  "wallets": 7,
+  "feeSol": 0.368833032,
+  "limitation": "Fee-paying Solana OFT sends only; Bittensor delivery and staking completion are not verified. Wallets are not unique people."
+}

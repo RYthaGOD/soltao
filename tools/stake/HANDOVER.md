@@ -4,7 +4,7 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
-Last updated: 2026-10-11 (wallet readiness check). **Live executable code:** commit `e33b99e` (deployed 7 Oct),
+Last updated: 2026-10-12 (reporting and history checkpoint). **Live executable code:** commit `e33b99e` (deployed 7 Oct),
 `stake.js?v=b6c4271f`, `return.js?v=049fc82b`, `stake.css?v=34b30b81`. The hero leads with "Stake on root" and
 one "Done with real funds on mainnet" strip, and the footer says how to verify the script (item 43). The subnet
 list sits under the hero; its figures, and an open validator or holdings list, re-read every minute (items
@@ -22,10 +22,24 @@ Move/Claim evidence runs and distinguishes same-subnet from cross-subnet Move pr
 **11 Oct checks:** the full `npm test` suite passed, including 16 new usage regression cases and
 the Solana mainnet simulation. `test:return:metadata` passed at block 9,259,338: Move, Claim and
 root-unstake definitions still match; root-claim minimum read as 0.0005 TAO. These checks spend no funds.
-**Usage still needs an archive RPC:** a five-minute scan hit its total deadline; a second since-launch
-scan with a 15-minute budget stopped on repeated request timeouts after listing 545 candidates. Both
-returned no count. The figures below remain the historical 6 Oct measurement. See the readable checkpoint
-at `docs/soltao-audit-next-2026-10-11.html`.
+**12 Oct usage recount complete:** optional `node usage.mjs --cache --json` now preserves finalized
+transactions in ignored `research/usage-cache/`, separated by cluster genesis hash. It re-reads signature
+history and revalidates/reclassifies raw cached transactions; incomplete coverage still produces no count.
+An interrupted five-minute run saved 174 reads; the resumed scan completed all 559 candidates. Result:
+9 qualifying Solana OFT submissions, 7 wallets, 0.368833032 SOL in fees, last send 3 Oct 16:30:18 UTC.
+A fresh-history rerun at `2026-10-12T13:01:24.923Z` reused all 559 reads in 6.367 seconds, with only
+`getGenesisHash` and `getSignaturesForAddress` network calls. Coverage reached 20 Sep, before the 21 Sep
+start. `docs/usage-2026-10-12.json` records the public evidence. This resolves the incomplete 11 Oct recount.
+**12 Oct verification:** `npm test` passed in full, including all 22 reporting regressions and the
+Solana mainnet simulation (507,131 / 650,000 CU). `npm run test:live` passed all checks at about 06:03 UTC;
+production history was then 2.8 days old. Builds before and after the local data refresh kept all three
+executable hashes unchanged. The readable checkpoint is `docs/soltao-audit-next-2026-10-11.html`, updated
+12 Oct; the milestone plan no longer incorrectly lists proven subnet staking/unstaking as open.
+**12 Oct history refresh LOCAL ONLY:** `npm run history` generated the next snapshot at
+`2026-10-12T06:05:41.118Z`, last point `2026-10-11T10:03:24Z`, zero missing days. All 128 subnet files
+and 128 validator files passed JSON/schema checks; subnet histories contain 2-91 points according to
+registration age. Deployment approval was requested but has not been explicitly supplied. Do not describe
+this refresh as live. After fresh Railway approval, follow the deploy procedure and rerun `test:live`.
 **11 Oct supplied wallet:** Craig supplied the configured Bittensor fee recipient `5Cvj3sq8...QG94`.
 At finalized block 9,260,908 it held 0.008593908 TAO free, with no stake positions and no root rewards.
 No Move or Claim can be demonstrated on that state. Next, check the public Bittensor address the live
@@ -36,7 +50,7 @@ on 1 Oct, a subnet Unstake with the batched Bittensor fee, chained into a return
 Top up Chutes (still off, `chutesLive: false`), and a first-time Solana token-account arrival.
 **Next:** one small real-funds Move and Claim. Not a new feature. Do not name a subnet.
 
-Usage measured on 6 Oct 2026 (`npm run usage`, unchanged since 4 Oct; the last submission was 3 Oct 16:30 UTC): 9 fee-paying Solana OFT submissions from 7 wallets since 21 Sep, 0.368833032 SOL in fees.
+Usage rechecked on 12 Oct 2026 (`node usage.mjs --cache --json`; unchanged from the 6 Oct measurement): 9 fee-paying Solana OFT submissions from 7 wallets since 21 Sep, 0.368833032 SOL in fees. The last qualifying submission was 3 Oct 16:30 UTC.
 This Solana counter alone does not prove Bittensor delivery or staking completion, or distinct people.
 Three routes are Craig's (`CVXTu5…`, `3hfdqA…` twice) and one wallet he funded (`GfoFSM…`). About 54 TAO has gone
 in, almost all from `FH9zKY…` (43.05 TAO on 1 Oct) and `cKR3xq…` (9.60 TAO on 3 Oct).
