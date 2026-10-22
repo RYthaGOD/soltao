@@ -1,0 +1,29 @@
+{
+  "kind": "read-only-contract-capability",
+  "blockHash": "0x1f59977222994c2211e08c9a13a3310f53cda808e6fc3eb7c78262409b76ce5c",
+  "blockNumber": "9336777",
+  "runtimeVersion": 482,
+  "compiler": "0.8.24+commit.e11b9ed9.Emscripten.clang",
+  "adapterSourceHash": "0x4c1e4d956b569b9b0f2a9c8ff009499309d2cd82079f1cdb7c1cec28c1feafc8",
+  "coldkey": "0xf71b36265a3218e4b244b8830040257dff3f46073f02913728728076a1439a76",
+  "stakeRao": "99999999",
+  "remainingStakeRao": "0",
+  "recoveredWei": "199998999000000000",
+  "unauthorizedBlocked": true,
+  "rewardViewAvailable": true,
+  "claimCallAccepted": true,
+  "claimStakeDeltaRao": "0",
+  "claimGasUsed": "330062",
+  "claimGasAllowance": "100000000",
+  "simulationGasLimit": "150000000",
+  "claimMethod": "claimRoot(uint16[])",
+  "claimSubnets": [],
+  "productionReady": false,
+  "paidClaimProven": false,
+  "claimFailure": "0x",
+  "limitations": [
+    "State override harness; adapter created inside eth_call, never deployed persistently.",
+    "Fresh stake earns no rewards inside a single call: claim acceptance does not prove a paid claim.",
+    "Privileged prototype only: no share token, bridge verification, full vault accounting or production review."
+  ]
+}

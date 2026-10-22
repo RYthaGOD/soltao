@@ -1,0 +1,20 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Solana eTAO token feasibility</title>
+<style>body{font:17px/1.6 system-ui;max-width:960px;margin:48px auto;padding:0 24px;background:#101820;color:#e8edf2}a{color:#83d7cf}table{border-collapse:collapse;width:100%}td,th{text-align:left;vertical-align:top;border-bottom:1px solid #40505e;padding:14px}small{color:#b7c6d1}</style>
+<h1>A Solana token backed by Bittensor stake</h1><small>Feasibility assessment · 22 October 2026 · proposed architecture, not a deployed product</small>
+<p>Feasible in principle: a Solana receipt token can represent redeemable shares of a Bittensor staking vault. eTAO changes emission allocation; it does not automatically create this token or move staking execution to Solana.</p>
+<table><tr><th>Model</th><th>Reward source</th><th>What users own</th><th>Key limitation</th></tr>
+<tr><td>Current soltao gateway</td><td>Bittensor staking</td><td>Their own coldkey and stake</td><td>No transferable Solana staking receipt</td></tr>
+<tr><td>Proposed vault receipt</td><td>Underlying Bittensor stake</td><td>Redeemable Solana vault shares</td><td>New vault control, bridge, share accounting and redemption risks</td></tr>
+<tr><td>Solana rewards pool</td><td>Prefunded TAO or other incentives</td><td>Tokens locked in a Solana program</td><td>Minting a token creates no Bittensor reward entitlement</td></tr>
+<tr><td>Tensorplex stTAO precedent</td><td>Historically Bittensor-backed staking</td><td>Cross-chain receipt token</td><td>Official site now deprecated; manual withdrawal process. Cause of deprecation not established here.</td></tr></table>
+<h2>Candidate lifecycle</h2><p>Solana TAO deposit → confirmed bridge delivery → controlled Bittensor staking vault → verified share issuance → transferable Solana receipt. Redemption reserves or burns the shares exactly once, unwinds the backing and returns TAO to Solana, with pending and recovery states.</p>
+<p>A root-only proof of concept would isolate share and bridge accounting from subnet alpha allocation decisions. It still has variable returns, fees and cross-chain risks. A subnet strategy would add alpha price risk and changing eTAO allocations. Neither has a guaranteed exchange rate or yield.</p>
+<h2>Research boundaries</h2><p>Colosseum Copilot authenticated successfully. The query “Bittensor TAO liquid staking token on Solana cross chain staking receipt” returned broad matches including Bliv (yield-bearing SPL token principal/yield separation) and Solpipe (validator/MEV infrastructure). These results do not establish an exact competitor or an empty market. Competition and demand remain unvalidated; no TVL or market-share estimates are asserted.</p>
+<p>The existing project plan defers pooled vaults until gateway proof and outside usage are established. This assessment does not alter that release gate or authorize token issuance.</p>
+<h2>Sources</h2><ul>
+<li><a href="https://www.bittensor.com/docs/guides/etao">Bittensor eTAO mechanics</a></li>
+<li><a href="https://solana.com/docs/tokens/basics/create-mint">Solana token mint primitives</a></li>
+<li><a href="https://docs.layerzero.network/v2/concepts/technical-reference/oft-reference">LayerZero OFT supply and transfer model</a></li>
+<li><a href="https://docs.layerzero.network/v2/developers/evm/ovault/overview">LayerZero omnichain vault reference architecture</a> — architectural reference, not verified Bittensor compatibility</li>
+<li><a href="https://stake.tensorplex.ai/manual-withdrawal">Tensorplex deprecation and withdrawal notice</a></li>
+<li><a href="https://colosseum.com/projects/explore/bliv">Bliv — Copilot result</a></li></ul></html>

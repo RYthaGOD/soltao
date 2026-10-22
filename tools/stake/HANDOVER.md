@@ -4,6 +4,15 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
+**22 Oct vault checkpoint:** the root-receipt accounting model now has twelve passing offline
+tests and tracks liquid/staked backing and realized unstakes. Constructor-based read-only
+contract simulation at finalized runtime 482/block 9,336,777 passed stake, reward read, bulk
+claim-call acceptance, unstake, payout and four unauthorized-action checks. A positive reward
+payout is not proven. See `docs/root-tao-vault-readiness.md` and the JSON evidence. No receipt
+token, authenticated share bridge or public deposit path exists; no vault deployment is claimed.
+Craig again requested Railway deployment. Build and `pretest` passed with browser bundle hashes
+unchanged; Railway still returns Unauthorized and a fresh browserless login is pending.
+
 **22 Oct release preparation:** Craig explicitly requested GitHub push and Railway deployment.
 `4345b72` adds operator-only finalized eTAO inspection and evidence (runtime 482); no browser
 feature change. History refreshed at `2026-10-22T04:22:22.824Z`, last daily block 9,331,200,

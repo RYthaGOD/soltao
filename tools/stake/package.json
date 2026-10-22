@@ -4,9 +4,11 @@
   "type": "module",
   "description": "Source for /stake/. Bundled into one self-hosted file; the published page has no runtime dependencies.",
   "scripts": {
+    "test:vault": "node --test test/vault_model.test.mjs",
+    "test:vault:live": "node test/vault_capability_live.test.mjs",
     "etao:inspect": "node etao-inspect.mjs",
     "test:etao": "node test/etao.test.mjs",
-    "pretest": "node test/etao.test.mjs",
+    "pretest": "node test/etao.test.mjs && node --test test/vault_model.test.mjs",
     "build": "node build.mjs",
     "test": "node test/usage.test.mjs && node test/derive.test.mjs && node test/keyring.test.mjs && node test/oft_return.test.mjs && node test/return_route.test.mjs && node test/stake_moves.test.mjs && node test/payments.test.mjs && node test/subnet_profile.test.mjs && node test/topups.test.mjs && node test/evm.test.mjs && node test/route.test.mjs && node test/subnet.test.mjs && node test/pending.test.mjs && node test/confirm.test.mjs && node test/shim.test.mjs && node test/solana.test.mjs",
     "test:page": "node build.mjs && node test/page.test.mjs",

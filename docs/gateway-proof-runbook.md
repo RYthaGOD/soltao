@@ -28,6 +28,18 @@ alone is only a lookup. Nothing was signed or sent during this check.
 
 ## First: Move, then Claim
 
+### Recheck on 22 October 2026
+
+Craig supplied the same public address again. Finalized block 9,336,713,
+`0x666f213fd2d32cae9ce2862fa0dd7d2d394b3296de645a89b2148639edf412ed`,
+chain time `2026-10-22T04:42:24Z` (12:42:24 Perth), runtime 482, returned:
+free 8,593,908 rao (0.008593908 TAO), reserved/frozen zero, nonce 1, no stake positions
+and no Root reward baskets. These reads were all pinned to the same finalized state.
+Move and Claim remain unavailable on this address. Its configured role is the Bittensor fee
+recipient; whether it is also the user's live gateway-derived coldkey is not independently
+established. Need the public address attached to the actual existing position, or an explicit
+future user-operated funding/staking plan. No funding, signature or transaction was performed.
+
 Use the existing position in Craig's wallet on `https://soltao.xyz/stake/`. Choose the amount and
 maximum acceptable total fee before confirming anything. Signing in derives the keys; confirming
 an action authorizes the page to sign a Bittensor transaction. Do not expect a second Solana-wallet

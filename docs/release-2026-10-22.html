@@ -1,0 +1,11 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>22 October release status</title>
+<style>body{font:17px/1.6 system-ui;max-width:850px;margin:40px auto;padding:0 24px;color:#202a35}table{border-collapse:collapse;width:100%}th,td{padding:12px;border-bottom:1px solid #ccd3da;text-align:left}a{color:#086b68}</style>
+<h1>22 October 2026 release preparation</h1><p><strong>Railway upload pending authentication. The receipt vault is not deployed or ready for deposits.</strong></p>
+<table><tr><th>Check</th><th>Result</th></tr><tr><td>Gateway build</td><td>Pass; executable hashes unchanged</td></tr>
+<tr><td>eTAO validation tests</td><td>Pass</td></tr><tr><td>Vault accounting tests</td><td>12 pass, including seeded conservation and liquid/staked withdrawal checks</td></tr>
+<tr><td>Bittensor contract simulation</td><td>Read-only stake, reward read, bulk claim acceptance, unstake, payout and authorization checks pass at block 9,336,777</td></tr>
+<tr><td>Positive reward payout</td><td>Not proven</td></tr><tr><td>Receipt token and authenticated share bridge</td><td>Not implemented</td></tr>
+<tr><td>Production vault security review</td><td>Not completed</td></tr><tr><td>Railway authentication</td><td>Unauthorized; fresh interactive login required</td></tr></table>
+<p>The current Docker image serves the existing gateway and refreshed history. Tools and research documents are excluded from its upload/image. Uploading it cannot launch the receipt vault.</p>
+<p>After Railway authentication, upload the authorized gateway release and verify rollout health, bundle hashes and history generation time on the live domain. Run the read-only live test before marking deployment successful.</p>
+<p><a href="root-tao-vault-readiness.md">Detailed vault readiness</a> · <a href="vault-capability-2026-10-22.json">Contract simulation evidence</a></p></html>
