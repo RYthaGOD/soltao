@@ -1,0 +1,217 @@
+{
+  "schemaVersion": 1,
+  "blockHash": "0x4429433e7fa4b6b4e9817ef82fae0ce32fcbdcfce8e8e316c1aea49370d54992",
+  "blockNumber": "9336573",
+  "chainTime": "2026-10-22T04:14:24.000Z",
+  "runtime": {
+    "specName": "node-subtensor",
+    "implName": "node-subtensor",
+    "authoringVersion": 1,
+    "specVersion": 482,
+    "implVersion": 1,
+    "apis": [
+      [
+        "0xdf6acb689907609b",
+        5
+      ],
+      [
+        "0x37e397fc7c91f5e4",
+        2
+      ],
+      [
+        "0x40fe3ad401f8959a",
+        6
+      ],
+      [
+        "0xfbc577b9d747efd6",
+        1
+      ],
+      [
+        "0xd2bc9897eed08f15",
+        3
+      ],
+      [
+        "0xf78b278be53f454c",
+        2
+      ],
+      [
+        "0xdd718d5cc53262d4",
+        1
+      ],
+      [
+        "0xab3c0572291feb8b",
+        1
+      ],
+      [
+        "0xed99c5acb25eedf5",
+        3
+      ],
+      [
+        "0xbc9d89904f5b923f",
+        1
+      ],
+      [
+        "0x37c8bb1350a9a2a8",
+        4
+      ],
+      [
+        "0xf3ff14d5ab527059",
+        3
+      ],
+      [
+        "0x582211f65bb14b89",
+        6
+      ],
+      [
+        "0xe65b00e46cedd0aa",
+        2
+      ],
+      [
+        "0x68b66ba122c93fa7",
+        2
+      ],
+      [
+        "0x42e62be4a39e5b60",
+        1
+      ],
+      [
+        "0x806df4ccaa9ed485",
+        1
+      ],
+      [
+        "0x8375104b299b74c5",
+        3
+      ],
+      [
+        "0x5d1fbfbe852f2807",
+        1
+      ],
+      [
+        "0xc6886e2f8e598b0a",
+        1
+      ],
+      [
+        "0x43580abff6baab45",
+        5
+      ],
+      [
+        "0xc0de4984d112f3b4",
+        1
+      ],
+      [
+        "0xcbca25e39f142387",
+        2
+      ],
+      [
+        "0xa8b093e6508d9e9c",
+        1
+      ],
+      [
+        "0x1c4585bd5c707202",
+        1
+      ]
+    ],
+    "transactionVersion": 1,
+    "stateVersion": 1
+  },
+  "rows": [
+    {
+      "netuid": 8,
+      "createdViaLease": false,
+      "split": {
+        "burn": {
+          "parts": "0",
+          "percent": 0
+        },
+        "recycle": {
+          "parts": "0",
+          "percent": 0
+        },
+        "owner": {
+          "parts": "0",
+          "percent": 0
+        },
+        "validator": {
+          "parts": "9223372036854775807",
+          "percent": 50
+        },
+        "miner": {
+          "parts": "9223372036854775808",
+          "percent": 50
+        }
+      },
+      "rootBaselineParts": "1014193773183238143",
+      "rootPaidParts": "1014193773183238143",
+      "alphaValidatorParts": "8209178263671537664",
+      "rootBaselinePercent": 5.498,
+      "alphaValidatorPercent": 44.502
+    },
+    {
+      "netuid": 41,
+      "createdViaLease": false,
+      "split": {
+        "burn": {
+          "parts": "0",
+          "percent": 0
+        },
+        "recycle": {
+          "parts": "0",
+          "percent": 0
+        },
+        "owner": {
+          "parts": "1844674407370955161",
+          "percent": 10
+        },
+        "validator": {
+          "parts": "7378697629483820646",
+          "percent": 40
+        },
+        "miner": {
+          "parts": "9223372036854775808",
+          "percent": 50
+        }
+      },
+      "rootBaselineParts": "1059599398637404159",
+      "rootPaidParts": "1059599398637404159",
+      "alphaValidatorParts": "6319098230846416487",
+      "rootBaselinePercent": 5.7441,
+      "alphaValidatorPercent": 34.2559
+    },
+    {
+      "netuid": 47,
+      "createdViaLease": false,
+      "split": {
+        "burn": {
+          "parts": "0",
+          "percent": 0
+        },
+        "recycle": {
+          "parts": "0",
+          "percent": 0
+        },
+        "owner": {
+          "parts": "3320413933267719290",
+          "percent": 18
+        },
+        "validator": {
+          "parts": "2324289753287403503",
+          "percent": 12.6
+        },
+        "miner": {
+          "parts": "12802040387154428822",
+          "percent": 69.4
+        }
+      },
+      "rootBaselineParts": "2296838086291619839",
+      "rootPaidParts": "2296838086291619839",
+      "alphaValidatorParts": "27451666995783664",
+      "rootBaselinePercent": 12.4512,
+      "alphaValidatorPercent": 0.1488
+    }
+  ],
+  "limitations": [
+    "Root baseline and alpha-validator remainder are null if the runtime view is unavailable.",
+    "Validator allocation includes Root; it is not staker APY or a ranking.",
+    "Snapshot only: allocations and the Root baseline can change."
+  ]
+}
