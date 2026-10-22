@@ -4,6 +4,16 @@ Living document. Whoever (human or LLM) picks this up next should be able to rea
 continue without re-deriving context. Keep it updated after every meaningful step — don't let it
 go stale.
 
+**22 Oct release preparation:** Craig explicitly requested GitHub push and Railway deployment.
+`4345b72` adds operator-only finalized eTAO inspection and evidence (runtime 482); no browser
+feature change. History refreshed at `2026-10-22T04:22:22.824Z`, last daily block 9,331,200,
+zero missing days; all 128 subnet and 128 validator JSON records validated. Build retained
+`b6c4271f` / `049fc82b` / `34b30b81`; full `npm test` including eTAO pretest passed, unsigned
+Solana simulation 509,017 / 650,000 CU. GitHub main pushed through `4345b72` before the history
+checkpoint. Railway CLI currently returns Unauthorized; browserless reauthentication requested.
+No 22 Oct deployment is claimed until CLI authentication, upload and live verification finish.
+Unrelated marketing edits remain uncommitted.
+
 Last updated: 2026-10-12 (reporting and history checkpoint). **Live executable code:** commit `e33b99e` (deployed 7 Oct),
 `stake.js?v=b6c4271f`, `return.js?v=049fc82b`, `stake.css?v=34b30b81`. The hero leads with "Stake on root" and
 one "Done with real funds on mainnet" strip, and the footer says how to verify the script (item 43). The subnet
