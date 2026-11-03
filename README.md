@@ -436,6 +436,13 @@ saying what was actually read on-chain and what was not; on 20 Sep 2026 that was
 fee accrual read from sampled mainnet transactions, but not the pro-rata payout itself, which is
 taken from StonkFun's published model exactly as it is for every other row.
 
+### JTX referral
+
+JTX (Jito) trades canonical TAO, so the stake page and the board link to it beside Jupiter. Those
+JTX links carry soltao's referral code (`CONFIG.jtxRef` in `tools/stake/src/config.js`): JTX passes
+part of its trading fee to the referrer. Jupiter stays listed with no referral, and both page
+footers say so.
+
 ## Accuracy notes
 
 - **The slippage table is an upper bound, and a loose one.** `impact = size ÷ quote-side

@@ -22,6 +22,8 @@ export const CONFIG = {
 
   // Canonical Solana TAO: LayerZero V2 OFT, SPL Token, 9 decimals, 6 shared.
   taoMint: "taoC6xyv2v8tDLcev4uaGUgV4vdQsWJrGft2kcBRrBY",
+  // JTX (Jito) trades canonical TAO. This link carries soltao's referral code; disclosed in the page footer.
+  jtxRef: "https://app.jtx.com/ref/Rygod",
   taoOftProgram: "tao3RyGP8XiiWQKmBzkiULmPoMewWjq65b46H4rTAQQ",
   taoOftEscrow: "FeiTZPe7uJYJLux1CahrQnU94SjSXQ6zsdgobLm658LN",
   // LayerZero's address lookup table on Solana mainnet; the send does not fit a transaction without it.

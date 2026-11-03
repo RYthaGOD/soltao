@@ -46,6 +46,7 @@ function stakeMinRao() {
 }
 const usdOf = (rao) => (lastUsd?.tao ? ` (about ${fmtUsd((Number(rao) / 1e9) * lastUsd.tao)})` : "");
 const jupiterLink = () => link(`https://jup.ag/swap/So11111111111111111111111111111111111111112-${CONFIG.taoMint}`, "Swap SOL for it on Jupiter ↗");
+const jtxLink = (label = "buy it on JTX ↗") => link(CONFIG.jtxRef, label);
 
 // ── formatting ──────────────────────────────────────────────────────────────
 function fmtUnits(value, decimals, maxFrac = 6) {
@@ -234,7 +235,7 @@ async function refreshBalances() {
     again.addEventListener("click", () => { again.disabled = true; refreshBalances(); });
     noteHtml("connect-note", [
       text(`This wallet holds no canonical Solana TAO yet. ${minText}`),
-      jupiterLink(),
+      jupiterLink(), text(" or "), jtxLink(),
       text(`, check the mint is ${CONFIG.taoMint.slice(0, 6)}…${CONFIG.taoMint.slice(-4)}, then come back. `), again,
     ], "warn");
   } else if (state.direction === "forward" && min !== null && taoBal < min) {
@@ -242,7 +243,7 @@ async function refreshBalances() {
     again.addEventListener("click", () => { again.disabled = true; refreshBalances(); });
     noteHtml("connect-note", [
       text(`This wallet holds ${tao(taoBal)}, less than the ${tao(min)}${usdOf(min)} staking needs at today's gas price. You can still deliver it unstaked, but the fees are mostly flat, so on a small amount they take a large share. `),
-      jupiterLink(), text(" for more, then "), again,
+      jupiterLink(), text(" or "), jtxLink(), text(" for more, then "), again,
     ], "warn");
   } else note("connect-note", "");
   gate();
@@ -2087,7 +2088,10 @@ async function runReturn({ amountRao: chosen = null, retryReverted = false, afte
     trackRev("finish", "ok", `${tao(arrivingLd(amountRao))} seen in your wallet`);
     clearReturn(w);
     $("sign").textContent = "Sign and send";
-    note("track-note", `Done. Your Solana TAO rose by ${tao(arrivingLd(amountRao))}. This page watched the token account; LayerZero Scan is the bridge record.`, "ok");
+    noteHtml("track-note", [
+      text(`Done. Your Solana TAO rose by ${tao(arrivingLd(amountRao))}. This page watched the token account; LayerZero Scan is the bridge record. `),
+      jtxLink("Trade it on JTX ↗"),
+    ], "ok");
     setStep("step-status", "done");
   } catch (e) {
     const busy = document.querySelector('#track-rev li[data-s="busy"]');
